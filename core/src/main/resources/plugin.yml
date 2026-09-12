@@ -1,0 +1,10 @@
+name: xiaojie-orm
+version: 1.0-SNAPSHOT
+main: io.github.heyhey123.xiaojieorm.XiaojieORM
+description: A ORM plugin for Skript, aimed at providing a user-friendly & high performance interface for Skript users to create and manage database operations.
+author: heyhey123
+api-version: '1.21.8'
+depend:
+  - Skript
+softdepend:
+  - SkBee
