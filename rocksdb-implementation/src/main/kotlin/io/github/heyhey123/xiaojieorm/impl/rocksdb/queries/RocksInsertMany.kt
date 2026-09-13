@@ -2,91 +2,141 @@
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementManager
-import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementValueAdapter
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.queries.InsertMany
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
+import org.rocksdb.ColumnFamilyHandle
+import org.rocksdb.RocksDB
 import org.rocksdb.WriteBatch
 import org.rocksdb.WriteOptions
 
+/** Atomically inserts a batch of rows without overwriting existing primary keys. */
 class RocksInsertMany(
     valuesList: List<Map<String, Any?>>,
     override val database: RocksdbDatabase
 ) : InsertMany(valuesList), RocksQuery {
 
     override suspend fun execute(table: Table): WriteResult {
-        val db = database.database!!
-        val tableName = table.name
-        val cfHandle = database.columnFamilyHandles[tableName]
-            ?: throw IllegalStateException("Column family for table $tableName not found")
-
-        val pkColumn = table.primaryKey
-
-        val mutValuesList = this.valuesList.map { it.toMutableMap() }
-
-        if (pkColumn?.isAutoIncrement == true) {
-            val needAutoIncrementCount = mutValuesList.count { pkColumn.name !in it }
-            if (needAutoIncrementCount > 0) {
-                val idRange = RocksAutoIncrementManager.getAndIncrementBatch(
-                    database, table, pkColumn.name, needAutoIncrementCount
-                )
-                var currentId = idRange.first
-                mutValuesList.forEach { row ->
-                    if (pkColumn.name !in row) {
-                        row[pkColumn.name] = RocksAutoIncrementValueAdapter.toColumnValue(pkColumn, currentId++)
-                    }
-                }
-            }
-        }
-
-        WriteBatch().use { writeBatch ->
-            WriteOptions().use { writeOptions ->
-                for (row in mutValuesList) {
-                    val keyBytes = buildRowKey(row, table)
-                    val valueBytes = buildRowValue(row, table)
-                    writeBatch.put(cfHandle, keyBytes, valueBytes)
-                }
-                db.write(writeOptions, writeBatch)
-            }
-        }
-
-        return WriteResult(mutValuesList.size)
+        if (valuesList.isEmpty()) return WriteResult(0)
+        return database.withMutationLock { mutateLocked(table) }
     }
 
-    private fun buildRowKey(
-        row: MutableMap<String, Any?>,
-        table: Table,
-    ): ByteArray {
-        val pkColumn = table.primaryKey
-        val pkValue = pkColumn?.let {
-            row[it.name] ?: throw IllegalArgumentException("Primary key value missing")
+    /** Executes the insert while the database insert lock is held. */
+    private fun mutateLocked(table: Table): WriteResult {
+        val db = requireNotNull(database.database) { "Database is not connected" }
+        val columnFamily = requireNotNull(database.columnFamilyHandles[table.name]) {
+            "Column family for table `${table.name}` not found"
         }
+        val plan = buildInsertPlan(db, columnFamily, table)
 
-        val key = pkColumn?.let {
-            RocksRowKeyEncoder.encodePrimaryKey(table, pkValue!!)
-        } ?: RocksRowKeyEncoder.encodeGeneratedRowKey()
-
-        return key
+        WriteBatch().use { batch ->
+            plan.rows.forEach { row ->
+                batch.put(columnFamily, row.key, row.value)
+            }
+            addHighWaterMark(batch, table, plan.highWaterMark)
+            WriteOptions().use { options -> db.write(options, batch) }
+        }
+        return WriteResult(plan.rows.size)
     }
 
-    @Suppress("UNCHECKED_CAST")
-    private fun buildRowValue(
-        row: MutableMap<String, Any?>,
+    /** Resolves and validates every row before anything is written. */
+    private fun buildInsertPlan(
+        db: RocksDB,
+        columnFamily: ColumnFamilyHandle,
         table: Table
-    ): ByteArray {
+    ): InsertPlan {
+        var highWaterMark = readHighWaterMark(table)
+        val rows = ArrayList<EncodedRow>(valuesList.size)
+        val batchKeys = HashSet<ByteArrayKey>(valuesList.size)
+        val codec = RocksRowValueCodec.forTable(table)
 
+        valuesList.forEach { values ->
+            val primaryKey = RocksInsertPrimaryKeyResolver.resolve(
+                values,
+                table,
+                highWaterMark
+            )
+            highWaterMark = primaryKey.highWaterMark
+
+            val rowValues = buildRowValues(values, table, primaryKey.value)
+            val key = encodeKey(table, primaryKey.value)
+            ensurePrimaryKeyAvailable(db, columnFamily, table, key, batchKeys)
+            rows += EncodedRow(key, codec.encodeRow(rowValues))
+        }
+        return InsertPlan(rows, highWaterMark)
+    }
+
+    private fun readHighWaterMark(table: Table): Long? =
+        table.primaryKey
+            ?.takeIf { it.isAutoIncrement }
+            ?.let { RocksAutoIncrementManager.getCurrent(database, table, it.name) }
+
+    private fun buildRowValues(
+        sourceValues: Map<String, Any?>,
+        table: Table,
+        primaryKeyValue: Any?
+    ): Map<String, Any?> = sourceValues.toMutableMap().apply {
+        table.primaryKey?.let { this[it.name] = primaryKeyValue }
         table.columns.forEach { (name, column) ->
-            val value = row[name]
-
-            require(value != null || column.isNullable) {
+            require(column.isNullable || this[name] != null) {
                 "Column $name cannot be null"
             }
+        }
+    }
 
-            row[name] = value
+    private fun encodeKey(table: Table, primaryKeyValue: Any?): ByteArray =
+        if (table.primaryKey == null) {
+            RocksRowKeyEncoder.encodeGeneratedRowKey()
+        } else {
+            RocksRowKeyEncoder.encodePrimaryKey(table, requireNotNull(primaryKeyValue))
         }
 
-        return RocksRowValueCodec.forTable(table).encodeRow(row)
+    private fun ensurePrimaryKeyAvailable(
+        db: RocksDB,
+        columnFamily: ColumnFamilyHandle,
+        table: Table,
+        key: ByteArray,
+        batchKeys: MutableSet<ByteArrayKey>
+    ) {
+        check(batchKeys.add(ByteArrayKey(key))) {
+            "Duplicate primary key in insert batch for table `${table.name}`"
+        }
+        check(!db.keyExists(columnFamily, key)) {
+            "Duplicate primary key for table `${table.name}`"
+        }
+    }
+
+    private fun addHighWaterMark(
+        batch: WriteBatch,
+        table: Table,
+        highWaterMark: Long?
+    ) {
+        val column = table.primaryKey?.takeIf { it.isAutoIncrement } ?: return
+        RocksAutoIncrementManager.putCounter(
+            batch,
+            database,
+            table,
+            column.name,
+            requireNotNull(highWaterMark)
+        )
+    }
+
+    private data class EncodedRow(
+        val key: ByteArray,
+        val value: ByteArray
+    )
+
+    private data class InsertPlan(
+        val rows: List<EncodedRow>,
+        val highWaterMark: Long?
+    )
+
+    private class ByteArrayKey(private val bytes: ByteArray) {
+        override fun equals(other: Any?): Boolean =
+            other is ByteArrayKey && bytes.contentEquals(other.bytes)
+
+        override fun hashCode(): Int = bytes.contentHashCode()
     }
 }

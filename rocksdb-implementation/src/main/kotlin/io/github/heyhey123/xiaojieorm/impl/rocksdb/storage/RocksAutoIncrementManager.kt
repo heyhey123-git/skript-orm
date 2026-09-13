@@ -2,69 +2,23 @@ package io.github.heyhey123.xiaojieorm.impl.rocksdb.storage
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.table.Table
+import org.rocksdb.WriteBatch
 import java.nio.ByteBuffer
 
 /**
- * Persists auto-increment counters in the dedicated metadata column family.
+ * Persists auto-increment high-water marks in the dedicated metadata column family.
  */
 object RocksAutoIncrementManager {
 
     private const val AUTO_INCREMENT_PREFIX = "auto-increment:"
 
     /**
-     * A monitor to prevent concurrent auto-increment updates.
-     * When an update is in progress, no other updates can be started.
-     */
-    private val incrementLock = Any()
-
-    /**
-     * Get the current auto-increment value and increment it by 1.
+     * Gets the current high-water mark for the given table and column. If the high-water mark is not set, returns 0.
      *
-     * @param database The database instance
-     * @param table The table
-     * @param columnName The column
-     * @return The next auto-increment value
-     */
-    fun getAndIncrement(
-        database: RocksdbDatabase,
-        table: Table,
-        columnName: String
-    ): Long = synchronized(incrementLock) {
-        val current = getCurrent(database, table, columnName)
-        val next = Math.addExact(current, 1L)
-        set(database, table, columnName, next)
-        next
-    }
-
-    /**
-     * Get the current auto-increment value and increment it by the specified amount.
-     *
-     * @param database The database instance
-     * @param table The table
-     * @param columnName The column
-     * @param count The amount
-     * @return The next auto-increment value
-     */
-    fun getAndIncrementBatch(
-        database: RocksdbDatabase,
-        table: Table,
-        columnName: String,
-        count: Int
-    ): LongRange = synchronized(incrementLock) {
-        require(count >= 0) { "Auto-increment batch count cannot be negative." }
-        val current = getCurrent(database, table, columnName)
-        val next = Math.addExact(current, count.toLong())
-        set(database, table, columnName, next)
-        (current + 1)..next
-    }
-
-    /**
-     * Get current auto-increment value, or 0 if not found.
-     *
-     * @param database The database instance
-     * @param table The table
-     * @param columnName The column
-     * @return The current auto-increment value
+     * @param database the RocksDB database instance
+     * @param table the table
+     * @param columnName the column name
+     * @return the current high-water mark, or 0 if not set
      */
     fun getCurrent(
         database: RocksdbDatabase,
@@ -82,27 +36,59 @@ object RocksAutoIncrementManager {
     }
 
     /**
-     * Set the current auto-increment value.
+     * Returns the next sequence value without persisting it.
      *
-     * @param database The database instance
-     * @param table The table
-     * @param columnName The column name
-     * @param value The value to set
+     * @throws ArithmeticException if the sequence has reached [Long.MAX_VALUE]
      */
-    fun set(
+    fun nextAfter(current: Long): Long = Math.addExact(current, 1L)
+
+    /**
+     * Computes a monotonically increasing high-water mark.
+     *
+     * @return the greater of [current] and [candidate]
+     */
+    fun advanceToAtLeast(current: Long, candidate: Long): Long = maxOf(current, candidate)
+
+    /**
+     * Adds a counter update to the caller's atomic RocksDB write batch.
+     * The update will be committed atomically with the rest of the write batch,
+     * so that the high-water mark is only updated if the insert succeeds.
+     * @param writeBatch the write batch to add the update to
+     * @param database the RocksDB database instance
+     * @param table the table
+     * @param columnName the column name
+     * @param value the new value for the counter
+     */
+    fun putCounter(
+        writeBatch: WriteBatch,
         database: RocksdbDatabase,
         table: Table,
         columnName: String,
         value: Long
     ) {
-        val bytes = ByteBuffer.allocate(Long.SIZE_BYTES).putLong(value).array()
-        database.database!!.put(
+        writeBatch.put(
             database.metadataColumnFamilyHandle,
             encodeKey(table.name, columnName),
-            bytes
+            encodeValue(value)
         )
     }
 
+    /**
+     * Encode value for the auto-increment counter in the metadata column family.
+     *
+     * @param value the value to encode
+     * @return the byte array representing the encoded value
+     */
+    private fun encodeValue(value: Long): ByteArray =
+        ByteBuffer.allocate(Long.SIZE_BYTES).putLong(value).array()
+
+    /**
+     * Encode key for the auto-increment counter in the metadata column family.
+     *
+     * @param tableName the table name
+     * @param columnName the column name
+     * @return the encoded key to be used in the metadata column family
+     */
     private fun encodeKey(tableName: String, columnName: String): ByteArray =
         "$AUTO_INCREMENT_PREFIX$tableName.$columnName".toByteArray(Charsets.UTF_8)
 }

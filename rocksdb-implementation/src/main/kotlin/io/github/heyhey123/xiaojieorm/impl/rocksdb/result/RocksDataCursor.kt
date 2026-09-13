@@ -4,11 +4,17 @@ import io.github.heyhey123.xiaojieorm.result.DataCursor
 import io.github.heyhey123.xiaojieorm.type.DataType
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
 
+/**
+ * In-memory RocksDB query cursor.
+ *
+ * Row positioning follows JDBC semantics: the cursor starts before the first row
+ * and [next] advances it. Numeric column access is one-based.
+ */
 class RocksDataCursor(
     val result: List<Map<String, Any?>>
 ) : DataCursor {
 
-    var currentIndex = -1
+    private var currentIndex = -1
 
     override fun next() = ++currentIndex < result.size
 
