@@ -105,6 +105,12 @@ tasks {
         relocate("reactor.", "$shadePrefix.reactor.")
         relocate("org.reactivestreams.", "$shadePrefix.org.reactivestreams.")
 
+        // JDBC
+        relocate("com.zaxxer.hikari.", "$shadePrefix.com.zaxxer.hikari.")
+        dependencies {
+            exclude(dependency("org.slf4j:.*"))
+        }
+
         // MongoDB
         relocate("com.mongodb.", "$shadePrefix.com.mongodb.")
         relocate("org.bson.", "$shadePrefix.org.bson.")
