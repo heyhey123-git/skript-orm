@@ -11,68 +11,50 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.rocksdb.WriteBatch
 import org.rocksdb.WriteOptions
-import kotlin.collections.component1
-import kotlin.collections.component2
-import kotlin.collections.iterator
-import kotlin.use
 
 class RocksDelete(
     limit: Int?,
     where: WhereClause?,
     override val database: RocksdbDatabase
-): Delete(limit, where), RocksQuery {
-    override suspend fun execute(table: Table): WriteResult {
-        val db = database.database!!
-        val conditions = RocksConditionTranslator.translate(where, table)
-        val cfHandle = database.columnFamilyHandles[table.name]
-            ?: throw IllegalStateException("Column family for table ${table.name} not found")
-        val codec = RocksRowValueCodec.forTable(table)
+) : Delete(limit, where), RocksQuery {
 
-        when (conditions) {
-            is TranslateResult.PrimaryKeyLookup -> {
-                val key = RocksRowKeyEncoder.encodePrimaryKey(table, conditions.pkValue)
-                val valueExists = db.keyExists(cfHandle, key)
-                if (!valueExists) {
-                    return WriteResult(affectedCount = 0)
+    override suspend fun execute(table: Table): WriteResult =
+        database.withMutationLock {
+            val deleteLimit = limit
+            require(deleteLimit == null || deleteLimit >= 0) { "Delete limit cannot be negative." }
+            if (deleteLimit == 0) return@withMutationLock WriteResult(0)
+
+            val db = requireNotNull(database.database) { "Database is not connected" }
+            val columnFamily = requireNotNull(database.columnFamilyHandles[table.name]) {
+                "Column family for table `${table.name}` not found"
+            }
+            val keys = when (val translated = RocksConditionTranslator.translate(where, table)) {
+                is TranslateResult.PrimaryKeyLookup -> {
+                    val key = RocksRowKeyEncoder.encodePrimaryKey(table, translated.pkValue)
+                    if (db.keyExists(columnFamily, key)) listOf(key) else emptyList()
                 }
 
-                db.delete(cfHandle, key)
-                return WriteResult(affectedCount = 1)
-            }
-
-            is TranslateResult.ScanWithFilter -> {
-                val deletedRows = mutableListOf<ByteArray>()
-
-                db.newIterator(cfHandle).use { iterator ->
-                    iterator.seekToFirst()
-                    while (iterator.isValid) {
-                        if (limit != null && deletedRows.size >= limit!!) {
-                            break
-                        }
-
-                        val row = codec.decodeRow(iterator.value())
-                        if (!conditions.predicate(row)) {
+                is TranslateResult.ScanWithFilter -> {
+                    val result = mutableListOf<ByteArray>()
+                    val codec = RocksRowValueCodec.forTable(table)
+                    db.newIterator(columnFamily).use { iterator ->
+                        iterator.seekToFirst()
+                        while (iterator.isValid && (deleteLimit == null || result.size < deleteLimit)) {
+                            if (translated.predicate(codec.decodeRow(iterator.value()))) {
+                                result += iterator.key()
+                            }
                             iterator.next()
-                            continue
                         }
-
-                        deletedRows.add(iterator.key())
-
-                        iterator.next()
                     }
+                    result
                 }
-
-                WriteBatch().use { writeBatch ->
-                    WriteOptions().use { writeOptions ->
-                        for (key in deletedRows) {
-                            writeBatch.delete(cfHandle, key)
-                        }
-                        db.write(writeOptions, writeBatch)
-                    }
-                }
-
-                return WriteResult(deletedRows.size)
             }
+
+            if (keys.isEmpty()) return@withMutationLock WriteResult(0)
+            WriteBatch().use { batch ->
+                keys.forEach { batch.delete(columnFamily, it) }
+                WriteOptions().use { options -> db.write(options, batch) }
+            }
+            WriteResult(keys.size)
         }
-    }
 }

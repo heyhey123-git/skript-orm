@@ -16,6 +16,8 @@ class RocksSelectPage(
     override val database: RocksdbDatabase
 ) : SelectPage(pageSize, pageIndex, where), RocksQuery {
     override suspend fun execute(table: Table): CursorResult {
+        require(pageSize > 0) { "Page size must be positive." }
+        require(pageIndex >= 1) { "Page index must be 1-based and positive." }
         val conditions = RocksConditionTranslator.translate(where, table)
         val cfHandle = database.columnFamilyHandles[table.name]
             ?: throw IllegalStateException("Column family for table ${table.name} not found")
@@ -30,7 +32,7 @@ class RocksSelectPage(
             }
 
             is TranslateResult.ScanWithFilter -> {
-                val skip = pageSize * pageIndex
+                val skip = Math.multiplyExact(pageSize, pageIndex - 1)
                 val rows = RocksQueryHelper.scanWithFilter(
                     table,
                     conditions.predicate,
