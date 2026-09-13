@@ -50,13 +50,13 @@ object JdbcConditionTranslator {
      */
     fun translateCondition(condition: Condition): String =
         when (condition) {
-            is Condition.Equals -> "$condition = ?"
-            is Condition.NotEquals -> "$condition != ?"
-            is Condition.Between -> "$condition BETWEEN ? AND ?"
-            is Condition.GreaterThan -> "$condition > ?"
-            is Condition.GreaterThanOrEquals -> "$condition >= ?"
-            is Condition.LessThan -> "$condition < ?"
-            is Condition.LessThanOrEquals -> "$condition <= ?"
+            is Condition.Equals -> "${condition.left} = ?"
+            is Condition.NotEquals -> "${condition.left} != ?"
+            is Condition.Between -> "${condition.left} BETWEEN ? AND ?"
+            is Condition.GreaterThan -> "${condition.left} > ?"
+            is Condition.GreaterThanOrEquals -> "${condition.left} >= ?"
+            is Condition.LessThan -> "${condition.left} < ?"
+            is Condition.LessThanOrEquals -> "${condition.left} <= ?"
         }
 
     /**
