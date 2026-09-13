@@ -3,7 +3,7 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 plugins {
     java
     kotlin("jvm") version "2.3.21"
-    id("com.gradleup.shadow") version "9.0.0-beta15"
+    id("com.gradleup.shadow") version "9.2.2"
 }
 
 
@@ -26,7 +26,7 @@ val bundledModules: List<String> = run {
             exists
         }
         .takeIf { !it.isNullOrEmpty() }
-        ?: listOf("mongodb-implementation") // 默认值
+        ?: listOf("generic-jdbc-implementation") // 默认值
 }
 
 // 确保先评估这些子模块
