@@ -14,8 +14,6 @@ import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.bukkit.event.Event
 

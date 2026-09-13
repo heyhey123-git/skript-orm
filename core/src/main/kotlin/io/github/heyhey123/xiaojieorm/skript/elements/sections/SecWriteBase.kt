@@ -13,8 +13,6 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.*
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import org.bukkit.event.Event
 
