@@ -7,6 +7,7 @@ import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
+import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.*
@@ -107,7 +108,7 @@ abstract class SecWriteBase : Section() {
         val resolvedSingle = singleValues?.bind(table)?.resolve(event)
         val resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
 
-        CoroutineScope(Dispatchers.IO).launch {
+        XiaojieOrm.ioScope.launch {
             try {
                 executeWrite(database, table, resolvedSingle, resolvedMultiple, whereClause, event)
             } catch (e: Throwable) {

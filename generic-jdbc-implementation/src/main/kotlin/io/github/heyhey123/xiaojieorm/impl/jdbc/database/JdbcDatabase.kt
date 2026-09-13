@@ -36,6 +36,9 @@ open class JdbcDatabase(
         } catch (e: ClassNotFoundException) {
             throw ClassNotFoundException("JDBC Driver class not found: $driver", e)
         } catch (e: Exception) {
+            dataSource?.close()
+            dataSource = null
+            queries = null
             throw IllegalStateException("Failed to connect to the database: $url", e)
         }
     }

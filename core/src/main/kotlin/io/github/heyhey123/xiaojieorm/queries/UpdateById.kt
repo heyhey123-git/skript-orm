@@ -10,5 +10,7 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
  */
 abstract class UpdateById(
     val id: Any,
-    val values: Map<String, Any?>
-) : Query<WriteResult>()
+    values: Map<String, Any?>
+) : Query<WriteResult>() {
+    val values: Map<String, Any?> = values.toMap()
+}

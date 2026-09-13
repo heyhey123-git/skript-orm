@@ -8,6 +8,7 @@ import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
+import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
@@ -102,7 +103,7 @@ abstract class SecSelectBase : Section() {
             }
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        XiaojieOrm.ioScope.launch {
             try {
                 executeQuery(database, table, whereClause, event)
             } catch (e: Throwable) {

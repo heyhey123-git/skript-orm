@@ -19,4 +19,13 @@ data class Column<T : Any>(
     val isAutoIncrement: Boolean = false,
     val isNullable: Boolean = true,
     val size: Int? = null
-)
+) {
+    init {
+        require(!isAutoIncrement || isPrimaryKey) {
+            "Auto-increment column '$name' must be a primary key."
+        }
+        require(size == null || size > 0) {
+            "Column '$name' size must be greater than zero."
+        }
+    }
+}

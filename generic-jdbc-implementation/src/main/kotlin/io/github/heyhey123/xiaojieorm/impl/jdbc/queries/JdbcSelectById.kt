@@ -1,25 +1,16 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
-import io.github.heyhey123.xiaojieorm.impl.jdbc.result.JdbcDataCursor
+import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.queries.SelectById
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.table.Table
-import java.sql.Connection
+import javax.sql.DataSource
 
-open class JdbcSelectById(
-    id: Any,
-    val connection: Connection
-) : SelectById(id) {
-
+open class JdbcSelectById(id: Any, override val dataSource: DataSource) : SelectById(id), JdbcQuery {
     override suspend fun execute(table: Table): CursorResult {
-        val tableName = table.name
-        val idColumn = table.primaryKey!!
-        val sql = "SELECT * FROM $tableName WHERE ${idColumn.name} = ? LIMIT 1"
-        val preparedStatement = connection.prepareStatement(sql)
-        preparedStatement.setObject(1, id)
-        val resultSet = preparedStatement.executeQuery()
-
-        return CursorResult(JdbcDataCursor(resultSet))
+        val primaryKey = requireNotNull(table.primaryKey) { "Table ${table.name} does not have a primary key." }
+        return executeCursor("SELECT * FROM ${table.name} WHERE ${primaryKey.name} = ? LIMIT 1") { statement ->
+            statement.setObject(1, id, (primaryKey.type as JdbcDataType).jdbcType)
+        }
     }
-
 }

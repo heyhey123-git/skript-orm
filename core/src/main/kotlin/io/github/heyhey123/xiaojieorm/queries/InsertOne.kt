@@ -8,5 +8,7 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
  * @param values the entity values to insert
  */
 abstract class InsertOne(
-    val values: Map<String, Any?>
-) : Query<WriteResult>()
+    values: Map<String, Any?>
+) : Query<WriteResult>() {
+    val values: Map<String, Any?> = values.toMap()
+}

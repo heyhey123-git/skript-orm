@@ -5,6 +5,8 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 class SecSelectMany : SecSelectBase() {
@@ -28,16 +30,18 @@ class SecSelectMany : SecSelectBase() {
         whereClause: WhereClause?,
         event: Event?
     ) {
-        val cursor = database.queries!!.selectMany(whereClause).execute(table).cursor
         val result = mutableListOf<Any?>()
-
-        while (cursor.next()) {
-            table.columns.values.forEach { column ->
-                result.add(cursor.get(column.name, column.type))
+        database.queries!!.selectMany(whereClause).execute(table).cursor.use { cursor ->
+            while (cursor.next()) {
+                table.columns.values.forEach { column ->
+                    result.add(cursor.get(column.name, column.type))
+                }
             }
         }
 
-        VariableModifier.writeList(resultVar, event, result)
+        withContext(SyncDispatcher) {
+            VariableModifier.writeList(resultVar, event, result)
+        }
     }
 
     override fun toString(event: Event?, debug: Boolean): String =

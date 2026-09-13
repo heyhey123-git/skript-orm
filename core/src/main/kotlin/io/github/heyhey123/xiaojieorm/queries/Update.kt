@@ -11,7 +11,9 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
  * @param where the where clause to filter records to be updated
  */
 abstract class Update(
-    val values: Map<String, Any?>,
+    values: Map<String, Any?>,
     val limit: Int?,
     val where: WhereClause?
-) : Query<WriteResult>()
+) : Query<WriteResult>() {
+    val values: Map<String, Any?> = values.toMap()
+}

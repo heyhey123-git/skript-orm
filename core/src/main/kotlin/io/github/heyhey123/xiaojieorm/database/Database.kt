@@ -47,16 +47,31 @@ abstract class Database {
      * @param user The username for authentication.
      * @param password The password for authentication.
      */
+    @Synchronized
     fun connect(url: String, user: String, password: String) {
         check(!isConnected) { "Database is already connected." }
+        check(current == null || current === this) {
+            "Another database is already connected. Disconnect it before connecting a new database."
+        }
 
-        doConnect(url, user, password)
-        isConnected = true
-        current = this
-        if (tables.isNotEmpty()) {
-            tables.forEach { (_, table) ->
-                doRegisterTable(table)
+        try {
+            doConnect(url, user, password)
+            check(queries != null) { "Database implementation did not initialize queries during connection." }
+            isConnected = true
+            current = this
+            if (tables.isNotEmpty()) {
+                tables.forEach { (_, table) -> doRegisterTable(table) }
             }
+        } catch (error: Throwable) {
+            try {
+                doDisconnect()
+            } catch (cleanupError: Throwable) {
+                error.addSuppressed(cleanupError)
+            }
+            queries = null
+            isConnected = false
+            if (current === this) current = null
+            throw error
         }
     }
 
@@ -75,12 +90,23 @@ abstract class Database {
      * If there is no active connection, this method does nothing.
      *
      */
+    @Synchronized
     fun disconnect() {
-        isConnected = false
-        queries = null
-        doDisconnect()
-        current = null
-        tables.clear()
+        if (!isConnected && queries == null && current !== this) return
+        var failure: Throwable? = null
+        try {
+            doDisconnect()
+        } catch (error: Throwable) {
+            failure = error
+        } finally {
+            isConnected = false
+            queries = null
+            if (current === this) {
+                current = null
+                tables.clear()
+            }
+        }
+        failure?.let { throw it }
     }
 
     /**

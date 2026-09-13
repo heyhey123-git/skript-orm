@@ -7,6 +7,7 @@ import ch.njol.skript.doc.Example
 import ch.njol.skript.doc.Name
 import ch.njol.skript.lang.*
 import ch.njol.util.Kleenean
+import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
@@ -122,19 +123,20 @@ class SecSelectOne : Section() {
             }
         }
 
-        CoroutineScope(Dispatchers.IO).launch {
+        XiaojieOrm.ioScope.launch {
             try {
-                val cursor = database.queries!!.selectMany(whereClause).execute(table).cursor
                 val result = mutableMapOf<Int, Any?>()
-                val columns = table.columns.values
-                while (cursor.next()) {
-                    for ((index, column) in columns.withIndex()) {
-                        val value = cursor.get(column.name, column.type)
-                        result[index + 1] = value
+                database.queries!!.selectOne(whereClause).execute(table).cursor.use { cursor ->
+                    if (cursor.next()) {
+                        for ((index, column) in table.columns.values.withIndex()) {
+                            result[index + 1] = cursor.get(column.name, column.type)
+                        }
                     }
                 }
 
-                VariableModifier.writeMap(resultVar, event, result.mapKeys { it.key.toString() })
+                launch(SyncDispatcher) {
+                    VariableModifier.writeMap(resultVar, event, result.mapKeys { it.key.toString() })
+                }
 
             } catch (e: Throwable) {
                 ErrorPrinter.printErrorMessageWithDetail(

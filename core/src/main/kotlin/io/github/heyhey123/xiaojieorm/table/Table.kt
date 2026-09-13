@@ -12,6 +12,22 @@ class Table(
     columns: List<Column<*>>
 ) {
 
+    init {
+        require(IDENTIFIER_PATTERN.matches(name)) {
+            "Invalid table name '$name'. Only letters, digits, and underscores are allowed, and the first character cannot be a digit."
+        }
+        require(columns.isNotEmpty()) {
+            "Table $name must define at least one column."
+        }
+        require(columns.map { it.name }.distinct().size == columns.size) {
+            "Table $name cannot contain duplicate column names."
+        }
+    }
+
+    companion object {
+        private val IDENTIFIER_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_]*")
+    }
+
     /**
      * A map of column names to their corresponding Column objects.
      */

@@ -3,16 +3,16 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.result
 import io.github.heyhey123.xiaojieorm.result.DataCursor
 import io.github.heyhey123.xiaojieorm.type.DataType
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
+import java.sql.Connection
 import java.sql.ResultSet
+import java.sql.Statement
 
-/**
- * A JDBC implementation of the DataCursor interface.
- *
- * @property resultSet The JDBC ResultSet to iterate over.
- */
 class JdbcDataCursor(
-    val resultSet: ResultSet
+    private val resultSet: ResultSet,
+    private val statement: Statement,
+    private val connection: Connection
 ) : DataCursor {
+    private var closed = false
 
     override fun next(): Boolean = resultSet.next()
 
@@ -31,6 +31,16 @@ class JdbcDataCursor(
     }
 
     override fun close() {
-        resultSet.close()
+        if (closed) return
+        closed = true
+        var failure: Throwable? = null
+        try { resultSet.close() } catch (error: Throwable) { failure = error }
+        try { statement.close() } catch (error: Throwable) {
+            if (failure == null) failure = error else failure.addSuppressed(error)
+        }
+        try { connection.close() } catch (error: Throwable) {
+            if (failure == null) failure = error else failure.addSuppressed(error)
+        }
+        failure?.let { throw it }
     }
 }

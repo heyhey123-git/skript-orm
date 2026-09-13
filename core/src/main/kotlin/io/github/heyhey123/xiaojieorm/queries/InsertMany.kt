@@ -10,5 +10,7 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
  * @param valuesList
  */
 abstract class InsertMany(
-    val valuesList: List<Map<String, Any?>>
-) : Query<WriteResult>()
+    valuesList: List<Map<String, Any?>>
+) : Query<WriteResult>() {
+    val valuesList: List<Map<String, Any?>> = valuesList.map { it.toMap() }
+}

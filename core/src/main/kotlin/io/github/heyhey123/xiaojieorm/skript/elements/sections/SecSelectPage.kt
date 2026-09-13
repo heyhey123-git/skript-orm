@@ -8,6 +8,8 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 class SecSelectPage : SecSelectBase() {
@@ -59,23 +61,25 @@ class SecSelectPage : SecSelectBase() {
             return
         }
 
-        val cursor = database.queries!!
+        val result = mutableListOf<Map<String, Any?>>()
+        val columns = table.columns.values
+        database.queries!!
             .selectPage(pageSize, pageIndex, whereClause)
             .execute(table)
             .cursor
-
-        val result = mutableListOf<Map<String, Any?>>()
-        val columns = table.columns.values
-
-        while (cursor.next()) {
-            val row = mutableMapOf<String, Any?>()
-            columns.forEachIndexed { index, column ->
-                row[(index + 1).toString()] = cursor.get(column.name, column.type)
+            .use { cursor ->
+                while (cursor.next()) {
+                    val row = mutableMapOf<String, Any?>()
+                    columns.forEachIndexed { index, column ->
+                        row[(index + 1).toString()] = cursor.get(column.name, column.type)
+                    }
+                    result.add(row)
+                }
             }
-            result.add(row)
-        }
 
-        VariableModifier.writeList(resultVar, event, result)
+        withContext(SyncDispatcher) {
+            VariableModifier.writeList(resultVar, event, result)
+        }
     }
 
     override fun toString(event: Event?, debug: Boolean): String = buildString {

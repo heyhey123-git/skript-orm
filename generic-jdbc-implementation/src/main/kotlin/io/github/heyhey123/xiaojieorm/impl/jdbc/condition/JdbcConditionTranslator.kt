@@ -21,8 +21,8 @@ object JdbcConditionTranslator {
     fun translate(whereClause: WhereClause): String = buildString {
         append("WHERE")
         val conjunction = when (whereClause) {
-            is WhereClause.All -> " AND"
-            is WhereClause.Any -> " OR"
+            is WhereClause.All -> "AND"
+            is WhereClause.Any -> "OR"
         }
 
         if (whereClause.negated) {
@@ -50,8 +50,8 @@ object JdbcConditionTranslator {
      */
     fun translateCondition(condition: Condition): String =
         when (condition) {
-            is Condition.Equals -> "${condition.left} = ?"
-            is Condition.NotEquals -> "${condition.left} != ?"
+            is Condition.Equals -> if (condition.right == null) "${condition.left} IS NULL" else "${condition.left} = ?"
+            is Condition.NotEquals -> if (condition.right == null) "${condition.left} IS NOT NULL" else "${condition.left} != ?"
             is Condition.Between -> "${condition.left} BETWEEN ? AND ?"
             is Condition.GreaterThan -> "${condition.left} > ?"
             is Condition.GreaterThanOrEquals -> "${condition.left} >= ?"
@@ -72,13 +72,17 @@ object JdbcConditionTranslator {
         val jdbcType = (type as JdbcDataType).jdbcType
         return when (condition) {
             is Condition.Equals -> {
-                statement.setObject(offset, condition.right, jdbcType)
-                offset + 1
+                if (condition.right == null) offset else {
+                    statement.setObject(offset, condition.right, jdbcType)
+                    offset + 1
+                }
             }
 
             is Condition.NotEquals -> {
-                statement.setObject(offset, condition.right, jdbcType)
-                offset + 1
+                if (condition.right == null) offset else {
+                    statement.setObject(offset, condition.right, jdbcType)
+                    offset + 1
+                }
             }
 
             is Condition.Between -> {

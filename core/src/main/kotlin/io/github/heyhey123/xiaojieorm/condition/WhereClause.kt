@@ -18,12 +18,24 @@ sealed class WhereClause {
 
     class Any(
         override val negated: Boolean,
-        override val conditions: List<Condition>
-    ) : WhereClause()
+        conditions: List<Condition>
+    ) : WhereClause() {
+        override val conditions: List<Condition> = conditions.toList()
+
+        init {
+            require(this.conditions.isNotEmpty()) { "A WHERE clause must contain at least one condition." }
+        }
+    }
 
     class All(
         override val negated: Boolean,
-        override val conditions: List<Condition>
-    ) : WhereClause()
+        conditions: List<Condition>
+    ) : WhereClause() {
+        override val conditions: List<Condition> = conditions.toList()
+
+        init {
+            require(this.conditions.isNotEmpty()) { "A WHERE clause must contain at least one condition." }
+        }
+    }
 }
 
