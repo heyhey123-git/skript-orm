@@ -1,14 +1,13 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
-import org.gradle.kotlin.dsl.exclude
 
 plugins {
     java
-    kotlin("jvm") version "2.2.21"
+    kotlin("jvm") version "2.3.21"
     id("com.gradleup.shadow") version "9.0.0-beta15"
 }
 
 
-val kotlinVersion = "2.2.21"
+val kotlinVersion = "2.3.21"
 val kotlinCoroutinesVersion = "1.10.2"
 val paperVersion = "26.2.build.+"
 val shadePrefix = "io.github.heyhey123.xiaojieorm.libs"
@@ -39,7 +38,9 @@ allprojects {
     version = "1.0-SNAPSHOT"
 
     repositories {
-        mavenCentral()
+        // 当前网络访问 repo.maven.apache.org 会返回 403；镜像优先，官方仓库保留为回退。
+        maven("https://maven.aliyun.com/repository/central")
+        maven("https://maven-central.storage-download.googleapis.com/maven2/")
         maven("https://repo.papermc.io/repository/maven-public/")
         maven("https://repo.skriptlang.org/releases")
         maven("https://repo.destroystokyo.com/repository/maven-public/")
@@ -59,7 +60,7 @@ subprojects {
         compileOnly("de.tr7zw:item-nbt-api-plugin:2.15.5")
     }
     kotlin {
-        jvmToolchain(21)
+        jvmToolchain(25)
     }
 }
 
@@ -119,5 +120,5 @@ tasks {
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }

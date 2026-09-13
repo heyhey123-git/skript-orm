@@ -5,10 +5,6 @@ plugins {
 group = "io.github.heyhey123"
 version = "1.0-SNAPSHOT"
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     compileOnly(project(":core"))
     implementation(platform("org.mongodb:mongodb-driver-bom:5.6.1"))
@@ -19,5 +15,5 @@ tasks.test {
     useJUnitPlatform()
 }
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }

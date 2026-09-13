@@ -48,10 +48,6 @@ val rocksdbDependencyNotation: String = when {
     }
 }
 
-repositories {
-    mavenCentral()
-}
-
 dependencies {
     compileOnly(project(":core"))
     implementation(rocksdbDependencyNotation)
@@ -62,5 +58,5 @@ tasks.test {
     useJUnitPlatform()
 }
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
