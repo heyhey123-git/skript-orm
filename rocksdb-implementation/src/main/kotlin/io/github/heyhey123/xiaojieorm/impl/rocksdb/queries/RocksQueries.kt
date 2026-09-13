@@ -2,19 +2,7 @@ package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
-import io.github.heyhey123.xiaojieorm.queries.Delete
-import io.github.heyhey123.xiaojieorm.queries.DeleteById
-import io.github.heyhey123.xiaojieorm.queries.InsertIfAbsent
-import io.github.heyhey123.xiaojieorm.queries.InsertMany
-import io.github.heyhey123.xiaojieorm.queries.InsertOne
 import io.github.heyhey123.xiaojieorm.queries.Queries
-import io.github.heyhey123.xiaojieorm.queries.SelectById
-import io.github.heyhey123.xiaojieorm.queries.SelectMany
-import io.github.heyhey123.xiaojieorm.queries.SelectOne
-import io.github.heyhey123.xiaojieorm.queries.SelectPage
-import io.github.heyhey123.xiaojieorm.queries.Update
-import io.github.heyhey123.xiaojieorm.queries.UpdateById
-import io.github.heyhey123.xiaojieorm.queries.UpsertById
 
 class RocksQueries(
     val database: RocksdbDatabase
