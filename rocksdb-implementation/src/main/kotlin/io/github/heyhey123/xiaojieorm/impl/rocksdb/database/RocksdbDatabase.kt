@@ -2,23 +2,41 @@ package io.github.heyhey123.xiaojieorm.impl.rocksdb.database
 
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.queries.RocksQueries
-import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.RocksDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
 import kotlinx.coroutines.Job
-import org.rocksdb.*
+import org.rocksdb.ColumnFamilyDescriptor
+import org.rocksdb.ColumnFamilyHandle
+import org.rocksdb.DBOptions
+import org.rocksdb.Options
+import org.rocksdb.RocksDB
+import java.nio.charset.StandardCharsets
 import java.util.concurrent.ConcurrentHashMap
 
 class RocksdbDatabase : Database() {
 
+    companion object {
+        const val METADATA_COLUMN_FAMILY = "__xiaojieorm_metadata__"
+    }
+
+    /**
+     * Lifecycle lock used to ensure that the database is only opened once.
+     */
+    private val lifecycleLock = Any()
+
     var databasePath: String? = null
+        private set
 
     val database: RocksDB?
         get() {
             if (!isConnected) return null
-            if (internalDatabase == null) internalDatabase = openDatabase()
-            return internalDatabase
+            synchronized(lifecycleLock) {
+                if (internalDatabase == null) {
+                    internalDatabase = openDatabase()
+                }
+                return internalDatabase
+            }
         }
 
     var internalDatabase: RocksDB? = null
@@ -26,12 +44,16 @@ class RocksdbDatabase : Database() {
 
     val columnFamilyHandles: MutableMap<String, ColumnFamilyHandle> = ConcurrentHashMap()
 
+    val metadataColumnFamilyHandle: ColumnFamilyHandle
+        get() {
+            database ?: error("Database is not connected")
+            return columnFamilyHandles[METADATA_COLUMN_FAMILY]
+                ?: error("Metadata column family is not available")
+        }
+
     private val requestedTables: MutableSet<String> = ConcurrentHashMap.newKeySet()
 
-    private val options = DBOptions().apply {
-        setCreateIfMissing(true)
-        setCreateMissingColumnFamilies(true)
-    }
+    private var options: DBOptions? = null
 
     override val dataTypes: RocksDataTypes = RocksDataTypes
 
@@ -41,67 +63,78 @@ class RocksdbDatabase : Database() {
     }
 
     private fun openDatabase(): RocksDB {
-        check(databasePath != null) { "Database path is not set." }
+        val path = checkNotNull(databasePath) { "Database path is not set." }
 
-        val existingColumnFamilies = try {
-            RocksDB.listColumnFamilies(Options(), databasePath!!)
-                .map { String(it) }
-                .toSet()
-        } catch (_: Exception) {
-            setOf("default")
+        val existingColumnFamilies = Options().use { listOptions ->
+            try {
+                RocksDB.listColumnFamilies(listOptions, path)
+                    .map { String(it, StandardCharsets.UTF_8) }
+                    .toSet()
+            } catch (_: org.rocksdb.RocksDBException) {
+                setOf(RocksDB.DEFAULT_COLUMN_FAMILY.toString(StandardCharsets.UTF_8))
+            }
         }
 
-        val allColumnFamilies = (existingColumnFamilies + requestedTables + "default").toSet()
+        val allColumnFamilies = linkedSetOf<String>().apply {
+            add(RocksDB.DEFAULT_COLUMN_FAMILY.toString(StandardCharsets.UTF_8))
+            add(METADATA_COLUMN_FAMILY)
+            addAll(existingColumnFamilies)
+            addAll(requestedTables)
+        }
 
-        val descriptors = allColumnFamilies.map {
-            ColumnFamilyDescriptor(it.toByteArray())
+        val descriptors = allColumnFamilies.map { name ->
+            ColumnFamilyDescriptor(name.toByteArray(StandardCharsets.UTF_8))
         }
         val handles = mutableListOf<ColumnFamilyHandle>()
-
-        val database = RocksDB.open(
-            options,
-            databasePath!!,
-            descriptors,
-            handles
-        )
-
-        allColumnFamilies.zip(handles).forEach { (name, handle) ->
-            columnFamilyHandles[name] = handle
+        val dbOptions = DBOptions().apply {
+            setCreateIfMissing(true)
+            setCreateMissingColumnFamilies(true)
         }
 
-        return database
+        return try {
+            RocksDB.open(dbOptions, path, descriptors, handles).also { db ->
+                options = dbOptions
+                allColumnFamilies.zip(handles).forEach { (name, handle) ->
+                    columnFamilyHandles[name] = handle
+                }
+            }
+        } catch (exception: Exception) {
+            handles.forEach(ColumnFamilyHandle::close)
+            dbOptions.close()
+            throw exception
+        }
     }
 
     override fun doDisconnect() {
-        RocksRowKeyEncoder.encodedPrimaryKeys.clear()
-        RocksRowValueCodec.cache.clear()
+        synchronized(lifecycleLock) {
+            RocksRowValueCodec.cache.clear()
 
-        internalDatabase?.close()
-        internalDatabase = null
-        val iterator = columnFamilyHandles.iterator()
-        while (iterator.hasNext()) {
-            val entry = iterator.next()
-            entry.value.close()
-            iterator.remove()
+            columnFamilyHandles.values.forEach(ColumnFamilyHandle::close)
+            columnFamilyHandles.clear()
+
+            internalDatabase?.close()
+            internalDatabase = null
+
+            options?.close()
+            options = null
+
+            requestedTables.clear()
+            databasePath = null
         }
-        requestedTables.clear()
-        databasePath = null
     }
 
     override fun doRegisterTable(table: Table): Job {
-        val completedJob = Job().apply { complete() }
+        synchronized(lifecycleLock) {
+            val tableName = table.name
+            requestedTables.add(tableName)
 
-        val tableName = table.name
-        if (tableName in requestedTables) return completedJob
+            val db = database
+            if (db != null && tableName !in columnFamilyHandles) {
+                val descriptor = ColumnFamilyDescriptor(tableName.toByteArray(StandardCharsets.UTF_8))
+                columnFamilyHandles[tableName] = db.createColumnFamily(descriptor)
+            }
+        }
 
-        val descriptor = ColumnFamilyDescriptor(tableName.toByteArray())
-        requestedTables.add(tableName)
-
-        if (database == null) return completedJob
-
-        val handle = database!!.createColumnFamily(descriptor)
-        columnFamilyHandles[tableName] = handle
-
-        return completedJob
+        return Job().apply { complete() }
     }
 }

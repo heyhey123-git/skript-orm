@@ -48,7 +48,10 @@ abstract class Database {
      * @param password The password for authentication.
      */
     fun connect(url: String, user: String, password: String) {
+        check(!isConnected) { "Database is already connected." }
+
         doConnect(url, user, password)
+        isConnected = true
         current = this
         if (tables.isNotEmpty()) {
             tables.forEach { (_, table) ->

@@ -10,7 +10,7 @@ class RocksDataCursor(
 
     var currentIndex = -1
 
-    override fun next() = currentIndex++ < result.size
+    override fun next() = ++currentIndex < result.size
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> get(column: String, dataType: DataType<T>): T? {
@@ -20,8 +20,9 @@ class RocksDataCursor(
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> get(index: Int, dataType: DataType<T>): T? {
+        require(index >= 1) { "Column index must be 1-based and positive." }
         val converter = dataType.converter as ValueConverter<T, Any>
-        return result[currentIndex].values.elementAt(index)?.let { converter.fromStorage(it) }
+        return result[currentIndex].values.elementAt(index - 1)?.let { converter.fromStorage(it) }
     }
 
     override fun close() {}

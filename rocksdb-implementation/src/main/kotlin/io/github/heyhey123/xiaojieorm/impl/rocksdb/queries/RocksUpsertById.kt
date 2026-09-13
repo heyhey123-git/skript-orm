@@ -1,4 +1,4 @@
-package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
@@ -12,13 +12,12 @@ class RocksUpsertById(
     values: Map<String, Any?>,
     override val database: RocksdbDatabase
 ): UpsertById(id, values), RocksQuery {
-    @Suppress("UNCHECKED_CAST")
     override suspend fun execute(table: Table): WriteResult {
         val primaryKey = RocksRowKeyEncoder.encodePrimaryKey(table, id)
         val cfHandle = database.columnFamilyHandles[table.name]
             ?: error("Column family for table `${table.name}` not found, did you forget to register the table?")
 
-        val valueBytes = RocksRowValueCodec.forTable(table).encodeRow(values as Map<String, ByteArray?>)
+        val valueBytes = RocksRowValueCodec.forTable(table).encodeRow(values)
 
         database.database!!.put(cfHandle, primaryKey, valueBytes)
         return WriteResult(affectedCount = 1)

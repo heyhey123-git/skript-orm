@@ -1,17 +1,15 @@
-package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementManager
+import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementValueAdapter
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.queries.InsertMany
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
-import org.rocksdb.ColumnFamilyHandle
 import org.rocksdb.WriteBatch
 import org.rocksdb.WriteOptions
-import kotlin.String
-import kotlin.collections.Map
 
 class RocksInsertMany(
     valuesList: List<Map<String, Any?>>,
@@ -32,12 +30,12 @@ class RocksInsertMany(
             val needAutoIncrementCount = mutValuesList.count { pkColumn.name !in it }
             if (needAutoIncrementCount > 0) {
                 val idRange = RocksAutoIncrementManager.getAndIncrementBatch(
-                    database, cfHandle, table, pkColumn.name, needAutoIncrementCount
+                    database, table, pkColumn.name, needAutoIncrementCount
                 )
                 var currentId = idRange.first
                 mutValuesList.forEach { row ->
                     if (pkColumn.name !in row) {
-                        row[pkColumn.name] = currentId++
+                        row[pkColumn.name] = RocksAutoIncrementValueAdapter.toColumnValue(pkColumn, currentId++)
                     }
                 }
             }
@@ -89,6 +87,6 @@ class RocksInsertMany(
             row[name] = value
         }
 
-        return RocksRowValueCodec.forTable(table).encodeRow(row as Map<String, ByteArray?>)
+        return RocksRowValueCodec.forTable(table).encodeRow(row)
     }
 }

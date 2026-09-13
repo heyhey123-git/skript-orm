@@ -1,4 +1,4 @@
-package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.condition.RocksConditionTranslator
@@ -18,7 +18,6 @@ class RocksUpdate(
     where: WhereClause?,
     override val database: RocksdbDatabase
 ) : Update(values, limit, where), RocksQuery {
-    @Suppress("UNCHECKED_CAST")
     override suspend fun execute(table: Table): WriteResult {
         val db = database.database!!
         val conditions = RocksConditionTranslator.translate(where, table)
@@ -34,7 +33,7 @@ class RocksUpdate(
                     return WriteResult(affectedCount = 0)
                 }
 
-                val value = codec.encodeRow(values as Map<String, ByteArray?>)
+                val value = codec.encodeRow(values)
 
                 db.put(cfHandle, key, value)
                 return WriteResult(affectedCount = 1)
@@ -58,7 +57,7 @@ class RocksUpdate(
                         }
 
                         val key = iterator.key()
-                        val newValue = codec.encodeRow(values as Map<String, ByteArray?>)
+                        val newValue = codec.encodeRow(values)
 
                         updates[key] = newValue
                         iterator.next()

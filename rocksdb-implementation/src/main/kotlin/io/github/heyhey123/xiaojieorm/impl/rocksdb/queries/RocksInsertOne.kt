@@ -1,7 +1,8 @@
-package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementManager
+import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementValueAdapter
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.queries.InsertOne
@@ -12,7 +13,6 @@ class RocksInsertOne(
     values: Map<String, Any?>,
     override val database: RocksdbDatabase
 ) : InsertOne(values), RocksQuery {
-    @Suppress("UNCHECKED_CAST")
     override suspend fun execute(table: Table): WriteResult {
         val cfHandle = database.columnFamilyHandles[table.name]
             ?: throw IllegalStateException("Column family for table ${table.name} not found")
@@ -25,11 +25,13 @@ class RocksInsertOne(
             values.containsKey(pkColumn.name) -> values[pkColumn.name]
                 ?: throw IllegalArgumentException("Primary key ${pkColumn.name} value can't be null")
 
-            pkColumn.isAutoIncrement -> RocksAutoIncrementManager.getAndIncrement(
-                database,
-                cfHandle,
-                table,
-                pkColumn.name
+            pkColumn.isAutoIncrement -> RocksAutoIncrementValueAdapter.toColumnValue(
+                pkColumn,
+                RocksAutoIncrementManager.getAndIncrement(
+                    database,
+                    table,
+                    pkColumn.name
+                )
             )
 
             else -> throw IllegalArgumentException("Primary key value for column ${pkColumn.name} is missing")
@@ -44,12 +46,12 @@ class RocksInsertOne(
         }
 
         table.columns.forEach { (name, column) ->
-            if (!column.isNullable && !rowValues.containsKey(name)) {
+            if (!column.isNullable && rowValues[name] == null) {
                 throw IllegalArgumentException("Column $name cannot be null")
             }
         }
 
-        val value = RocksRowValueCodec.forTable(table).encodeRow(rowValues as Map<String, ByteArray?>)
+        val value = RocksRowValueCodec.forTable(table).encodeRow(rowValues)
 
         database.database!!.put(cfHandle, key, value)
 

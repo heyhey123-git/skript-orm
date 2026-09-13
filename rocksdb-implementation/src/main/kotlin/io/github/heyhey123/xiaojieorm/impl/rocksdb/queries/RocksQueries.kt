@@ -15,7 +15,6 @@ import io.github.heyhey123.xiaojieorm.queries.SelectPage
 import io.github.heyhey123.xiaojieorm.queries.Update
 import io.github.heyhey123.xiaojieorm.queries.UpdateById
 import io.github.heyhey123.xiaojieorm.queries.UpsertById
-import io.papermc.paper.datacomponent.item.attribute.AttributeModifierDisplay.override
 
 class RocksQueries(
     val database: RocksdbDatabase

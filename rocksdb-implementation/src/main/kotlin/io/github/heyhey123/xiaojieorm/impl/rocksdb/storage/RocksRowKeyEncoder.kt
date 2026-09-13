@@ -5,43 +5,30 @@ import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.EncoderUtils.ROW_MARK
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.RocksDataType
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.StringRocksConverter
 import io.github.heyhey123.xiaojieorm.table.Table
-import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Rocks row key encoder.
+ * Encoder for row keys.
  *
- * @property table The table to encode keys for
- * @constructor Create empty Rocks row key encoder
  */
 object RocksRowKeyEncoder {
 
     /**
-     * Cache of encoded primary keys.
-     */
-    val encodedPrimaryKeys: MutableMap<Table, ByteArray> = ConcurrentHashMap()
-
-    /**
      * Encode primary key.
+     *
+     * The public query API may supply either a domain value or an already converted
+     * storage value, so ByteArray values are used directly.
      *
      * @param table The table
      * @param id The primary key value
      * @return Encoded primary key as byte array
      */
+    @Suppress("UNCHECKED_CAST")
     fun encodePrimaryKey(table: Table, id: Any): ByteArray {
-        if (table in encodedPrimaryKeys) {
-            return encodedPrimaryKeys[table]!!
-        }
-
         val pkColumn = table.primaryKey
             ?: error("Table `${table.name}` has no primary key")
-        val dataType = pkColumn.type
-
-        val converter = (dataType as RocksDataType<Any>).converter
+        val converter = (pkColumn.type as RocksDataType<Any>).converter
         val pkBytes = converter.toStorage(id)
-        val result = byteArrayOf(PRIMARY_KEY_MARKER) + pkBytes
-
-        encodedPrimaryKeys[table] = result
-        return result
+        return byteArrayOf(PRIMARY_KEY_MARKER) + pkBytes
     }
 
     /**

@@ -1,4 +1,4 @@
-package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
@@ -11,7 +11,6 @@ class RocksInsertIfAbsent(
     values: Map<String, Any?>,
     override val database: RocksdbDatabase
 ) : InsertIfAbsent(values), RocksQuery {
-    @Suppress("UNCHECKED_CAST")
     override suspend fun execute(table: Table): WriteResult {
         val cfHandle = database.columnFamilyHandles[table.name]
             ?: throw IllegalStateException("Column family for table ${table.name} not found")
@@ -42,7 +41,7 @@ class RocksInsertIfAbsent(
                 RocksRowKeyEncoder.encodePrimaryKey(table, pkValue!!)
             } ?: RocksRowKeyEncoder.encodeGeneratedRowKey()
 
-            val value = RocksRowValueCodec.forTable(table).encodeRow(values as Map<String, ByteArray?>)
+            val value = RocksRowValueCodec.forTable(table).encodeRow(values)
 
             database.database!!.put(cfHandle, key, value)
             WriteResult(affectedCount = 1)

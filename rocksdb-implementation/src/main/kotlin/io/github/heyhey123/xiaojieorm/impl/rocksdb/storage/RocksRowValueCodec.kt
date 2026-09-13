@@ -1,19 +1,12 @@
 package io.github.heyhey123.xiaojieorm.impl.rocksdb.storage
 
-import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.RocksValueConverter
+import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.RocksDataType
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.nio.ByteBuffer
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Type alias for pre-converted row values.
- * All values should already be converted to ByteArray by
- * [RocksValueConverter] before encoding.
- */
-typealias ConvertedRowValues = Map<String, ByteArray?>
-
-/**
- * Rocks row value codec.
+ * Codec for encoding and decoding rows in RocksDB.
  *
  * @property table The table to encode/decode rows for
  */
@@ -50,9 +43,14 @@ class RocksRowValueCodec private constructor(
      * @param values The map of column names to their values.
      * @return The encoded byte array.
      */
-    fun encodeRow(values: ConvertedRowValues): ByteArray {
+    @Suppress("UNCHECKED_CAST")
+    fun encodeRow(values: Map<String, Any?>): ByteArray {
         val columns = table.columns
 
+        /**
+         * Encoded column.
+         *
+         */
         data class EncodedCol(
             val nameBytes: ByteArray,
             val valueBytes: ByteArray?,
@@ -61,8 +59,7 @@ class RocksRowValueCodec private constructor(
         val encoded = ArrayList<EncodedCol>(columns.size)
         var totalLen = 2 // column count length
 
-        for ((name, _) in columns) {
-            val name = name
+        for ((name, column) in columns) {
             val nameBytes = name.toByteArray(Charsets.UTF_8)
 
             totalLen += 2 + nameBytes.size + 4 // the total length of this column
@@ -73,9 +70,18 @@ class RocksRowValueCodec private constructor(
                 continue
             }
 
-            totalLen += value.size
+            val valueBytes = if (value is ByteArray) {
+                value
+            } else {
+                val dataType = column.type as? RocksDataType<Any>
+                    ?: throw IllegalArgumentException(
+                        "Column `$name` in table `${table.name}` is not backed by a Rocks data type"
+                    )
+                dataType.converter.toStorage(value)
+            }
 
-            encoded += EncodedCol(nameBytes, value)
+            totalLen += valueBytes.size
+            encoded += EncodedCol(nameBytes, valueBytes)
         }
 
         val buffer = ByteBuffer.allocate(if (totalLen > 0) totalLen else 2)

@@ -2,97 +2,107 @@ package io.github.heyhey123.xiaojieorm.impl.rocksdb.storage
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.table.Table
-import org.rocksdb.ColumnFamilyHandle
 import java.nio.ByteBuffer
 
 /**
- * 自增ID持久化管理器
- * 使用特殊的 key 前缀存储每个表每列的当前自增值
+ * Persists auto-increment counters in the dedicated metadata column family.
  */
 object RocksAutoIncrementManager {
 
-    private const val AUTO_INCREMENT_PREFIX = "__auto_increment__:"
+    private const val AUTO_INCREMENT_PREFIX = "auto-increment:"
 
     /**
-     * 获取并递增自增值
+     * A monitor to prevent concurrent auto-increment updates.
+     * When an update is in progress, no other updates can be started.
+     */
+    private val incrementLock = Any()
+
+    /**
+     * Get the current auto-increment value and increment it by 1.
+     *
+     * @param database The database instance
+     * @param table The table
+     * @param columnName The column
+     * @return The next auto-increment value
      */
     fun getAndIncrement(
         database: RocksdbDatabase,
-        cfHandle: ColumnFamilyHandle,
         table: Table,
         columnName: String
-    ): Long {
-        val key = encodeKey(table.name, columnName)
-        val db = database.database!!
-
-        // 读取当前值
-        val currentBytes = db.get(cfHandle, key)
-        val currentValue = if (currentBytes != null) {
-            ByteBuffer.wrap(currentBytes).getLong()
-        } else {
-            0L
-        }
-
-        // 递增并写回
-        val newValue = currentValue + 1
-        val newBytes = ByteBuffer.allocate(Long.SIZE_BYTES).putLong(newValue).array()
-        db.put(cfHandle, key, newBytes)
-
-        return newValue
+    ): Long = synchronized(incrementLock) {
+        val current = getCurrent(database, table, columnName)
+        val next = Math.addExact(current, 1L)
+        set(database, table, columnName, next)
+        next
     }
-
-    fun getAndIncrementBatch(database: RocksdbDatabase, cfHandle: ColumnFamilyHandle, table: Table, columnName: String, count: Int): LongRange {
-        val key = encodeKey(table.name, columnName)
-        val db = database.database!!
-
-        // 读取当前值
-        val currentBytes = db.get(cfHandle, key)
-        val currentValue = if (currentBytes != null) {
-            ByteBuffer.wrap(currentBytes).getLong()
-        } else {
-            0L
-        }
-
-        // 计算新的范围
-        val newValue = currentValue + count
-        val newBytes = ByteBuffer.allocate(Long.SIZE_BYTES).putLong(newValue).array()
-        db.put(cfHandle, key, newBytes)
-
-        return (currentValue + 1)..newValue
-    }
-
 
     /**
-     * 获取当前自增值（不递增）
+     * Get the current auto-increment value and increment it by the specified amount.
+     *
+     * @param database The database instance
+     * @param table The table
+     * @param columnName The column
+     * @param count The amount
+     * @return The next auto-increment value
+     */
+    fun getAndIncrementBatch(
+        database: RocksdbDatabase,
+        table: Table,
+        columnName: String,
+        count: Int
+    ): LongRange = synchronized(incrementLock) {
+        require(count >= 0) { "Auto-increment batch count cannot be negative." }
+        val current = getCurrent(database, table, columnName)
+        val next = Math.addExact(current, count.toLong())
+        set(database, table, columnName, next)
+        (current + 1)..next
+    }
+
+    /**
+     * Get current auto-increment value, or 0 if not found.
+     *
+     * @param database The database instance
+     * @param table The table
+     * @param columnName The column
+     * @return The current auto-increment value
      */
     fun getCurrent(
         database: RocksdbDatabase,
-        cfHandle: ColumnFamilyHandle,
         table: Table,
         columnName: String
     ): Long {
-        val key = encodeKey(table.name, columnName)
-        val bytes = database.database!!.get(cfHandle, key) ?: return 0L
-        return ByteBuffer.wrap(bytes).getLong()
+        val bytes = database.database!!.get(
+            database.metadataColumnFamilyHandle,
+            encodeKey(table.name, columnName)
+        ) ?: return 0L
+        require(bytes.size == Long.SIZE_BYTES) {
+            "Invalid auto-increment value for `${table.name}.$columnName`."
+        }
+        return ByteBuffer.wrap(bytes).long
     }
 
     /**
-     * 设置自增值（用于初始化或重置）
+     * Set the current auto-increment value.
+     *
+     * @param database The database instance
+     * @param table The table
+     * @param columnName The column name
+     * @param value The value to set
      */
     fun set(
         database: RocksdbDatabase,
-        cfHandle: ColumnFamilyHandle,
         table: Table,
         columnName: String,
         value: Long
     ) {
-        val key = encodeKey(table.name, columnName)
         val bytes = ByteBuffer.allocate(Long.SIZE_BYTES).putLong(value).array()
-        database.database!!.put(cfHandle, key, bytes)
+        database.database!!.put(
+            database.metadataColumnFamilyHandle,
+            encodeKey(table.name, columnName),
+            bytes
+        )
     }
 
-    private fun encodeKey(tableName: String, columnName: String): ByteArray {
-        return "$AUTO_INCREMENT_PREFIX$tableName.$columnName".toByteArray(Charsets.UTF_8)
-    }
+    private fun encodeKey(tableName: String, columnName: String): ByteArray =
+        "$AUTO_INCREMENT_PREFIX$tableName.$columnName".toByteArray(Charsets.UTF_8)
 }
-
