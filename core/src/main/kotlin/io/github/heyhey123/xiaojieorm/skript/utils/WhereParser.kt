@@ -9,7 +9,6 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpression
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpressionNonNull
 import io.github.heyhey123.xiaojieorm.table.Table
-import io.github.heyhey123.xiaojieorm.type.ValueConverter
 import org.bukkit.event.Event
 
 /**
@@ -20,15 +19,15 @@ sealed class ParsedCondition {
 
     abstract fun resolve(event: Event?): Condition
 
-    protected fun convertValueExpr(
+    protected fun resolveValueExpr(
         columnName: String,
         valueExpr: Expression<*>?,
         event: Event?
     ): Any? {
-        val converter = table.getColumnByName(columnName)?.type?.converter as ValueConverter<Any,*>?
-            ?: throw IllegalArgumentException("Column '$columnName' does not exist in table '${table.name}'")
-        val value = valueExpr?.getSingle(event) ?: return null
-        return converter.toStorage(value)
+        checkNotNull(table.getColumnByName(columnName)) {
+            "Column '$columnName' does not exist in table '${table.name}'"
+        }
+        return valueExpr?.getSingle(event)
     }
 
     data class Equals(
@@ -38,7 +37,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.Equals(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)
+            resolveValueExpr(columnName,valueExpr, event)
         )
     }
 
@@ -49,7 +48,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.NotEquals(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)
+            resolveValueExpr(columnName,valueExpr, event)
         )
     }
 
@@ -60,7 +59,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.GreaterThan(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName,valueExpr, event)!!
         )
     }
 
@@ -71,7 +70,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.LessThan(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName,valueExpr, event)!!
         )
     }
 
@@ -82,7 +81,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.GreaterThanOrEquals(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName,valueExpr, event)!!
         )
     }
 
@@ -93,7 +92,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.LessThanOrEquals(
             columnName,
-            convertValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName,valueExpr, event)!!
         )
     }
 
@@ -105,8 +104,8 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.Between(
             columnName,
-            convertValueExpr(columnName,startExpr, event)!!,
-            convertValueExpr(columnName,endExpr, event)!!
+            resolveValueExpr(columnName,startExpr, event)!!,
+            resolveValueExpr(columnName,endExpr, event)!!
         )
     }
 }

@@ -3,7 +3,6 @@ package io.github.heyhey123.xiaojieorm.skript.utils
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.table.Table
-import io.github.heyhey123.xiaojieorm.type.ValueConverter
 import org.bukkit.event.Event
 
 data class RawValue(
@@ -43,14 +42,13 @@ data class ParsedValues(
     val table: Table,
     val values: Map<String, Expression<*>?>
 ) {
-    @Suppress("UNCHECKED_CAST")
     fun resolve(event: Event?): Map<String, Any?> {
         val resolvedMap = mutableMapOf<String, Any?>()
         for ((columnName, expression) in values) {
-            val converter = table.getColumnByName(columnName)?.type?.converter as ValueConverter<Any, Any>?
-                ?: throw IllegalArgumentException("Column '$columnName' does not exist in table '${table.name}'")
-            val domainValue = expression?.getSingle(event)
-            resolvedMap[columnName] = domainValue?.let { converter.toStorage(it) }
+            checkNotNull(table.getColumnByName(columnName)) {
+                "Column '$columnName' does not exist in table '${table.name}'"
+            }
+            resolvedMap[columnName] = expression?.getSingle(event)
         }
         return resolvedMap
     }
