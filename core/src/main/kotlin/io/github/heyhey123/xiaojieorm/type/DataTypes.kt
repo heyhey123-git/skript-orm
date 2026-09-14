@@ -12,13 +12,6 @@ typealias SkriptTimespan = ch.njol.skript.util.Timespan
 
 abstract class DataTypes {
 
-    companion object {
-        /**
-         * The DataTypes singleton instance.
-         */
-        lateinit var INSTANCE: DataTypes
-    }
-
     /**
      * The registry of data types.
      */

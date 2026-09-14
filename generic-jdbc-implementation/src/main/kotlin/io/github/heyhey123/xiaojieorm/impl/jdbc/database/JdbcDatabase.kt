@@ -7,14 +7,14 @@ import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
-import io.github.heyhey123.xiaojieorm.type.DataTypes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 open class JdbcDatabase(
-    val driver: String
+    val driver: String,
+    val dialect: JdbcDialect = GenericJdbcDialect
 ) : Database() {
 
     var dataSource: HikariDataSource? = null
@@ -31,12 +31,15 @@ open class JdbcDatabase(
             }
             dataSource = HikariDataSource(config)
 
-            queries = JdbcQueries(dataSource!!)
-            DataTypes.INSTANCE = JdbcDataTypes
+            queries = JdbcQueries(dataSource!!, dialect)
         } catch (e: ClassNotFoundException) {
             throw ClassNotFoundException("JDBC Driver class not found: $driver", e)
         } catch (e: Exception) {
-            dataSource?.close()
+            try {
+                dataSource?.close()
+            } catch (cleanupError: Throwable) {
+                e.addSuppressed(cleanupError)
+            }
             dataSource = null
             queries = null
             throw IllegalStateException("Failed to connect to the database: $url", e)
@@ -49,22 +52,36 @@ open class JdbcDatabase(
     }
 
     override fun doRegisterTable(table: Table): Job {
-        check(dataSource != null) { "Database is not connected. Please connect before registering tables." }
+        val source = checkNotNull(dataSource) {
+            "Database is not connected. Please connect before registering tables."
+        }
         val sql = buildString {
             append("CREATE TABLE IF NOT EXISTS ${table.name} (")
 
             table.columns.values.forEachIndexed { index, column ->
-                val columnType = column.type as JdbcDataType<*>
+                val columnType = requireNotNull(column.type as? JdbcDataType<*>) {
+                    "Data type ${column.type.typeCode} is not supported by the JDBC implementation."
+                }
                 append("${column.name} ${columnType.storageName}")
-                val size = if (column.size != null) column.size!!
-                    else columnType.defaultSize
-                if (size >= 0) {
+                val size = column.size ?: columnType.defaultSize.takeIf { it >= 0 }
+                if (size != null) {
+                    require(columnType.supportsSize) {
+                        "JDBC type ${columnType.storageName} does not support a column size."
+                    }
                     append("($size)")
                 }
 
                 if (!column.isNullable) append(" NOT NULL")
                 if (column.isPrimaryKey) append(" PRIMARY KEY")
-                if (column.isAutoIncrement) append(" AUTO_INCREMENT")
+                if (column.isAutoIncrement) {
+                    require(columnType.jdbcType in setOf(
+                        java.sql.JDBCType.TINYINT,
+                        java.sql.JDBCType.SMALLINT,
+                        java.sql.JDBCType.INTEGER,
+                        java.sql.JDBCType.BIGINT
+                    )) { "Auto-increment column ${column.name} must use an integer JDBC type." }
+                    append(dialect.autoIncrementClause())
+                }
 
                 if (index < table.columns.size - 1) append(", ")
             }
@@ -73,7 +90,7 @@ open class JdbcDatabase(
         }
 
         return CoroutineScope(Dispatchers.IO).launch {
-            dataSource!!.connection.use { connection ->
+            source.connection.use { connection ->
                 connection.createStatement().use { statement ->
                     statement.executeUpdate(sql)
                 }

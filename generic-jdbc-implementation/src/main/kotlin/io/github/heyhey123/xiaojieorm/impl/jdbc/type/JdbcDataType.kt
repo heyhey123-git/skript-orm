@@ -20,6 +20,12 @@ interface JdbcDataType<T : Any>: DataType<T> {
         get() = -1
 
     /**
+     * Whether a column length can be appended to this storage type.
+     */
+    val supportsSize: Boolean
+        get() = false
+
+    /**
      * The name of the storage type in the database.
      */
     val storageName: String

@@ -94,7 +94,7 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
-        val table = Database.tables[tableName] ?: run {
+        val table = database.tables[tableName] ?: run {
             ErrorPrinter.printErrorMessageWithDetail(trigger, "Table '$tableName' not found.")
             return walk(event, false)
         }
@@ -110,6 +110,7 @@ abstract class SecWriteBase : Section() {
             try {
                 executeWrite(database, table, resolvedSingle, resolvedMultiple, whereClause, event)
             } catch (e: Throwable) {
+                // Make sure the error message will be printed instantly, because the main thread may continue to execute other code and the error message may be delayed.
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${e.message}")
             } finally {
                 if (waitFlag) {

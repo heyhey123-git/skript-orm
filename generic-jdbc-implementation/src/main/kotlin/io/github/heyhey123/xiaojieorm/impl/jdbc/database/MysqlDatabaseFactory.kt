@@ -26,5 +26,5 @@ object MysqlDatabaseFactory : DatabaseFactory {
         get() = "MySQL"
 
     override fun create(properties: Map<String, String>) =
-        JdbcDatabase(driverName)
+        JdbcDatabase(driverName, MysqlJdbcDialect)
 }

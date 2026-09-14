@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
-import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.queries.UpdateById
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
@@ -16,9 +15,9 @@ open class JdbcUpdateById(id: Any, values: Map<String, Any?>, override val dataS
         return executeUpdate(sql) { statement ->
             columns.forEachIndexed { index, key ->
                 val column = requireNotNull(table.getColumnByName(key)) { "Table ${table.name} does not have column $key." }
-                statement.setObject(index + 1, values[key], (column.type as JdbcDataType).jdbcType)
+                statement.bindValue(index + 1, values[key], column.type)
             }
-            statement.setObject(columns.size + 1, id, (primaryKey.type as JdbcDataType).jdbcType)
+            statement.bindValue(columns.size + 1, id, primaryKey.type)
         }
     }
 }

@@ -44,11 +44,19 @@ interface JdbcQuery {
                 val resultSet = statement.executeQuery()
                 return CursorResult(JdbcDataCursor(resultSet, statement, connection))
             } catch (error: Throwable) {
-                statement.close()
+                try {
+                    statement.close()
+                } catch (cleanupError: Throwable) {
+                    error.addSuppressed(cleanupError)
+                }
                 throw error
             }
         } catch (error: Throwable) {
-            connection.close()
+            try {
+                connection.close()
+            } catch (cleanupError: Throwable) {
+                error.addSuppressed(cleanupError)
+            }
             throw error
         }
     }

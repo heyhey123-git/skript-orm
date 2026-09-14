@@ -16,6 +16,7 @@ import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.launch
 import org.bukkit.event.Event
+import java.lang.ScopedValue.where
 
 @Name("Select One")
 @Description("Select one entity from a table and store the result in a variable.")
@@ -100,7 +101,7 @@ class SecSelectOne : Section() {
             return walk(event, false)
         }
 
-        val table = Database.tables[tableName]
+        val table = database.tables[tableName]
         if (table == null) {
             ErrorPrinter.printErrorMessageWithDetail(
                 firstLine,
@@ -131,12 +132,11 @@ class SecSelectOne : Section() {
                         }
                     }
                 }
-
-                launch(SyncDispatcher) {
-                    VariableModifier.writeMap(resultVar, event, result.mapKeys { it.key.toString() })
-                }
+                // Don't need to change to sync context here, because the caller will handle it based on the waitFlag.
+                VariableModifier.writeMap(resultVar, event, result.mapKeys { it.key.toString() })
 
             } catch (e: Throwable) {
+                // Make sure the error message will be printed instantly, because the main thread may continue to execute other code and the error message may be delayed.
                 ErrorPrinter.printErrorMessageWithDetail(
                     firstLine,
                     "Failed to execute select one query in select one section: ${e.message}"

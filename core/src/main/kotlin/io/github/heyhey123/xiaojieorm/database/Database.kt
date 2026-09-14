@@ -4,7 +4,7 @@ import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataTypes
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.future.asCompletableFuture
+import org.bukkit.Bukkit
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -13,16 +13,14 @@ import java.util.concurrent.ConcurrentHashMap
  */
 abstract class Database {
     companion object {
-        /**
-         * The currently active database connection.
-         */
-        var current: Database? = null
 
-        /**
-         * The set of registered tables in the current database.
-         */
-        val tables: MutableMap<String, Table> = ConcurrentHashMap()
+        var current: Database? = null
     }
+
+    /**
+     * Tables registered for this database instance.
+     */
+    val tables: MutableMap<String, Table> = ConcurrentHashMap()
 
     /**
      * Indicates whether the database is currently connected.
@@ -40,15 +38,15 @@ abstract class Database {
      */
     abstract val dataTypes: DataTypes
 
+
     /**
-     * Establishes a connection to the database using the provided URL, username, and password.
+     * Connects to the database using the provided URL, username, and password.
+     * This method must be called on the primary thread and ensures that only one database connection is active at a time.
      *
-     * @param url The database connection URL.
-     * @param user The username for authentication.
-     * @param password The password for authentication.
+     * @throws error if the connection fails or if another database is already connected.
      */
-    @Synchronized
     fun connect(url: String, user: String, password: String) {
+        check(Bukkit.isPrimaryThread()) { "Connection must be established on the primary thread." }
         check(!isConnected) { "Database is already connected." }
         check(current == null || current === this) {
             "Another database is already connected. Disconnect it before connecting a new database."
@@ -88,10 +86,11 @@ abstract class Database {
     /**
      * Disconnects from the database.
      * If there is no active connection, this method does nothing.
-     *
+     * This method must be called on the primary thread.
+     * @throws error if the disconnection fails.
      */
-    @Synchronized
     fun disconnect() {
+        check(Bukkit.isPrimaryThread()) { "Disconnection must be performed on the primary thread." }
         if (!isConnected && queries == null && current !== this) return
         var failure: Throwable? = null
         try {
@@ -103,7 +102,6 @@ abstract class Database {
             queries = null
             if (current === this) {
                 current = null
-                tables.clear()
             }
         }
         failure?.let { throw it }
@@ -120,10 +118,13 @@ abstract class Database {
      *
      * @param table The table to register.
      */
-    fun registerTable(table: Table) {
-        doRegisterTable(table).asCompletableFuture().thenAccept {
-            tables[table.name] = table
+    fun registerTable(table: Table): Job {
+        check(isConnected) { "Database is not connected." }
+        val registration = doRegisterTable(table)
+        registration.invokeOnCompletion { error ->
+            if (error == null) tables[table.name] = table
         }
+        return registration
     }
 
     /**

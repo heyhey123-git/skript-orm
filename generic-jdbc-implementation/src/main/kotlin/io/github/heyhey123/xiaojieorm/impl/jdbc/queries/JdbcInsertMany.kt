@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
-import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.queries.InsertMany
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
@@ -22,20 +21,21 @@ open class JdbcInsertMany(valuesList: List<Map<String, Any?>>, override val data
                 valuesList.forEach { row ->
                     columns.forEachIndexed { index, key ->
                         val column = requireNotNull(table.getColumnByName(key)) { "Table ${table.name} does not have column $key." }
-                        statement.setObject(index + 1, row[key], (column.type as JdbcDataType).jdbcType)
+                        statement.bindValue(index + 1, row[key], column.type)
                     }
                     statement.addBatch()
                 }
                 val counts = statement.executeBatch()
-                var affected = 0
+                var affected = 0L
                 counts.forEach { count ->
                     when {
-                        count >= 0 -> affected += count
-                        count == Statement.SUCCESS_NO_INFO -> affected += 1
+                        count >= 0 -> affected += count.toLong()
+                        count == Statement.SUCCESS_NO_INFO -> error("The JDBC driver did not report an exact batch update count.")
                         count == Statement.EXECUTE_FAILED -> error("A JDBC batch insert operation failed.")
                     }
+                    check(affected <= Int.MAX_VALUE) { "Affected row count exceeds the supported Int range." }
                 }
-                WriteResult(affected)
+                WriteResult(affected.toInt())
             }
         }
     }

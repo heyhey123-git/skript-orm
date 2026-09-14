@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
-import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.queries.InsertOne
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
@@ -14,7 +13,7 @@ open class JdbcInsertOne(values: Map<String, Any?>, override val dataSource: Dat
         return executeUpdate(sql) { statement ->
             columns.forEachIndexed { index, key ->
                 val column = requireNotNull(table.getColumnByName(key)) { "Table ${table.name} does not have column $key." }
-                statement.setObject(index + 1, values[key], (column.type as JdbcDataType).jdbcType)
+                statement.bindValue(index + 1, values[key], column.type)
             }
         }
     }

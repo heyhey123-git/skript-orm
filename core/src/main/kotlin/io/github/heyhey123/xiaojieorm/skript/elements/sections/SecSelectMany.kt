@@ -28,6 +28,7 @@ class SecSelectMany : SecSelectBase() {
         database: Database,
         table: Table,
         whereClause: WhereClause?,
+        extraArguments: Any?,
         event: Event?
     ) {
         val result = mutableListOf<Any?>()
@@ -38,10 +39,7 @@ class SecSelectMany : SecSelectBase() {
                 }
             }
         }
-
-        withContext(SyncDispatcher) {
-            VariableModifier.writeList(resultVar, event, result)
-        }
+        VariableModifier.writeList(resultVar, event, result)
     }
 
     override fun toString(event: Event?, debug: Boolean): String =

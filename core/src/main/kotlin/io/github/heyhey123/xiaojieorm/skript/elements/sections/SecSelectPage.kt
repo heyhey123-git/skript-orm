@@ -5,7 +5,6 @@ import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Trigger
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
-import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
@@ -37,29 +36,30 @@ class SecSelectPage : SecSelectBase() {
         pageSizeExpr = expressions[1] as Expression<Int>
     }
 
+    private data class PageArguments(val pageIndex: Int, val pageSize: Int)
+
+    override fun resolveExtraArguments(event: Event?, trigger: Trigger): Any {
+        val pageIndex = requireNotNull(pageIndexExpr.getSingle(event)) {
+            "Page index expression in 'select page' is null."
+        }
+        val pageSize = requireNotNull(pageSizeExpr.getSingle(event)) {
+            "Page size expression in 'select page' is null."
+        }
+        require(pageIndex >= 1) { "Page index must be at least one." }
+        require(pageSize > 0) { "Page size must be positive." }
+        return PageArguments(pageIndex, pageSize)
+    }
+
     override suspend fun executeQuery(
         database: Database,
         table: Table,
         whereClause: WhereClause?,
+        extraArguments: Any?,
         event: Event?
     ) {
-        val firstLine: Trigger = this.first!!.trigger!!
-
-        val pageIndex = pageIndexExpr.getSingle(event) ?: let {
-            ErrorPrinter.printErrorMessageWithDetail(
-                firstLine,
-                "Page index expression in 'select page' is null."
-            )
-            return
-        }
-
-        val pageSize = pageSizeExpr.getSingle(event) ?: let {
-            ErrorPrinter.printErrorMessageWithDetail(
-                firstLine,
-                "Page size expression in 'select page' is null."
-            )
-            return
-        }
+        val arguments = extraArguments as PageArguments
+        val pageIndex = arguments.pageIndex
+        val pageSize = arguments.pageSize
 
         val result = mutableListOf<Map<String, Any?>>()
         val columns = table.columns.values
@@ -76,10 +76,7 @@ class SecSelectPage : SecSelectBase() {
                     result.add(row)
                 }
             }
-
-        withContext(SyncDispatcher) {
             VariableModifier.writeList(resultVar, event, result)
-        }
     }
 
     override fun toString(event: Event?, debug: Boolean): String = buildString {

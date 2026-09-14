@@ -89,6 +89,7 @@ open class StringJdbcDataType : StringDataType(), JdbcDataType<String> {
     override val jdbcType: JDBCType = JDBCType.VARCHAR
     override val storageName: String = "VARCHAR"
     override val defaultSize: Int = 255
+    override val supportsSize: Boolean = true
 }
 
 open class UuidJdbcDataType : UuidDataType(), JdbcDataType<UUID> {
@@ -96,6 +97,7 @@ open class UuidJdbcDataType : UuidDataType(), JdbcDataType<UUID> {
     override val storageName: String = "BINARY"
     override val converter: ValueConverter<UUID, ByteArray> = UuidJdbcConverter
     override val defaultSize: Int = 16
+    override val supportsSize: Boolean = true
 }
 
 open class ItemStackJdbcDataType : ItemStackDataType(), JdbcDataType<ItemStack> {
@@ -109,6 +111,7 @@ open class LocationJdbcDataType : LocationDataType(), JdbcDataType<Location> {
     override val storageName: String = "VARBINARY"
     override val converter: ValueConverter<Location, ByteArray> = LocationJdbcConverter
     override val defaultSize: Int = 255
+    override val supportsSize: Boolean = true
 }
 
 open class ConfigurationSerializableJdbcDataType

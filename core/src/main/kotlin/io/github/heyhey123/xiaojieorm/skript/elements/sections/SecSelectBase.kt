@@ -70,6 +70,8 @@ abstract class SecSelectBase : Section() {
         return true
     }
 
+    protected open fun resolveExtraArguments(event: Event?, trigger: Trigger): Any? = Unit
+
     override fun walk(event: Event?): TriggerItem? {
         val trigger = first?.trigger ?: return walk(event, false)
 
@@ -83,7 +85,7 @@ abstract class SecSelectBase : Section() {
             return walk(event, false)
         }
 
-        val table = Database.tables[tableName] ?: run {
+        val table = database.tables[tableName] ?: run {
             ErrorPrinter.printErrorMessageWithDetail(trigger, "Table '$tableName' not found.")
             return walk(event, false)
         }
@@ -97,11 +99,20 @@ abstract class SecSelectBase : Section() {
             }
         }
 
+        val extraArguments = try {
+            resolveExtraArguments(event, trigger)
+        } catch (e: Exception) {
+            ErrorPrinter.printErrorMessageWithDetail(trigger, "Failed to parse query arguments: ${e.message}")
+            return walk(event, false)
+        }
+
         XiaojieOrm.ioScope.launch {
             try {
-                executeQuery(database, table, whereClause, event)
+                executeQuery(database, table, whereClause, extraArguments, event)
             } catch (e: Throwable) {
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${e.message}")
+                launch(SyncDispatcher) {
+                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${e.message}")
+                }
             } finally {
                 if (waitFlag) {
                     launch(SyncDispatcher) { walk(event, false) }
@@ -125,6 +136,7 @@ abstract class SecSelectBase : Section() {
         database: Database,
         table: Table,
         whereClause: WhereClause?,
+        extraArguments: Any?,
         event: Event?
     )
 }

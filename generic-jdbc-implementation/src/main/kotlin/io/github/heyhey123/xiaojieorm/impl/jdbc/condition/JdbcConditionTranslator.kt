@@ -2,7 +2,7 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.condition
 
 import io.github.heyhey123.xiaojieorm.condition.Condition
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
+import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.bindValue
 import io.github.heyhey123.xiaojieorm.type.DataType
 import java.sql.PreparedStatement
 
@@ -69,45 +69,44 @@ object JdbcConditionTranslator {
      * @return The next offset after filling the parameters.
      */
     fun fillConditionParameters(condition: Condition, statement: PreparedStatement, offset: Int, type: DataType<*>): Int {
-        val jdbcType = (type as JdbcDataType).jdbcType
         return when (condition) {
             is Condition.Equals -> {
                 if (condition.right == null) offset else {
-                    statement.setObject(offset, condition.right, jdbcType)
+                    statement.bindValue(offset, condition.right, type)
                     offset + 1
                 }
             }
 
             is Condition.NotEquals -> {
                 if (condition.right == null) offset else {
-                    statement.setObject(offset, condition.right, jdbcType)
+                    statement.bindValue(offset, condition.right, type)
                     offset + 1
                 }
             }
 
             is Condition.Between -> {
-                statement.setObject(offset, condition.start, jdbcType)
-                statement.setObject(offset + 1, condition.end, jdbcType)
+                statement.bindValue(offset, condition.start, type)
+                statement.bindValue(offset + 1, condition.end, type)
                 offset + 2
             }
 
             is Condition.GreaterThan -> {
-                statement.setObject(offset, condition.right, jdbcType)
+                statement.bindValue(offset, condition.right, type)
                 offset + 1
             }
 
             is Condition.GreaterThanOrEquals -> {
-                statement.setObject(offset, condition.right, jdbcType)
+                statement.bindValue(offset, condition.right, type)
                 offset + 1
             }
 
             is Condition.LessThan -> {
-                statement.setObject(offset, condition.right, jdbcType)
+                statement.bindValue(offset, condition.right, type)
                 offset + 1
             }
 
             is Condition.LessThanOrEquals -> {
-                statement.setObject(offset, condition.right, jdbcType)
+                statement.bindValue(offset, condition.right, type)
                 offset + 1
             }
         }

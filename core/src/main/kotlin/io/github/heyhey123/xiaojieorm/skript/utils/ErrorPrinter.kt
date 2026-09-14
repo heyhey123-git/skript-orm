@@ -9,6 +9,12 @@ object ErrorPrinter {
     private val logger: Logger
         get() = XiaojieOrm.instance.logger
 
+    /**
+     * Prints an error message with detailed information about the Skript trigger and the error itself that occurred.
+     *
+     * @param trigger
+     * @param error
+     */
     fun printErrorWithDetail(trigger: Trigger, error: Throwable) {
         logger.severe("An error occurred while executing the Skript trigger:")
         logger.severe("In trigger: ${trigger.name}")
@@ -19,6 +25,12 @@ object ErrorPrinter {
         logger.log(Level.SEVERE, "Error details:", error)
     }
 
+    /**
+     * Prints an error message with detailed information about the Skript trigger and the error message that occurred.
+     *
+     * @param trigger
+     * @param message
+     */
     fun printErrorMessageWithDetail(trigger: Trigger, message: String) {
         logger.severe("An error occurred while executing the Skript trigger:")
         logger.severe("In trigger: ${trigger.name}")
