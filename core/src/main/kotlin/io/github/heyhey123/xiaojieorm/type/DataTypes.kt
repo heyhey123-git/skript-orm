@@ -5,6 +5,7 @@ import org.bukkit.Location
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
 import java.util.*
+import kotlin.jvm.javaObjectType
 
 typealias SkriptDate = ch.njol.skript.util.Date
 typealias SkriptTime = ch.njol.skript.util.Time
@@ -35,32 +36,32 @@ abstract class DataTypes {
 }
 
 open class BooleanDataType : DataType<Boolean> {
-    override val domainType: Class<Boolean> = Boolean::class.java
+    override val domainType: Class<Boolean> = Boolean::class.javaObjectType
     override val typeCode: String = "boolean"
 }
 
 open class TinyIntDataType : DataType<Byte> {
-    override val domainType: Class<Byte> = Byte::class.java
+    override val domainType: Class<Byte> = Byte::class.javaObjectType
     override val typeCode: String = "tinyint"
 }
 
 open class IntDataType : DataType<Int> {
-    override val domainType: Class<Int> = Int::class.java
+    override val domainType: Class<Int> = Int::class.javaObjectType
     override val typeCode: String = "int"
 }
 
 open class BigIntDataType : DataType<Long> {
-    override val domainType: Class<Long> = Long::class.java
+    override val domainType: Class<Long> = Long::class.javaObjectType
     override val typeCode: String = "bigint"
 }
 
 open class DoubleDataType : DataType<Double> {
-    override val domainType: Class<Double> = Double::class.java
+    override val domainType: Class<Double> = Double::class.javaObjectType
     override val typeCode: String = "double"
 }
 
 open class FloatDataType : DataType<Float> {
-    override val domainType: Class<Float> = Float::class.java
+    override val domainType: Class<Float> = Float::class.javaObjectType
     override val typeCode: String = "float"
 }
 
