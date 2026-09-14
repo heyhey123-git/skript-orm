@@ -2,11 +2,13 @@ package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
 import ch.njol.skript.config.SectionNode
+import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
+import ch.njol.skript.variables.Variables
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
@@ -14,6 +16,7 @@ import io.github.heyhey123.xiaojieorm.skript.utils.*
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 abstract class SecWriteBase : Section() {
@@ -47,6 +50,9 @@ abstract class SecWriteBase : Section() {
     ): Boolean {
         tableNameExpr = expressions[tableNameIndex] as Expression<String>
         waitFlag = parseResult.hasTag("wait")
+        if (waitFlag) {
+            parser.hasDelayBefore = Kleenean.TRUE
+        }
 
         // 解析 WHERE 子句（如果支持）
         if (supportsWhere) {

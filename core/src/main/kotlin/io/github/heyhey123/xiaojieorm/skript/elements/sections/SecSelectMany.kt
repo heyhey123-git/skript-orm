@@ -5,8 +5,6 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
-import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
-import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 class SecSelectMany : SecSelectBase() {

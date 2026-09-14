@@ -67,6 +67,16 @@ abstract class SecSelectBase : Section() {
         }
 
         waitFlag = parseResult.hasTag("wait")
+        if (!waitFlag && resultVar.isLocal) {
+            Skript.error(
+                "A non-waiting database query cannot store its result in a local variable. " +
+                    "Add 'and wait' or use a global variable."
+            )
+            return false
+        }
+        if (waitFlag) {
+            parser.hasDelayBefore = Kleenean.TRUE
+        }
         return true
     }
 
