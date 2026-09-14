@@ -40,9 +40,14 @@ class XiaojieOrm: JavaPlugin() {
     }
 
     override fun onDisable() {
-        runBlocking(Dispatchers.IO) {
-            Database.current?.disconnect()
+        try {
+            runBlocking(Dispatchers.IO) {
+                Database.current?.disconnect()
+            }
+        } catch (error: Throwable) {
+            logger.severe("Failed to disconnect the database during plugin shutdown: ${error.message}")
+        } finally {
+            ioScope.cancel("Plugin disabled")
         }
-        ioScope.cancel("Plugin disabled")
     }
 }

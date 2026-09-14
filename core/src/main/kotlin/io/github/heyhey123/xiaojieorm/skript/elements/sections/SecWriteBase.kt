@@ -105,12 +105,28 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
-        // 解析 WHERE
-        val whereClause = where?.bind(table)?.resolve(event)
+        val whereClause = try {
+            where?.bind(table)?.resolve(event)
+        } catch (error: Exception) {
+            ErrorPrinter.printErrorMessageWithDetail(
+                trigger,
+                "Failed to parse where clause: ${error.message}"
+            )
+            return walk(event, false)
+        }
 
-        // 解析 VALUES
-        val resolvedSingle = singleValues?.bind(table)?.resolve(event)
-        val resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
+        val resolvedSingle: Map<String, Any?>?
+        val resolvedMultiple: List<Map<String, Any?>>?
+        try {
+            resolvedSingle = singleValues?.bind(table)?.resolve(event)
+            resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
+        } catch (error: Exception) {
+            ErrorPrinter.printErrorMessageWithDetail(
+                trigger,
+                "Failed to parse write values: ${error.message}"
+            )
+            return walk(event, false)
+        }
 
         val localVariables = if (waitFlag && event != null) {
             SkriptLocalVariables.remove(event)

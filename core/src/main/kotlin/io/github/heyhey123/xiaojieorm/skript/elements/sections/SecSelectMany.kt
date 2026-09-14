@@ -31,6 +31,7 @@ class SecSelectMany : SecSelectBase() {
         database.queries!!.selectMany(whereClause).execute(table).cursor.use { cursor ->
             var rowIndex = 1
             while (cursor.next()) {
+                result["$rowIndex::__index"] = rowIndex
                 table.columns.values.forEach { column ->
                     result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
                 }

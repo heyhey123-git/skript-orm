@@ -135,8 +135,8 @@ class SecCreateConnection : Section() {
         val database = DatabaseRegistry.get(databaseName, implementationProperties)
 
         val localVariables = SkriptLocalVariables.remove(actualEvent)
+        Delay.addDelayedEvent(actualEvent)
         XiaojieOrm.ioScope.launch {
-            Delay.addDelayedEvent(actualEvent)
             try {
                 database.connect(url, username, password)
             } catch (error: Throwable) {

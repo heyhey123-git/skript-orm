@@ -1,5 +1,7 @@
 package io.github.heyhey123.xiaojieorm.database
 
+import java.util.concurrent.ConcurrentHashMap
+
 /**
  * Database types registry.
  * Allows registration and retrieval of different database types.
@@ -9,7 +11,7 @@ object DatabaseRegistry {
     /**
      * Registered database factories.
      */
-    private val factories = mutableMapOf<String, DatabaseFactory>()
+    private val factories = ConcurrentHashMap<String, DatabaseFactory>()
 
     /**
      * Register a database factory.
@@ -17,7 +19,10 @@ object DatabaseRegistry {
      * @param factory The database factory to register.
      */
     fun register(factory: DatabaseFactory) {
-        factories[factory.typeName] = factory
+        val existing = factories.putIfAbsent(factory.typeName, factory)
+        require(existing == null || existing === factory) {
+            "Database type '${factory.typeName}' is already registered by ${existing!!::class.java.name}."
+        }
     }
 
     /**
