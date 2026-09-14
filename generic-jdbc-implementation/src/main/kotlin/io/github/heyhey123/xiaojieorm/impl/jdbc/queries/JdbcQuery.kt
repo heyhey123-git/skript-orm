@@ -2,6 +2,7 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.impl.jdbc.condition.JdbcConditionTranslator
+import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.impl.jdbc.result.JdbcDataCursor
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.result.WriteResult
@@ -15,6 +16,7 @@ import javax.sql.DataSource
  */
 interface JdbcQuery {
     val dataSource: DataSource
+    val dialect: JdbcDialect
 
     fun bindWhere(table: Table, where: WhereClause?, statement: PreparedStatement, startIndex: Int = 1): Int {
         var index = startIndex

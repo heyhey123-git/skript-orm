@@ -10,7 +10,7 @@ open class JdbcUpsertById(
     id: Any,
     values: Map<String, Any?>,
     override val dataSource: DataSource,
-    private val dialect: JdbcDialect
+    override val dialect: JdbcDialect
 ) : UpsertById(id, values), JdbcQuery {
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Upsert values cannot be empty." }

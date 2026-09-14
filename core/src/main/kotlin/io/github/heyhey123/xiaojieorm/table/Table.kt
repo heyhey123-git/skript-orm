@@ -14,7 +14,7 @@ class Table(
 
     init {
         require(IDENTIFIER_PATTERN.matches(name)) {
-            "Invalid table name '$name'. Only letters, digits, and underscores are allowed, and the first character cannot be a digit."
+            "Invalid table name '$name'. Identifiers must start with a Unicode letter, Unicode letter number, or underscore, and may then contain Unicode letters, marks, digits, or underscores."
         }
         require(columns.isNotEmpty()) {
             "Table $name must define at least one column."
@@ -25,7 +25,7 @@ class Table(
     }
 
     companion object {
-        private val IDENTIFIER_PATTERN = Regex("[A-Za-z_][A-Za-z0-9_]*")
+        private val IDENTIFIER_PATTERN = Regex("[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*")
     }
 
     /**

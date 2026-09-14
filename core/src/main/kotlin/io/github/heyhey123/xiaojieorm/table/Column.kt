@@ -20,7 +20,14 @@ data class Column<T : Any>(
     val isNullable: Boolean = true,
     val size: Int? = null
 ) {
+    companion object {
+        private val IDENTIFIER_PATTERN = Regex("[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*")
+    }
+
     init {
+        require(IDENTIFIER_PATTERN.matches(name)) {
+            "Invalid column name '$name'. Identifiers must start with a Unicode letter, Unicode letter number, or underscore, and may then contain Unicode letters, marks, digits, or underscores."
+        }
         require(!isAutoIncrement || isPrimaryKey) {
             "Auto-increment column '$name' must be a primary key."
         }

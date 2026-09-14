@@ -1,12 +1,17 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
+import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.InsertMany
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.Statement
 import javax.sql.DataSource
 
-open class JdbcInsertMany(valuesList: List<Map<String, Any?>>, override val dataSource: DataSource) : InsertMany(valuesList), JdbcQuery {
+open class JdbcInsertMany(
+    valuesList: List<Map<String, Any?>>,
+    override val dataSource: DataSource,
+    override val dialect: JdbcDialect
+) : InsertMany(valuesList), JdbcQuery {
     override suspend fun execute(table: Table): WriteResult {
         if (valuesList.isEmpty()) return WriteResult(0)
         val columns = valuesList.first().keys.toList()
@@ -15,7 +20,7 @@ open class JdbcInsertMany(valuesList: List<Map<String, Any?>>, override val data
         valuesList.forEachIndexed { rowIndex, row ->
             require(row.keys == expectedColumns) { "Batch row ${rowIndex + 1} does not contain the same columns as the first row." }
         }
-        val sql = "INSERT INTO ${table.name} (${columns.joinToString(", ")}) VALUES (${columns.joinToString(", ") { "?" }})"
+        val sql = dialect.insert(table.name, columns)
         return dataSource.connection.use { connection ->
             connection.prepareStatement(sql).use { statement ->
                 valuesList.forEach { row ->

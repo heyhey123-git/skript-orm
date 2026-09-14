@@ -12,17 +12,11 @@ open class JdbcDelete(
     limit: Int?,
     where: WhereClause?,
     override val dataSource: DataSource,
-    private val dialect: JdbcDialect
+    override val dialect: JdbcDialect
 ) : Delete(limit, where), JdbcQuery {
     override suspend fun execute(table: Table): WriteResult {
-        val baseSql = buildString {
-            append("DELETE FROM ${table.name}")
-            where?.let { append(" ${JdbcConditionTranslator.translate(it)}") }
-        }
-        val sql = limit?.let {
-            require(it > 0) { "Delete limit must be positive." }
-            dialect.applyDeleteLimit(baseSql, it)
-        } ?: baseSql
+        val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
+        val sql = dialect.delete(table.name, whereSql, limit)
         return executeUpdate(sql) { statement ->
             var index = 1
             where?.conditions?.forEach { condition ->

@@ -2,6 +2,7 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.condition
 
 import io.github.heyhey123.xiaojieorm.condition.Condition
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
+import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.bindValue
 import io.github.heyhey123.xiaojieorm.type.DataType
 import java.sql.PreparedStatement
@@ -18,7 +19,7 @@ object JdbcConditionTranslator {
      * @param whereClause The WhereClause to translate.
      * @return The SQL string representation of the WHERE clause.
      */
-    fun translate(whereClause: WhereClause): String = buildString {
+    fun translate(whereClause: WhereClause, dialect: JdbcDialect): String = buildString {
         append("WHERE")
         val conjunction = when (whereClause) {
             is WhereClause.All -> "AND"
@@ -31,7 +32,7 @@ object JdbcConditionTranslator {
 
         val conditions = whereClause.conditions
         conditions.forEachIndexed { index, entry ->
-            append(" ${translateCondition(entry)}")
+            append(" ${translateCondition(entry, dialect)}")
             if (index < conditions.size - 1) {
                 append(" $conjunction")
             }
@@ -48,16 +49,18 @@ object JdbcConditionTranslator {
      * @param condition The Condition to translate.
      * @return The SQL string representation of the condition.
      */
-    fun translateCondition(condition: Condition): String =
-        when (condition) {
-            is Condition.Equals -> if (condition.right == null) "${condition.left} IS NULL" else "${condition.left} = ?"
-            is Condition.NotEquals -> if (condition.right == null) "${condition.left} IS NOT NULL" else "${condition.left} != ?"
-            is Condition.Between -> "${condition.left} BETWEEN ? AND ?"
-            is Condition.GreaterThan -> "${condition.left} > ?"
-            is Condition.GreaterThanOrEquals -> "${condition.left} >= ?"
-            is Condition.LessThan -> "${condition.left} < ?"
-            is Condition.LessThanOrEquals -> "${condition.left} <= ?"
+    fun translateCondition(condition: Condition, dialect: JdbcDialect): String {
+        val column = dialect.quoteIdentifier(condition.left)
+        return when (condition) {
+            is Condition.Equals -> if (condition.right == null) "$column IS NULL" else "$column = ?"
+            is Condition.NotEquals -> if (condition.right == null) "$column IS NOT NULL" else "$column <> ?"
+            is Condition.Between -> "$column BETWEEN ? AND ?"
+            is Condition.GreaterThan -> "$column > ?"
+            is Condition.GreaterThanOrEquals -> "$column >= ?"
+            is Condition.LessThan -> "$column < ?"
+            is Condition.LessThanOrEquals -> "$column <= ?"
         }
+    }
 
     /**
      * Fills the parameters with a PreparedStatement based on the given Condition.

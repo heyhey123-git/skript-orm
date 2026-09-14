@@ -9,7 +9,7 @@ import javax.sql.DataSource
 open class JdbcInsertIfAbsent(
     values: Map<String, Any?>,
     override val dataSource: DataSource,
-    private val dialect: JdbcDialect
+    override val dialect: JdbcDialect
 ) : InsertIfAbsent(values), JdbcQuery {
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Insert values cannot be empty." }
