@@ -6,7 +6,6 @@ import ch.njol.skript.doc.Example
 import ch.njol.skript.doc.Name
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
-import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -44,9 +43,8 @@ class SecSelectOne : SecSelectBase() {
         database: Database,
         table: Table,
         whereClause: WhereClause?,
-        extraArguments: Any?,
-        event: Event?
-    ) {
+        extraArguments: Any?
+    ): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
         database.queries!!.selectOne(whereClause).execute(table).cursor.use { cursor ->
             if (cursor.next()) {
@@ -55,7 +53,7 @@ class SecSelectOne : SecSelectBase() {
                 }
             }
         }
-        VariableModifier.writeMap(resultVar, event, result)
+        return result
     }
 
     override fun toString(event: Event?, debug: Boolean): String = buildString {

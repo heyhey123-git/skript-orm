@@ -5,12 +5,14 @@ import ch.njol.skript.lang.Variable
 import org.bukkit.event.Event
 
 object VariableModifier {
-    fun writeList(variable: Variable<*>, event: Event?, value: List<Any?>) {
-        val delta = value.toTypedArray()
-        variable.change(event, delta, ChangeMode.SET)
+    fun clear(variable: Variable<*>, event: Event?) {
+        variable.change(event, null, ChangeMode.DELETE)
     }
 
     fun writeMap(variable: Variable<*>, event: Event?, value: Map<String, Any?>) {
+        clear(variable, event)
+        if (value.isEmpty()) return
+
         val delta = value.values.toTypedArray()
         val keys = value.keys.toTypedArray()
         variable.change(event, delta, ChangeMode.SET, keys)

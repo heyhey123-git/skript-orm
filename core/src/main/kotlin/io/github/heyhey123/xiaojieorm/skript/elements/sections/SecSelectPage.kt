@@ -5,7 +5,6 @@ import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Trigger
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
-import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -52,29 +51,29 @@ class SecSelectPage : SecSelectBase() {
         database: Database,
         table: Table,
         whereClause: WhereClause?,
-        extraArguments: Any?,
-        event: Event?
-    ) {
+        extraArguments: Any?
+    ): Map<String, Any?> {
         val arguments = extraArguments as PageArguments
         val pageIndex = arguments.pageIndex
         val pageSize = arguments.pageSize
 
-        val result = mutableListOf<Map<String, Any?>>()
+        val result = linkedMapOf<String, Any?>()
         val columns = table.columns.values
         database.queries!!
             .selectPage(pageSize, pageIndex, whereClause)
             .execute(table)
             .cursor
             .use { cursor ->
+                var rowIndex = 1
                 while (cursor.next()) {
-                    val row = mutableMapOf<String, Any?>()
-                    columns.forEachIndexed { index, column ->
-                        row[(index + 1).toString()] = cursor.get(column.name, column.type)
+                    result["$rowIndex::__index"] = rowIndex
+                    columns.forEach { column ->
+                        result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
                     }
-                    result.add(row)
+                    rowIndex++
                 }
             }
-            VariableModifier.writeList(resultVar, event, result)
+        return result
     }
 
     override fun toString(event: Event?, debug: Boolean): String = buildString {

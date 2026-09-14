@@ -11,6 +11,7 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
+import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
@@ -59,7 +60,12 @@ abstract class SecSelectBase : Section() {
         triggerItems: List<TriggerItem?>
     ): Boolean {
         tableNameExpr = expressions[tableNameIndex] as Expression<String>
-        resultVar = expressions[resultVarIndex] as Variable<Any>
+        val resultExpression = expressions[resultVarIndex]
+        if (resultExpression !is Variable<*> || !resultExpression.isList) {
+            Skript.error("Database query results must be stored in a list variable, for example {_rows::*}.")
+            return false
+        }
+        resultVar = resultExpression as Variable<Any>
         extractExtraParams(expressions)
 
         if (parseResult.hasTag("where")) {
@@ -130,22 +136,33 @@ abstract class SecSelectBase : Section() {
         }
 
         XiaojieOrm.ioScope.launch {
+            var queryResult: Map<String, Any?>? = null
+            var failure: Throwable? = null
             try {
-                executeQuery(database, table, whereClause, extraArguments, event)
+                queryResult = executeQuery(database, table, whereClause, extraArguments)
             } catch (e: Throwable) {
-                withContext(NonCancellable + SyncDispatcher) {
-                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${e.message}")
-                }
+                failure = e
             } finally {
-                if (waitFlag) {
-                    withContext(NonCancellable + SyncDispatcher) {
-                        try {
-                            if (event != null && localVariables != null) {
-                                SkriptLocalVariables.restore(event, localVariables)
-                            }
+                withContext(NonCancellable + SyncDispatcher) {
+                    try {
+                        if (waitFlag && event != null && localVariables != null) {
+                            SkriptLocalVariables.restore(event, localVariables)
+                        }
+
+                        val queryFailure = failure
+                        if (queryFailure != null) {
+                            VariableModifier.clear(resultVar, event)
+                            ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${queryFailure.message}")
+                        } else {
+                            VariableModifier.writeMap(resultVar, event, checkNotNull(queryResult))
+                        }
+
+                        if (waitFlag) {
                             walk(event, false)
-                        } finally {
-                            if (event != null) SkriptLocalVariables.clear(event)
+                        }
+                    } finally {
+                        if (waitFlag && event != null) {
+                            SkriptLocalVariables.clear(event)
                         }
                     }
                 }
@@ -156,20 +173,17 @@ abstract class SecSelectBase : Section() {
     }
 
     /**
-     * Execute the query logic in subclasses.
-     * This method is called in IO dispatcher, when [walk] is invoked.
+     * Executes the database query on the IO dispatcher and returns the keyed snapshot
+     * that will be written to the Skript list variable on the main thread.
      *
-     * @param database the current database
-     * @param table the table to query
-     * @param whereClause the where clause, can be null
-     * @param event the current event, can be null
+     * Multi-row implementations use keys in the form `rowIndex::columnName` and
+     * reserve `rowIndex::__index` as a non-null row-presence marker.
      */
     protected abstract suspend fun executeQuery(
         database: Database,
         table: Table,
         whereClause: WhereClause?,
-        extraArguments: Any?,
-        event: Event?
-    )
+        extraArguments: Any?
+    ): Map<String, Any?>
 }
 
