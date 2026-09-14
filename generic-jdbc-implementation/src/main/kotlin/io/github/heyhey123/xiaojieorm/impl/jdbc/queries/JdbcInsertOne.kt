@@ -1,4 +1,4 @@
-package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
+﻿package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.InsertOne

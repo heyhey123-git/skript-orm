@@ -18,33 +18,36 @@ import java.io.InputStream
  *
  */
 object SerializationUtils {
-    object YggdrasilSerialization {
-        @Suppress("UNCHECKED_CAST")
-        fun serialize(serializable: Any, typeCode: String): ByteArrayOutputStream {
-            var classInfo = Classes.getClassInfo(typeCode)
-            if (classInfo.serializeAs != null) {
-                classInfo = Classes.getExactClassInfo(classInfo.serializeAs as Class<Any>)
-                    ?: throw IllegalArgumentException("No class info found for ${classInfo.serializeAs}")
-            }
-
-            val serializableObj =
-                Converters.convert(serializable, classInfo.c) ?: throw IllegalArgumentException("Cannot convert ${serializable::class.java} to ${classInfo.c}")
-
-            require(classInfo.serializer != null) { "No serializer found for ${classInfo.c}" }
-
-            val outputStream = ByteArrayOutputStream()
-            Variables.yggdrasil.newOutputStream(outputStream).use {
-                it.writeObject(serializableObj)
-                it.flush()
-            }
-            return outputStream
-        }
-
-        fun deserialize(data: InputStream, typeCode: String): Any {
-            val classInfo = Classes.getClassInfo(typeCode)
-            return Classes.deserialize(classInfo, data)!!
-        }
-    }
+//    object YggdrasilSerialization {
+//        @Suppress("UNCHECKED_CAST")
+//        fun serialize(serializable: Any, typeCode: String): ByteArrayOutputStream {
+//            var classInfo = Classes.getClassInfo(typeCode)
+//            if (classInfo.serializeAs != null) {
+//                classInfo = Classes.getExactClassInfo(classInfo.serializeAs as Class<Any>)
+//                    ?: throw IllegalArgumentException("No class info found for ${classInfo.serializeAs}")
+//            }
+//
+//            val serializableObj =
+//                Converters.convert(serializable, classInfo.c) ?: throw IllegalArgumentException("Cannot convert ${serializable::class.java} to ${classInfo.c}")
+//
+//            require(classInfo.serializer != null) { "No serializer found for ${classInfo.c}" }
+//
+//            val outputStream = ByteArrayOutputStream()
+//            Variables.yggdrasil.newOutputStream(outputStream).use {
+//                it.writeObject(serializableObj)
+//                it.flush()
+//            }
+//            return outputStream
+//        }
+//
+//        fun deserialize(data: InputStream, typeCode: String): Any {
+//            val classInfo = Classes.getClassInfo(typeCode)
+//            return Classes.deserialize(classInfo, data)
+//                ?: throw IllegalArgumentException(
+//                    "Failed to deserialize Skript value of type '$typeCode' (${classInfo.c.name})."
+//                )
+//        }
+//    }
 
     object BukkitSerialization {
         fun serialize(serializable: ConfigurationSerializable): ByteArrayOutputStream {

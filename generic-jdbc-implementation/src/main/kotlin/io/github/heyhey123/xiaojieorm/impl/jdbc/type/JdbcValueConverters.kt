@@ -10,12 +10,31 @@ import org.bukkit.Location
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
 import java.io.ByteArrayInputStream
-import java.io.InputStream
 import java.nio.ByteBuffer
 import java.sql.Blob
 import java.sql.Date
 import java.util.*
 import javax.sql.rowset.serial.SerialBlob
+
+/**
+ * Consumes the bytes from the receiver [Blob] and applies the given operation.
+ *
+ */
+private inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
+    var failure: Throwable? = null
+    try {
+        return binaryStream.use { operation(it.readBytes()) }
+    } catch (error: Throwable) {
+        failure = error
+        throw error
+    } finally {
+        try {
+            free()
+        } catch (freeError: Throwable) {
+            if (failure != null) failure.addSuppressed(freeError) else throw freeError
+        }
+    }
+}
 
 object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
     UUID::class.java, ByteArray::class.java
@@ -31,26 +50,22 @@ object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
     }
 
     override fun fromStorage(value: ByteArray): UUID {
+        require(value.size == 16) { "A stored UUID must contain exactly 16 bytes, but contained ${value.size}." }
         val buffer = ByteBuffer.wrap(value)
-        val msb = buffer.long
-        val lsb = buffer.long
-        return UUID(msb, lsb)
+        return UUID(buffer.long, buffer.long)
     }
 }
 
 object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
     ItemStack::class.java, Blob::class.java
 ) {
-    override fun toStorage(value: ItemStack): Blob {
-        val bytes = value.serializeAsBytes()
-        return SerialBlob(bytes)
-    }
+    override fun toStorage(value: ItemStack): Blob = SerialBlob(value.serializeAsBytes())
 
-    override fun fromStorage(value: Blob): ItemStack {
-        val inputStream: InputStream = value.binaryStream
-        inputStream.use {
-            val bytes = it.readBytes()
-            return ItemStack.deserializeBytes(bytes)
+    override fun fromStorage(value: Blob): ItemStack = value.consumeBytes { bytes ->
+        try {
+            ItemStack.deserializeBytes(bytes)
+        } catch (error: Throwable) {
+            throw IllegalArgumentException("Failed to deserialize an ItemStack from JDBC BLOB data.", error)
         }
     }
 }
@@ -58,19 +73,15 @@ object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
 object LocationJdbcConverter : ValueConverter<Location, ByteArray>(
     Location::class.java, ByteArray::class.java
 ) {
-    override fun toStorage(value: Location): ByteArray {
-        val outputStream = SerializationUtils.BukkitSerialization.serialize(value)
-        outputStream.use {
-            return outputStream.toByteArray()
-        }
-    }
+    override fun toStorage(value: Location): ByteArray =
+        SerializationUtils.BukkitSerialization.serialize(value).use { it.toByteArray() }
 
-    override fun fromStorage(value: ByteArray): Location {
-        val inputStream = ByteArrayInputStream(value)
-        inputStream.use {
-            val obj = SerializationUtils.BukkitSerialization.deserialize(inputStream)
-            return obj as Location
-        }
+    override fun fromStorage(value: ByteArray): Location = ByteArrayInputStream(value).use { input ->
+        val deserialized = SerializationUtils.BukkitSerialization.deserialize(input)
+        deserialized as? Location
+            ?: throw IllegalArgumentException(
+                "Expected a serialized Bukkit Location, but found ${deserialized::class.java.name}."
+            )
     }
 }
 
@@ -79,19 +90,16 @@ object ConfigurationSerializableJdbcConverter :
         ConfigurationSerializable::class.java,
         Blob::class.java
     ) {
-    override fun toStorage(value: ConfigurationSerializable): Blob {
-        val outputStream = SerializationUtils.BukkitSerialization.serialize(value)
-        outputStream.use {
-            val bytes = outputStream.toByteArray()
-            return SerialBlob(bytes)
-        }
-    }
+    override fun toStorage(value: ConfigurationSerializable): Blob =
+        SerializationUtils.BukkitSerialization.serialize(value).use { SerialBlob(it.toByteArray()) }
 
-    override fun fromStorage(value: Blob): ConfigurationSerializable {
-        val inputStream: InputStream = value.binaryStream
-        inputStream.use {
-            val obj = SerializationUtils.BukkitSerialization.deserialize(inputStream)
-            return obj as ConfigurationSerializable
+    override fun fromStorage(value: Blob): ConfigurationSerializable = value.consumeBytes { bytes ->
+        ByteArrayInputStream(bytes).use { input ->
+            val deserialized = SerializationUtils.BukkitSerialization.deserialize(input)
+            deserialized as? ConfigurationSerializable
+                ?: throw IllegalArgumentException(
+                    "Expected a Bukkit ConfigurationSerializable, but found ${deserialized::class.java.name}."
+                )
         }
     }
 }
@@ -99,17 +107,16 @@ object ConfigurationSerializableJdbcConverter :
 object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
     NBTCompound::class.java, Blob::class.java
 ) {
-    override fun toStorage(value: NBTCompound): Blob {
-        val outputStream = SerializationUtils.NbtSerialization.serialize(value)
-        outputStream.use {
-            return SerialBlob(outputStream.toByteArray())
-        }
-    }
+    override fun toStorage(value: NBTCompound): Blob =
+        SerializationUtils.NbtSerialization.serialize(value).use { SerialBlob(it.toByteArray()) }
 
-    override fun fromStorage(value: Blob): NBTCompound {
-        val inputStream = value.binaryStream
-        inputStream.use {
-            return SerializationUtils.NbtSerialization.deserialize(inputStream)
+    override fun fromStorage(value: Blob): NBTCompound = value.consumeBytes { bytes ->
+        ByteArrayInputStream(bytes).use { input ->
+            try {
+                SerializationUtils.NbtSerialization.deserialize(input)
+            } catch (error: Throwable) {
+                throw IllegalArgumentException("Failed to deserialize NBT from JDBC BLOB data.", error)
+            }
         }
     }
 }
@@ -117,20 +124,14 @@ object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
 object SkriptDateJdbcConverter : ValueConverter<SkriptDate, Date>(
     SkriptDate::class.java, Date::class.java
 ) {
-    override fun toStorage(value: SkriptDate): Date {
-        return Date(value.time)
-    }
-
-    override fun fromStorage(value: Date): SkriptDate {
-        return io.github.heyhey123.xiaojieorm.type.SkriptDate(value.time)
-    }
+    override fun toStorage(value: SkriptDate): Date = Date(value.time)
+    override fun fromStorage(value: Date): SkriptDate = SkriptDate(value.time)
 }
 
 object SkriptTimeJdbcConverter : ValueConverter<SkriptTime, Int>(
     SkriptTime::class.java, Integer.TYPE
 ) {
     override fun toStorage(value: SkriptTime): Int = value.ticks
-
     override fun fromStorage(value: Int): SkriptTime = SkriptTime(value)
 }
 
@@ -138,6 +139,5 @@ object SkriptTimespanJdbcConverter : ValueConverter<SkriptTimespan, Long>(
     SkriptTimespan::class.java, Long::class.java
 ) {
     override fun toStorage(value: SkriptTimespan): Long = value.duration.toMillis()
-
     override fun fromStorage(value: Long): SkriptTimespan = SkriptTimespan(value)
 }

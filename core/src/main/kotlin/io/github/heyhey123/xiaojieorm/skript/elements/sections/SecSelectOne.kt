@@ -10,14 +10,16 @@ import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
 @Name("Select One")
-@Description("Select one entity from a table and store the result in a variable.")
+@Description("Select one entity from a table and store the result in a variable. Whatever 'wait' or not," +
+        " the section will wait for the query to finish before continuing," +
+        " within the main thread.")
 @Example(
     """
 connect to database "MySQL":
     url: "jdbc:mysql://localhost:3306/mydb"
     username: "root"
     password: "123456"
-select one from table "users" and store the result in {_user::*} and wait where any:
+select one from table "users" and store the result in {_user::*} where any:
     name = "Alice"
     age > 25
 disconnect from database
@@ -59,7 +61,6 @@ class SecSelectOne : SecSelectBase() {
     override fun toString(event: Event?, debug: Boolean): String = buildString {
         append("select one from table $tableNameExpr")
         append(" and store the result in $resultVar")
-        if (waitFlag) append(" and wait")
         if (where != null) append(" where...")
     }
 }

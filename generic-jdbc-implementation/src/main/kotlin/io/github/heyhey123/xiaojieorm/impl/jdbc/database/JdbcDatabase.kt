@@ -9,7 +9,7 @@ import io.github.heyhey123.xiaojieorm.table.Table
 
 open class JdbcDatabase(
     val driver: String,
-    val dialect: JdbcDialect = GenericJdbcDialect
+    val dialect: JdbcDialect
 ) : Database() {
 
     var dataSource: HikariDataSource? = null

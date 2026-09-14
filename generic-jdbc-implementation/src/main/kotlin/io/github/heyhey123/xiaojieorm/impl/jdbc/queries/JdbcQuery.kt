@@ -17,6 +17,8 @@ import javax.sql.DataSource
 interface JdbcQuery {
     val dataSource: DataSource
     val dialect: JdbcDialect
+    val queryTimeoutSeconds: Int
+        get() = 0
 
     fun bindWhere(table: Table, where: WhereClause?, statement: PreparedStatement, startIndex: Int = 1): Int {
         var index = startIndex
@@ -29,23 +31,43 @@ interface JdbcQuery {
         return index
     }
 
-    fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult =
+    fun configureStatement(statement: PreparedStatement) {
+        require(queryTimeoutSeconds >= 0) { "JDBC query timeout must not be negative." }
+        if (queryTimeoutSeconds > 0) statement.queryTimeout = queryTimeoutSeconds
+    }
+
+    suspend fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult =
         dataSource.connection.use { connection ->
             connection.prepareStatement(sql).use { statement ->
-                bind(statement)
-                WriteResult(statement.executeLargeUpdate())
+                try {
+                    configureStatement(statement)
+                    bind(statement)
+                    WriteResult(statement.executeLargeUpdate())
+                } finally {
+                    statement.releaseBoundResources()
+                }
             }
         }
 
-    fun executeCursor(sql: String, bind: (PreparedStatement) -> Unit): CursorResult {
+    suspend fun executeCursor(sql: String, bind: (PreparedStatement) -> Unit): CursorResult {
         val connection = dataSource.connection
         try {
             val statement = connection.prepareStatement(sql)
             try {
+                configureStatement(statement)
                 bind(statement)
                 val resultSet = statement.executeQuery()
-                return CursorResult(JdbcDataCursor(resultSet, statement, connection))
+                return CursorResult(
+                    JdbcDataCursor(resultSet, statement, connection) {
+                        statement.releaseBoundResources()
+                    }
+                )
             } catch (error: Throwable) {
+                try {
+                    statement.releaseBoundResources()
+                } catch (cleanupError: Throwable) {
+                    error.addSuppressed(cleanupError)
+                }
                 try {
                     statement.close()
                 } catch (cleanupError: Throwable) {

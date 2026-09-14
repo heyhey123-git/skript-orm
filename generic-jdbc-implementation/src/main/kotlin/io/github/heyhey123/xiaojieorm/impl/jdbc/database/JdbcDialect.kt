@@ -33,9 +33,9 @@ interface JdbcDialect {
     fun selectOne(table: String, whereClause: String? = null): String =
         "${select(table, whereClause)} FETCH FIRST 1 ROW ONLY"
 
-    fun selectPage(table: String, whereClause: String? = null): JdbcPageSql =
+    fun selectPage(table: String, orderBy: String, whereClause: String? = null): JdbcPageSql =
         JdbcPageSql(
-            sql = "${select(table, whereClause)} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
+            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
             parameterOrder = listOf(JdbcPageParameter.OFFSET, JdbcPageParameter.LIMIT)
         )
 
@@ -171,9 +171,9 @@ object MysqlJdbcDialect : JdbcDialect {
     override fun selectOne(table: String, whereClause: String?): String =
         "${select(table, whereClause)} LIMIT 1"
 
-    override fun selectPage(table: String, whereClause: String?): JdbcPageSql =
+    override fun selectPage(table: String, orderBy: String, whereClause: String?): JdbcPageSql =
         JdbcPageSql(
-            sql = "${select(table, whereClause)} LIMIT ? OFFSET ?",
+            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} LIMIT ? OFFSET ?",
             parameterOrder = listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET)
         )
 

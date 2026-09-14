@@ -7,10 +7,17 @@ import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Statement
 
+/**
+ * A JDBC implementation of the DataCursor interface,
+ * which provides a way to iterate over the results of a SQL query.
+ *
+ * @property releaseBoundResources Releases temporary JDBC parameter resources owned by the statement.
+ */
 class JdbcDataCursor(
     private val resultSet: ResultSet,
     private val statement: Statement,
-    private val connection: Connection
+    private val connection: Connection,
+    private val releaseBoundResources: (() -> Unit)? = null
 ) : DataCursor {
     private var closed = false
 
@@ -46,7 +53,10 @@ class JdbcDataCursor(
         if (closed) return
         closed = true
         var failure: Throwable? = null
-        try { resultSet.close() } catch (error: Throwable) { failure = error }
+        try { releaseBoundResources?.invoke() } catch (error: Throwable) { failure = error }
+        try { resultSet.close() } catch (error: Throwable) {
+            if (failure == null) failure = error else failure.addSuppressed(error)
+        }
         try { statement.close() } catch (error: Throwable) {
             if (failure == null) failure = error else failure.addSuppressed(error)
         }

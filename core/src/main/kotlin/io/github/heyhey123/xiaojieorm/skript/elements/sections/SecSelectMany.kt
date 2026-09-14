@@ -31,7 +31,6 @@ class SecSelectMany : SecSelectBase() {
         queries.selectMany(whereClause).execute(table).cursor.use { cursor ->
             var rowIndex = 1
             while (cursor.next()) {
-                result["$rowIndex::__index"] = rowIndex
                 table.columns.values.forEach { column ->
                     result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
                 }
@@ -42,6 +41,6 @@ class SecSelectMany : SecSelectBase() {
     }
 
     override fun toString(event: Event?, debug: Boolean): String =
-        "select many from table $tableNameExpr and store in $resultVar${if (waitFlag) " and wait" else ""}${if (where != null) " where..." else ""}"
+        "select many from table $tableNameExpr and store in $resultVar${if (where != null) " where..." else ""}"
 
 }

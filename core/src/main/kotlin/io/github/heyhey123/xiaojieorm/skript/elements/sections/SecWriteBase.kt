@@ -151,7 +151,7 @@ abstract class SecWriteBase : Section() {
                 database.withQueries { queries ->
                     executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, event)
                 }
-            } catch (cancelled: CancellationException) {
+            } catch (_: CancellationException) {
                 return@launch
             } catch (error: Throwable) {
                 failure = error

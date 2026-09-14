@@ -30,8 +30,6 @@ abstract class SecSelectBase : Section() {
 
     protected var where: RawWhereClause? = null
 
-    protected var waitFlag: Boolean = false
-
     /**
      * The index of table name expression in expressions array.
      *
@@ -78,7 +76,6 @@ abstract class SecSelectBase : Section() {
             }
         }
 
-        waitFlag = parseResult.hasTag("wait")
         parser.hasDelayBefore = Kleenean.TRUE
         return true
     }
@@ -174,6 +171,7 @@ abstract class SecSelectBase : Section() {
      * that will be written to the Skript list variable on the main thread.
      *
      * Multi-row implementations use keys in the form `rowIndex::columnName`.
+     * SQL NULL values leave their corresponding result keys unset; no ORM metadata is inserted.
      */
     protected abstract suspend fun executeQuery(
         queries: Queries,

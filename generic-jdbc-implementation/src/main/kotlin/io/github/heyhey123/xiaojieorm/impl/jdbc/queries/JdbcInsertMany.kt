@@ -18,29 +18,60 @@ open class JdbcInsertMany(
         require(columns.isNotEmpty()) { "Insert values cannot be empty." }
         val expectedColumns = columns.toSet()
         valuesList.forEachIndexed { rowIndex, row ->
-            require(row.keys == expectedColumns) { "Batch row ${rowIndex + 1} does not contain the same columns as the first row." }
+            require(row.keys == expectedColumns) {
+                "Batch row ${rowIndex + 1} does not contain the same columns as the first row."
+            }
         }
+
         val sql = dialect.insert(table.name, columns)
         return dataSource.connection.use { connection ->
-            connection.prepareStatement(sql).use { statement ->
-                valuesList.forEach { row ->
-                    columns.forEachIndexed { index, key ->
-                        val column = requireNotNull(table.getColumnByName(key)) { "Table ${table.name} does not have column $key." }
-                        statement.bindValue(index + 1, row[key], column.type)
+            val previousAutoCommit = connection.autoCommit
+            connection.autoCommit = false
+            try {
+                val result = connection.prepareStatement(sql).use { statement ->
+                    try {
+                        valuesList.forEach { row ->
+                            columns.forEachIndexed { index, key ->
+                                val column = requireNotNull(table.getColumnByName(key)) {
+                                    "Table ${table.name} does not have column $key."
+                                }
+                                statement.bindValue(index + 1, row[key], column.type)
+                            }
+                            statement.addBatch()
+                        }
+
+                        val counts = statement.executeLargeBatch()
+                        var affected = 0L
+                        counts.forEach { count ->
+                            when {
+                                count >= 0L -> affected = Math.addExact(affected, count)
+                                count == Statement.SUCCESS_NO_INFO.toLong() ->
+                                    affected = Math.addExact(affected, 1L)
+                                count == Statement.EXECUTE_FAILED.toLong() ->
+                                    error("A JDBC batch insert operation failed.")
+                                else -> error("The JDBC driver returned an invalid batch update count: $count.")
+                            }
+                        }
+                        WriteResult(affected)
+                    } finally {
+                        statement.releaseBoundResources()
                     }
-                    statement.addBatch()
                 }
-                val counts = statement.executeLargeBatch()
-                var affected = 0L
-                counts.forEach { count ->
-                    when {
-                        count >= 0L -> affected = Math.addExact(affected, count)
-                        count == Statement.SUCCESS_NO_INFO.toLong() -> error("The JDBC driver did not report an exact batch update count.")
-                        count == Statement.EXECUTE_FAILED.toLong() -> error("A JDBC batch insert operation failed.")
-                        else -> error("The JDBC driver returned an invalid batch update count: $count.")
-                    }
+                connection.commit()
+                result
+            } catch (error: Throwable) {
+                try {
+                    connection.rollback()
+                } catch (rollbackError: Throwable) {
+                    error.addSuppressed(rollbackError)
                 }
-                WriteResult(affected)
+                throw error
+            } finally {
+                try {
+                    connection.autoCommit = previousAutoCommit
+                } catch (_: Throwable) {
+                    // The connection is about to be closed; preserve the primary operation result/failure.
+                }
             }
         }
     }

@@ -65,7 +65,6 @@ class SecSelectPage : SecSelectBase() {
             .use { cursor ->
                 var rowIndex = 1
                 while (cursor.next()) {
-                    result["$rowIndex::__index"] = rowIndex
                     columns.forEach { column ->
                         result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
                     }
@@ -78,7 +77,6 @@ class SecSelectPage : SecSelectBase() {
     override fun toString(event: Event?, debug: Boolean): String = buildString {
         append("select page $pageIndexExpr with size $pageSizeExpr from table $tableNameExpr")
         append(" and store results in $resultVar")
-        if (waitFlag) append(" and wait")
         if (where != null) append(" where...")
     }
 }
