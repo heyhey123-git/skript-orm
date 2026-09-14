@@ -3,16 +3,20 @@ package io.github.heyhey123.xiaojieorm.skript.elements.sections
 import ch.njol.skript.Skript
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.*
+import ch.njol.skript.effects.Delay
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 abstract class SecSelectBase : Section() {
@@ -116,16 +120,34 @@ abstract class SecSelectBase : Section() {
             return walk(event, false)
         }
 
+        val localVariables = if (waitFlag && event != null) {
+            SkriptLocalVariables.remove(event)
+        } else {
+            null
+        }
+        if (waitFlag && event != null) {
+            Delay.addDelayedEvent(event)
+        }
+
         XiaojieOrm.ioScope.launch {
             try {
                 executeQuery(database, table, whereClause, extraArguments, event)
             } catch (e: Throwable) {
-                launch(SyncDispatcher) {
+                withContext(NonCancellable + SyncDispatcher) {
                     ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${e.message}")
                 }
             } finally {
                 if (waitFlag) {
-                    launch(SyncDispatcher) { walk(event, false) }
+                    withContext(NonCancellable + SyncDispatcher) {
+                        try {
+                            if (event != null && localVariables != null) {
+                                SkriptLocalVariables.restore(event, localVariables)
+                            }
+                            walk(event, false)
+                        } finally {
+                            if (event != null) SkriptLocalVariables.clear(event)
+                        }
+                    }
                 }
             }
         }

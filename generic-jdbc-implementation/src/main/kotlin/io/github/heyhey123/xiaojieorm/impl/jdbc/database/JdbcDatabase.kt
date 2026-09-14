@@ -7,10 +7,6 @@ import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 
 open class JdbcDatabase(
     val driver: String,
@@ -51,7 +47,7 @@ open class JdbcDatabase(
         dataSource = null
     }
 
-    override fun doRegisterTable(table: Table): Job {
+    override suspend fun doRegisterTable(table: Table) {
         val source = checkNotNull(dataSource) {
             "Database is not connected. Please connect before registering tables."
         }
@@ -89,11 +85,9 @@ open class JdbcDatabase(
             append(");")
         }
 
-        return CoroutineScope(Dispatchers.IO).launch {
-            source.connection.use { connection ->
-                connection.createStatement().use { statement ->
-                    statement.executeUpdate(sql)
-                }
+        source.connection.use { connection ->
+            connection.createStatement().use { statement ->
+                statement.executeUpdate(sql)
             }
         }
     }

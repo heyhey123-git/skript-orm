@@ -1,65 +1,73 @@
 package io.github.heyhey123.xiaojieorm.database
 
+import io.github.heyhey123.xiaojieorm.database.Database.Companion.current
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataTypes
-import kotlinx.coroutines.Job
-import org.bukkit.Bukkit
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Represents a generic database connection and operations.
- *
  */
 abstract class Database {
     companion object {
+        private val lifecycleMutex = Mutex()
 
+        /** The currently active, fully initialized database connection. */
+        @Volatile
         var current: Database? = null
+            private set
     }
 
-    /**
-     * Tables registered for this database instance.
-     */
+    enum class State {
+        DISCONNECTED,
+        CONNECTING,
+        CONNECTED,
+        DISCONNECTING
+    }
+
+    /** Tables successfully registered for this database instance. */
     val tables: MutableMap<String, Table> = ConcurrentHashMap()
 
-    /**
-     * Indicates whether the database is currently connected.
-     */
-    var isConnected: Boolean = false
+    @Volatile
+    var state: State = State.DISCONNECTED
+        private set
+
+    val isConnected: Boolean
+        get() = state == State.CONNECTED
+
+    /** Queries specific to the database implementation. */
+    @Volatile
+    var queries: Queries? = null
         protected set
 
-    /**
-     * The queries specific to the database implementation.
-     */
-    var queries: Queries? = null
-
-    /**
-     * The data types supported by the database.
-     */
+    /** Data types supported by this database. */
     abstract val dataTypes: DataTypes
 
-
     /**
-     * Connects to the database using the provided URL, username, and password.
-     * This method must be called on the primary thread and ensures that only one database connection is active at a time.
-     *
-     * @throws error if the connection fails or if another database is already connected.
+     * Establishes and fully initializes this database.
+     * The instance is published through [current] only after all previously registered tables have
+     * been recreated successfully.
      */
-    fun connect(url: String, user: String, password: String) {
-        check(Bukkit.isPrimaryThread()) { "Connection must be established on the primary thread." }
-        check(!isConnected) { "Database is already connected." }
+    suspend fun connect(url: String, user: String, password: String) = lifecycleMutex.withLock {
+        check(state == State.DISCONNECTED) { "Database is not disconnected: $state." }
         check(current == null || current === this) {
             "Another database is already connected. Disconnect it before connecting a new database."
         }
 
+        state = State.CONNECTING
         try {
             doConnect(url, user, password)
             check(queries != null) { "Database implementation did not initialize queries during connection." }
-            isConnected = true
-            current = this
-            if (tables.isNotEmpty()) {
-                tables.forEach { (_, table) -> doRegisterTable(table) }
+
+            for (table in tables.values.toList()) {
+                doRegisterTable(table)
             }
+
+            state = State.CONNECTED
+            current = this
         } catch (error: Throwable) {
             try {
                 doDisconnect()
@@ -67,71 +75,51 @@ abstract class Database {
                 error.addSuppressed(cleanupError)
             }
             queries = null
-            isConnected = false
+            state = State.DISCONNECTED
             if (current === this) current = null
             throw error
         }
     }
 
-    /**
-     * Performs the actual connection logic specific to the database implementation.
-     * The field [queries] should be initialized in this method.
-     *
-     * @param url The database connection URL.
-     * @param user The username for authentication.
-     * @param password The password for authentication.
-     */
+    /** Initializes implementation-specific resources and [queries]. */
     protected abstract fun doConnect(url: String, user: String, password: String)
 
     /**
-     * Disconnects from the database.
-     * If there is no active connection, this method does nothing.
-     * This method must be called on the primary thread.
-     * @throws error if the disconnection fails.
+     * Disconnects this database. State is cleared even when implementation cleanup fails.
      */
-    fun disconnect() {
-        check(Bukkit.isPrimaryThread()) { "Disconnection must be performed on the primary thread." }
-        if (!isConnected && queries == null && current !== this) return
+    suspend fun disconnect() = lifecycleMutex.withLock {
+        if (state == State.DISCONNECTED && queries == null && current !== this) return@withLock
+
+        state = State.DISCONNECTING
         var failure: Throwable? = null
         try {
             doDisconnect()
         } catch (error: Throwable) {
             failure = error
         } finally {
-            isConnected = false
             queries = null
-            if (current === this) {
-                current = null
-            }
+            state = State.DISCONNECTED
+            if (current === this) current = null
         }
         failure?.let { throw it }
     }
 
-    /**
-     * Performs the actual disconnection logic specific to the database implementation.
-     *
-     */
+    /** Releases implementation-specific resources. */
     protected abstract fun doDisconnect()
 
     /**
-     * Registers a table in the database.
-     *
-     * @param table The table to register.
+     * Registers a table and publishes it to [tables] only after registration succeeds.
      */
-    fun registerTable(table: Table): Job {
-        check(isConnected) { "Database is not connected." }
-        val registration = doRegisterTable(table)
-        registration.invokeOnCompletion { error ->
-            if (error == null) tables[table.name] = table
-        }
-        return registration
+    suspend fun registerTable(table: Table) = lifecycleMutex.withLock {
+        check(state == State.CONNECTED) { "Database is not connected." }
+        doRegisterTable(table)
+        tables[table.name] = table
     }
 
     /**
-     * Performs the actual table registration logic specific to the database implementation.
-     *
-     * @param table The table to register.
-     * @return A Job representing the asynchronous registration operation.
+     * Structured registration hook for implementations. New implementations should override this.
+     * The default bridge keeps existing Job-based implementations source-compatible while ensuring
+     * their completion and failure are awaited by the lifecycle API.
      */
-    abstract fun doRegisterTable(table: Table): Job
+    protected abstract suspend fun doRegisterTable(table: Table)
 }

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.runBlocking
 import org.bukkit.plugin.java.JavaPlugin
 
 class XiaojieOrm: JavaPlugin() {
@@ -39,7 +40,9 @@ class XiaojieOrm: JavaPlugin() {
     }
 
     override fun onDisable() {
+        runBlocking(Dispatchers.IO) {
+            Database.current?.disconnect()
+        }
         ioScope.cancel("Plugin disabled")
-        Database.current?.disconnect()
     }
 }

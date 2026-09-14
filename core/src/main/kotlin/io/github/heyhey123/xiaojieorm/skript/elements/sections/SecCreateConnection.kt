@@ -5,14 +5,21 @@ import ch.njol.skript.config.SectionNode
 import ch.njol.skript.doc.Description
 import ch.njol.skript.doc.Example
 import ch.njol.skript.doc.Name
+import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
+import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
+import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 import org.skriptlang.skript.lang.entry.EntryValidator
 import org.skriptlang.skript.lang.entry.util.LiteralEntryData
@@ -32,7 +39,7 @@ connect to database "MySQL" with properties:
     password: "123456"
 """
 )
-class SecCreateConnection: Section()  {
+class SecCreateConnection : Section() {
 
     companion object {
         init {
@@ -44,7 +51,6 @@ class SecCreateConnection: Section()  {
     }
 
     private lateinit var databaseNameExpr: Expression<String>
-
     private lateinit var connectionProperties: MutableMap<String, String>
 
     @Suppress("UNCHECKED_CAST")
@@ -56,6 +62,7 @@ class SecCreateConnection: Section()  {
         sectionNode: SectionNode,
         triggerItems: List<TriggerItem?>
     ): Boolean {
+        parser.hasDelayBefore = Kleenean.TRUE
         databaseNameExpr = expressions[0] as Expression<String>
         return parseNode(sectionNode)
     }
@@ -98,8 +105,9 @@ class SecCreateConnection: Section()  {
     }
 
     override fun walk(event: Event?): TriggerItem? {
-        val databaseName = databaseNameExpr.getSingle(event)
-        val firstLine: Trigger = this.first!!.trigger!!
+        val actualEvent = event ?: return walk(event, false)
+        val firstLine: Trigger = first?.trigger ?: return walk(event, false)
+        val databaseName = databaseNameExpr.getSingle(actualEvent)
 
         if (databaseName == null) {
             ErrorPrinter.printErrorMessageWithDetail(
@@ -125,19 +133,33 @@ class SecCreateConnection: Section()  {
         }
 
         val database = DatabaseRegistry.get(databaseName, implementationProperties)
-        try {
-            database.connect(url, username, password)
-        } catch (e: Exception) {
-            ErrorPrinter.printErrorWithDetail(
-                firstLine,
-                e
-            )
-            return walk(event, false)
+
+        val localVariables = SkriptLocalVariables.remove(actualEvent)
+        XiaojieOrm.ioScope.launch {
+            Delay.addDelayedEvent(actualEvent)
+            try {
+                database.connect(url, username, password)
+            } catch (error: Throwable) {
+                withContext(NonCancellable + SyncDispatcher) {
+                    ErrorPrinter.printErrorWithDetail(firstLine, error)
+                }
+            } finally {
+                withContext(NonCancellable + SyncDispatcher) {
+                    try {
+                        if (localVariables != null) {
+                            SkriptLocalVariables.restore(actualEvent, localVariables)
+                        }
+                        walk(actualEvent, false)
+                    } finally {
+                        SkriptLocalVariables.clear(actualEvent)
+                    }
+                }
+            }
         }
 
-        return walk(event, false)
+        return null
     }
 
-    override fun toString(event: Event?, debug: Boolean) = "create connection to database ${databaseNameExpr.toString(event, debug)}"
-
+    override fun toString(event: Event?, debug: Boolean) =
+        "create connection to database ${databaseNameExpr.toString(event, debug)}"
 }

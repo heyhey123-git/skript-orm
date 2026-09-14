@@ -1,14 +1,15 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.effects
 
 import ch.njol.skript.Skript
-import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
+import ch.njol.skript.util.AsyncEffect
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.database.Database
+import kotlinx.coroutines.runBlocking
 import org.bukkit.event.Event
 
-class EffDisconnect: Effect() {
+class EffDisconnect : AsyncEffect() {
     companion object {
         init {
             Skript.registerEffect(
@@ -23,10 +24,15 @@ class EffDisconnect: Effect() {
         matchedPattern: Int,
         isDelayed: Kleenean,
         parseResult: SkriptParser.ParseResult
-    ): Boolean = true
+    ): Boolean {
+        parser.hasDelayBefore = Kleenean.TRUE
+        return true
+    }
 
     override fun execute(event: Event?) {
-        Database.current?.disconnect()
+        runBlocking {
+            Database.current?.disconnect()
+        }
     }
 
     override fun toString(event: Event?, debug: Boolean) =

@@ -8,13 +8,13 @@ import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
-import ch.njol.skript.variables.Variables
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.*
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
@@ -112,15 +112,34 @@ abstract class SecWriteBase : Section() {
         val resolvedSingle = singleValues?.bind(table)?.resolve(event)
         val resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
 
+        val localVariables = if (waitFlag && event != null) {
+            SkriptLocalVariables.remove(event)
+        } else {
+            null
+        }
+        if (waitFlag && event != null) {
+            Delay.addDelayedEvent(event)
+        }
+
         XiaojieOrm.ioScope.launch {
             try {
                 executeWrite(database, table, resolvedSingle, resolvedMultiple, whereClause, event)
             } catch (e: Throwable) {
-                // Make sure the error message will be printed instantly, because the main thread may continue to execute other code and the error message may be delayed.
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${e.message}")
+                withContext(NonCancellable + SyncDispatcher) {
+                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${e.message}")
+                }
             } finally {
                 if (waitFlag) {
-                    launch(SyncDispatcher) { walk(event, false) }
+                    withContext(NonCancellable + SyncDispatcher) {
+                        try {
+                            if (event != null && localVariables != null) {
+                                SkriptLocalVariables.restore(event, localVariables)
+                            }
+                            walk(event, false)
+                        } finally {
+                            if (event != null) SkriptLocalVariables.clear(event)
+                        }
+                    }
                 }
             }
         }
