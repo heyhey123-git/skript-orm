@@ -31,7 +31,7 @@ interface JdbcQuery {
         dataSource.connection.use { connection ->
             connection.prepareStatement(sql).use { statement ->
                 bind(statement)
-                WriteResult(statement.executeUpdate())
+                WriteResult(statement.executeLargeUpdate())
             }
         }
 

@@ -6,7 +6,7 @@ package io.github.heyhey123.xiaojieorm.result
  * @property affectedCount The number of rows affected by the write operation.
  */
 data class WriteResult(
-    val affectedCount: Int
+    val affectedCount: Long
 ) : ExecutionResult {
 
     override fun asCursorOrNull() = null

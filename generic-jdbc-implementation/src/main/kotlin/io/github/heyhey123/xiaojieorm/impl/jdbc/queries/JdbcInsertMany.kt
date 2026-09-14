@@ -25,17 +25,17 @@ open class JdbcInsertMany(valuesList: List<Map<String, Any?>>, override val data
                     }
                     statement.addBatch()
                 }
-                val counts = statement.executeBatch()
+                val counts = statement.executeLargeBatch()
                 var affected = 0L
                 counts.forEach { count ->
                     when {
-                        count >= 0 -> affected += count.toLong()
-                        count == Statement.SUCCESS_NO_INFO -> error("The JDBC driver did not report an exact batch update count.")
-                        count == Statement.EXECUTE_FAILED -> error("A JDBC batch insert operation failed.")
+                        count >= 0L -> affected = Math.addExact(affected, count)
+                        count == Statement.SUCCESS_NO_INFO.toLong() -> error("The JDBC driver did not report an exact batch update count.")
+                        count == Statement.EXECUTE_FAILED.toLong() -> error("A JDBC batch insert operation failed.")
+                        else -> error("The JDBC driver returned an invalid batch update count: $count.")
                     }
-                    check(affected <= Int.MAX_VALUE) { "Affected row count exceeds the supported Int range." }
                 }
-                WriteResult(affected.toInt())
+                WriteResult(affected)
             }
         }
     }
