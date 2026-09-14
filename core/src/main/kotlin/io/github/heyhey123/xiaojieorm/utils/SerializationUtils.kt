@@ -1,15 +1,12 @@
 @file:Suppress("DEPRECATION")
 package io.github.heyhey123.xiaojieorm.utils
 
-import ch.njol.skript.registrations.Classes
-import ch.njol.skript.variables.Variables
 import de.tr7zw.nbtapi.NBTCompound
 import de.tr7zw.nbtapi.NBTContainer
 import de.tr7zw.nbtapi.NBTReflectionUtil
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.util.io.BukkitObjectInputStream
 import org.bukkit.util.io.BukkitObjectOutputStream
-import org.skriptlang.skript.lang.converter.Converters
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
 
