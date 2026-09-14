@@ -11,9 +11,11 @@ import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.skript.utils.*
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,7 +90,7 @@ abstract class SecWriteBase : Section() {
 
 
     override fun walk(event: Event?): TriggerItem? {
-        val trigger = first?.trigger ?: return walk(event, false)
+        val trigger = this.trigger ?: return walk(event, false)
 
         val database = Database.current ?: run {
             ErrorPrinter.printErrorMessageWithDetail(trigger, "No database connected.")
@@ -128,6 +130,12 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
+        if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+            ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
+            return walk(event, false)
+        }
+
+        val continuation = if (waitFlag) getNext() else null
         val localVariables = if (waitFlag && event != null) {
             SkriptLocalVariables.remove(event)
         } else {
@@ -138,23 +146,33 @@ abstract class SecWriteBase : Section() {
         }
 
         XiaojieOrm.ioScope.launch {
+            var failure: Throwable? = null
             try {
-                executeWrite(database, table, resolvedSingle, resolvedMultiple, whereClause, event)
-            } catch (e: Throwable) {
-                withContext(NonCancellable + SyncDispatcher) {
-                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${e.message}")
+                database.withQueries { queries ->
+                    executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, event)
                 }
-            } finally {
+            } catch (cancelled: CancellationException) {
+                return@launch
+            } catch (error: Throwable) {
+                failure = error
+            }
+
+            withContext(NonCancellable + SyncDispatcher) {
+                if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
+
+                failure?.let {
+                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
+                }
                 if (waitFlag) {
-                    withContext(NonCancellable + SyncDispatcher) {
-                        try {
-                            if (event != null && localVariables != null) {
-                                SkriptLocalVariables.restore(event, localVariables)
-                            }
-                            walk(event, false)
-                        } finally {
-                            if (event != null) SkriptLocalVariables.clear(event)
+                    try {
+                        if (event != null && localVariables != null) {
+                            SkriptLocalVariables.restore(event, localVariables)
                         }
+                        if (event != null) {
+                            walk(continuation, event)
+                        }
+                    } finally {
+                        if (event != null) SkriptLocalVariables.clear(event)
                     }
                 }
             }
@@ -164,7 +182,7 @@ abstract class SecWriteBase : Section() {
     }
 
     protected abstract suspend fun executeWrite(
-        database: Database,
+        queries: Queries,
         table: Table,
         singleValues: Map<String, Any?>?,
         multipleValues: List<Map<String, Any?>>?,

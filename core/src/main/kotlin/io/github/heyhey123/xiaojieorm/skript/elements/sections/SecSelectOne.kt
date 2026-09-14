@@ -5,7 +5,7 @@ import ch.njol.skript.doc.Description
 import ch.njol.skript.doc.Example
 import ch.njol.skript.doc.Name
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -40,13 +40,13 @@ class SecSelectOne : SecSelectBase() {
     override val resultVarIndex: Int = 1
 
     override suspend fun executeQuery(
-        database: Database,
+        queries: Queries,
         table: Table,
         whereClause: WhereClause?,
         extraArguments: Any?
     ): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
-        database.queries!!.selectOne(whereClause).execute(table).cursor.use { cursor ->
+        queries.selectOne(whereClause).execute(table).cursor.use { cursor ->
             if (cursor.next()) {
                 table.columns.values.forEachIndexed { index, column ->
                     result[(index + 1).toString()] = cursor.get(column.name, column.type)

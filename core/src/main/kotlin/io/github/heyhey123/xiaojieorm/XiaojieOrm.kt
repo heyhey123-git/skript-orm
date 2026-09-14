@@ -20,6 +20,7 @@ class XiaojieOrm: JavaPlugin() {
 
     override fun onEnable() {
         instance = this
+        Database.beginLifecycle()
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         Skript.registerAddon(this)
             .loadClasses("io.github.heyhey123.xiaojieorm.skript", "elements")
@@ -42,7 +43,7 @@ class XiaojieOrm: JavaPlugin() {
     override fun onDisable() {
         try {
             runBlocking(Dispatchers.IO) {
-                Database.current?.disconnect()
+                Database.shutdown()
             }
         } catch (error: Throwable) {
             logger.severe("Failed to disconnect the database during plugin shutdown: ${error.message}")

@@ -4,7 +4,7 @@ import ch.njol.skript.Skript
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Trigger
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -48,7 +48,7 @@ class SecSelectPage : SecSelectBase() {
     }
 
     override suspend fun executeQuery(
-        database: Database,
+        queries: Queries,
         table: Table,
         whereClause: WhereClause?,
         extraArguments: Any?
@@ -59,8 +59,7 @@ class SecSelectPage : SecSelectBase() {
 
         val result = linkedMapOf<String, Any?>()
         val columns = table.columns.values
-        database.queries!!
-            .selectPage(pageSize, pageIndex, whereClause)
+        queries.selectPage(pageSize, pageIndex, whereClause)
             .execute(table)
             .cursor
             .use { cursor ->

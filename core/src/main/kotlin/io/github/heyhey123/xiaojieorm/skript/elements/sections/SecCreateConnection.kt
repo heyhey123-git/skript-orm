@@ -13,10 +13,12 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
+import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -106,7 +108,7 @@ class SecCreateConnection : Section() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
-        val firstLine: Trigger = first?.trigger ?: return walk(event, false)
+        val firstLine: Trigger = this.trigger ?: return walk(event, false)
         val databaseName = databaseNameExpr.getSingle(actualEvent)
 
         if (databaseName == null) {
@@ -132,27 +134,43 @@ class SecCreateConnection : Section() {
             it != "url" && it != "username" && it != "password"
         }
 
-        val database = DatabaseRegistry.get(databaseName, implementationProperties)
+        val database = try {
+            DatabaseRegistry.get(databaseName, implementationProperties)
+        } catch (error: Throwable) {
+            ErrorPrinter.printErrorWithDetail(firstLine, error)
+            return walk(actualEvent, false)
+        }
 
+        if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+            ErrorPrinter.printErrorMessageWithDetail(firstLine, "Database lifecycle is shutting down.")
+            return walk(actualEvent, false)
+        }
+
+        val continuation = next
         val localVariables = SkriptLocalVariables.remove(actualEvent)
         Delay.addDelayedEvent(actualEvent)
         XiaojieOrm.ioScope.launch {
+            var failure: Throwable? = null
             try {
-                database.connect(url, username, password)
+                Database.replaceWith(database, url, username, password)
+            } catch (_: CancellationException) {
+                return@launch
             } catch (error: Throwable) {
-                withContext(NonCancellable + SyncDispatcher) {
-                    ErrorPrinter.printErrorWithDetail(firstLine, error)
+                failure = error
+            }
+
+            withContext(NonCancellable + SyncDispatcher) {
+                if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+                    return@withContext
                 }
-            } finally {
-                withContext(NonCancellable + SyncDispatcher) {
-                    try {
-                        if (localVariables != null) {
-                            SkriptLocalVariables.restore(actualEvent, localVariables)
-                        }
-                        walk(actualEvent, false)
-                    } finally {
-                        SkriptLocalVariables.clear(actualEvent)
+                try {
+                    if (localVariables != null) {
+                        SkriptLocalVariables.restore(actualEvent, localVariables)
                     }
+                    failure?.let { ErrorPrinter.printErrorWithDetail(firstLine, it) }
+                    walk(continuation, actualEvent)
+                } finally {
+                    SkriptLocalVariables.clear(actualEvent)
                 }
             }
         }

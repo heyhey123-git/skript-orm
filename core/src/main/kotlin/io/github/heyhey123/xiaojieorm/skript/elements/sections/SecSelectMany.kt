@@ -2,7 +2,7 @@ package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -22,13 +22,13 @@ class SecSelectMany : SecSelectBase() {
     override val resultVarIndex: Int = 1
 
     override suspend fun executeQuery(
-        database: Database,
+        queries: Queries,
         table: Table,
         whereClause: WhereClause?,
         extraArguments: Any?
     ): Map<String, Any?> {
         val result = linkedMapOf<String, Any?>()
-        database.queries!!.selectMany(whereClause).execute(table).cursor.use { cursor ->
+        queries.selectMany(whereClause).execute(table).cursor.use { cursor ->
             var rowIndex = 1
             while (cursor.next()) {
                 result["$rowIndex::__index"] = rowIndex

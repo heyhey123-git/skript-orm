@@ -8,6 +8,7 @@ import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
@@ -15,6 +16,7 @@ import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,23 +79,15 @@ abstract class SecSelectBase : Section() {
         }
 
         waitFlag = parseResult.hasTag("wait")
-        if (!waitFlag && resultVar.isLocal) {
-            Skript.error(
-                "A non-waiting database query cannot store its result in a local variable. " +
-                    "Add 'and wait' or use a global variable."
-            )
-            return false
-        }
-        if (waitFlag) {
-            parser.hasDelayBefore = Kleenean.TRUE
-        }
+        parser.hasDelayBefore = Kleenean.TRUE
         return true
     }
 
     protected open fun resolveExtraArguments(event: Event?, trigger: Trigger): Any? = Unit
 
     override fun walk(event: Event?): TriggerItem? {
-        val trigger = first?.trigger ?: return walk(event, false)
+        val actualEvent = event ?: return walk(event, false)
+        val trigger = this.trigger ?: return walk(event, false)
 
         val database = Database.current ?: run {
             ErrorPrinter.printErrorMessageWithDetail(trigger, "No database connected.")
@@ -126,61 +120,63 @@ abstract class SecSelectBase : Section() {
             return walk(event, false)
         }
 
-        val localVariables = if (waitFlag && event != null) {
-            SkriptLocalVariables.remove(event)
-        } else {
-            null
+        if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+            ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
+            return walk(actualEvent, false)
         }
-        if (waitFlag && event != null) {
-            Delay.addDelayedEvent(event)
-        }
+
+        val continuation = next
+        // Store the continuation in order to resume after the query is complete
+        // Continuation means the rest of the script after this section, which will be executed after the query is done
+        val localVariables = SkriptLocalVariables.remove(actualEvent)
+        Delay.addDelayedEvent(actualEvent)
 
         XiaojieOrm.ioScope.launch {
             var queryResult: Map<String, Any?>? = null
             var failure: Throwable? = null
             try {
-                queryResult = executeQuery(database, table, whereClause, extraArguments)
-            } catch (e: Throwable) {
-                failure = e
-            } finally {
-                withContext(NonCancellable + SyncDispatcher) {
-                    try {
-                        if (waitFlag && event != null && localVariables != null) {
-                            SkriptLocalVariables.restore(event, localVariables)
-                        }
+                queryResult = database.withQueries { queries ->
+                    executeQuery(queries, table, whereClause, extraArguments)
+                }
+            } catch (_: CancellationException) {
+                return@launch
+            } catch (error: Throwable) {
+                failure = error
+            }
 
-                        val queryFailure = failure
-                        if (queryFailure != null) {
-                            VariableModifier.clear(resultVar, event)
-                            ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${queryFailure.message}")
-                        } else {
-                            VariableModifier.writeMap(resultVar, event, checkNotNull(queryResult))
-                        }
-
-                        if (waitFlag) {
-                            walk(event, false)
-                        }
-                    } finally {
-                        if (waitFlag && event != null) {
-                            SkriptLocalVariables.clear(event)
-                        }
+            withContext(NonCancellable + SyncDispatcher) {
+                if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
+                try {
+                    if (localVariables != null) {
+                        SkriptLocalVariables.restore(actualEvent, localVariables)
                     }
+
+                    val queryFailure = failure
+                    if (queryFailure != null) {
+                        VariableModifier.clear(resultVar, actualEvent)
+                        ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${queryFailure.message}")
+                    } else {
+                        VariableModifier.writeMap(resultVar, actualEvent, checkNotNull(queryResult))
+                    }
+
+                    walk(continuation, actualEvent)
+                } finally {
+                    SkriptLocalVariables.clear(actualEvent)
                 }
             }
         }
 
-        return if (waitFlag) null else walk(event, false)
+        return null
     }
 
     /**
      * Executes the database query on the IO dispatcher and returns the keyed snapshot
      * that will be written to the Skript list variable on the main thread.
      *
-     * Multi-row implementations use keys in the form `rowIndex::columnName` and
-     * reserve `rowIndex::__index` as a non-null row-presence marker.
+     * Multi-row implementations use keys in the form `rowIndex::columnName`.
      */
     protected abstract suspend fun executeQuery(
-        database: Database,
+        queries: Queries,
         table: Table,
         whereClause: WhereClause?,
         extraArguments: Any?
