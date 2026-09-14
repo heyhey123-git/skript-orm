@@ -25,52 +25,31 @@ open class JdbcInsertMany(
 
         val sql = dialect.insert(table.name, columns)
         return dataSource.connection.use { connection ->
-            val previousAutoCommit = connection.autoCommit
-            connection.autoCommit = false
-            try {
-                val result = connection.prepareStatement(sql).use { statement ->
-                    try {
-                        valuesList.forEach { row ->
-                            columns.forEachIndexed { index, key ->
-                                val column = requireNotNull(table.getColumnByName(key)) {
-                                    "Table ${table.name} does not have column $key."
-                                }
-                                statement.bindValue(index + 1, row[key], column.type)
+            connection.prepareStatement(sql).use { statement ->
+                statement.withBoundResources {
+                    valuesList.forEach { row ->
+                        columns.forEachIndexed { index, key ->
+                            val column = requireNotNull(table.getColumnByName(key)) {
+                                "Table ${table.name} does not have column $key."
                             }
-                            statement.addBatch()
+                            statement.bindValue(index + 1, row[key], column.type)
                         }
-
-                        val counts = statement.executeLargeBatch()
-                        var affected = 0L
-                        counts.forEach { count ->
-                            when {
-                                count >= 0L -> affected = Math.addExact(affected, count)
-                                count == Statement.SUCCESS_NO_INFO.toLong() ->
-                                    affected = Math.addExact(affected, 1L)
-                                count == Statement.EXECUTE_FAILED.toLong() ->
-                                    error("A JDBC batch insert operation failed.")
-                                else -> error("The JDBC driver returned an invalid batch update count: $count.")
-                            }
-                        }
-                        WriteResult(affected)
-                    } finally {
-                        statement.releaseBoundResources()
+                        statement.addBatch()
                     }
-                }
-                connection.commit()
-                result
-            } catch (error: Throwable) {
-                try {
-                    connection.rollback()
-                } catch (rollbackError: Throwable) {
-                    error.addSuppressed(rollbackError)
-                }
-                throw error
-            } finally {
-                try {
-                    connection.autoCommit = previousAutoCommit
-                } catch (_: Throwable) {
-                    // The connection is about to be closed; preserve the primary operation result/failure.
+
+                    val counts = statement.executeLargeBatch()
+                    var affected = 0L
+                    var countExact = true
+                    counts.forEach { count ->
+                        when {
+                            count >= 0L -> affected = Math.addExact(affected, count)
+                            count == Statement.SUCCESS_NO_INFO.toLong() -> countExact = false
+                            count == Statement.EXECUTE_FAILED.toLong() ->
+                                error("A JDBC batch insert operation failed.")
+                            else -> error("The JDBC driver returned an invalid batch update count: $count.")
+                        }
+                    }
+                    WriteResult(affected, countExact)
                 }
             }
         }

@@ -39,12 +39,10 @@ interface JdbcQuery {
     suspend fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult =
         dataSource.connection.use { connection ->
             connection.prepareStatement(sql).use { statement ->
-                try {
+                statement.withBoundResources {
                     configureStatement(statement)
                     bind(statement)
                     WriteResult(statement.executeLargeUpdate())
-                } finally {
-                    statement.releaseBoundResources()
                 }
             }
         }

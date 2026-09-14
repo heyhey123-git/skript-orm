@@ -50,6 +50,25 @@ internal fun PreparedStatement.bindValue(index: Int, value: Any?, type: DataType
     }
 }
 
+internal inline fun <T> PreparedStatement.withBoundResources(action: () -> T): T {
+    var failure: Throwable? = null
+    try {
+        return action()
+    } catch (error: Throwable) {
+        failure = error
+        throw error
+    } finally {
+        try {
+            releaseBoundResources()
+        } catch (cleanupError: Throwable) {
+            if (failure != null) {
+                failure.addSuppressed(cleanupError)
+            } else {
+                throw cleanupError
+            }
+        }
+    }
+}
 /**
  * Releases any bound resources (e.g., Blob values) associated with this PreparedStatement.
  * This is called after the statement is executed to free any resources that were bound to it.
