@@ -45,5 +45,5 @@ object DatabaseRegistry {
      * @param typeName The type name of the database.
      * @return True if the database type is supported, false otherwise.
      */
-    fun isSupported(typeName: String): Boolean = typeName in factories
+    fun isSupported(typeName: String): Boolean = typeName in factories.keys
 }
