@@ -16,6 +16,7 @@ import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
@@ -109,9 +110,11 @@ class SecCreateConnection : Section() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
         val firstLine: Trigger = this.trigger ?: return walk(event, false)
+        SkriptDatabaseErrors.clear(actualEvent)
         val databaseName = databaseNameExpr.getSingle(actualEvent)
 
         if (databaseName == null) {
+            SkriptDatabaseErrors.set(actualEvent, "Database name in create connection section can't be null.")
             ErrorPrinter.printErrorMessageWithDetail(
                 firstLine,
                 "Database name in create connection section can't be null."
@@ -120,6 +123,7 @@ class SecCreateConnection : Section() {
         }
 
         if (!DatabaseRegistry.isSupported(databaseName)) {
+            SkriptDatabaseErrors.set(actualEvent, "Database '$databaseName' is not supported.")
             ErrorPrinter.printErrorMessageWithDetail(
                 firstLine,
                 "Database '$databaseName' is not supported."
@@ -137,11 +141,13 @@ class SecCreateConnection : Section() {
         val database = try {
             DatabaseRegistry.get(databaseName, implementationProperties)
         } catch (error: Throwable) {
+            SkriptDatabaseErrors.set(actualEvent, error)
             ErrorPrinter.printErrorWithDetail(firstLine, error)
             return walk(actualEvent, false)
         }
 
         if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+            SkriptDatabaseErrors.set(actualEvent, "Database lifecycle is shutting down.")
             ErrorPrinter.printErrorMessageWithDetail(firstLine, "Database lifecycle is shutting down.")
             return walk(actualEvent, false)
         }
@@ -167,7 +173,12 @@ class SecCreateConnection : Section() {
                     if (localVariables != null) {
                         SkriptLocalVariables.restore(actualEvent, localVariables)
                     }
-                    failure?.let { ErrorPrinter.printErrorWithDetail(firstLine, it) }
+                    if (failure != null) {
+                        SkriptDatabaseErrors.set(actualEvent, failure)
+                        ErrorPrinter.printErrorWithDetail(firstLine, failure)
+                    } else {
+                        SkriptDatabaseErrors.clear(actualEvent)
+                    }
                     walk(continuation, actualEvent)
                 } finally {
                     SkriptLocalVariables.clear(actualEvent)

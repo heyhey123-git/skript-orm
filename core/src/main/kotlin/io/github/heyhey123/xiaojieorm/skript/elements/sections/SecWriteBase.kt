@@ -91,28 +91,35 @@ abstract class SecWriteBase : Section() {
 
     override fun walk(event: Event?): TriggerItem? {
         val trigger = this.trigger ?: return walk(event, false)
+        if (event != null) SkriptDatabaseErrors.clear(event)
 
         val database = Database.current ?: run {
+            if (event != null) SkriptDatabaseErrors.set(event, "No database connected.")
             ErrorPrinter.printErrorMessageWithDetail(trigger, "No database connected.")
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
+            if (event != null) SkriptDatabaseErrors.set(event, "Table name is null.")
             ErrorPrinter.printErrorMessageWithDetail(trigger, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "Table '$tableName' not found.")
+            val message = "Table '$tableName' not found."
+            if (event != null) SkriptDatabaseErrors.set(event, message)
+            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
             return walk(event, false)
         }
 
         val whereClause = try {
             where?.bind(table)?.resolve(event)
         } catch (error: Exception) {
+            val message = "Failed to parse where clause: ${error.message}"
+            if (event != null) SkriptDatabaseErrors.set(event, message)
             ErrorPrinter.printErrorMessageWithDetail(
                 trigger,
-                "Failed to parse where clause: ${error.message}"
+                message
             )
             return walk(event, false)
         }
@@ -123,19 +130,22 @@ abstract class SecWriteBase : Section() {
             resolvedSingle = singleValues?.bind(table)?.resolve(event)
             resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
         } catch (error: Exception) {
+            val message = "Failed to parse write values: ${error.message}"
+            if (event != null) SkriptDatabaseErrors.set(event, message)
             ErrorPrinter.printErrorMessageWithDetail(
                 trigger,
-                "Failed to parse write values: ${error.message}"
+                message
             )
             return walk(event, false)
         }
 
         if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
+            if (event != null) SkriptDatabaseErrors.set(event, "Database lifecycle is shutting down.")
             ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
             return walk(event, false)
         }
 
-        val continuation = if (waitFlag) getNext() else null
+        val continuation = if (waitFlag) next else null
         val localVariables = if (waitFlag && event != null) {
             SkriptLocalVariables.remove(event)
         } else {
@@ -160,6 +170,13 @@ abstract class SecWriteBase : Section() {
             withContext(NonCancellable + SyncDispatcher) {
                 if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
 
+                if (waitFlag && event != null) {
+                    if (failure != null) {
+                        SkriptDatabaseErrors.set(event, failure)
+                    } else {
+                        SkriptDatabaseErrors.clear(event)
+                    }
+                }
                 failure?.let {
                     ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
                 }
