@@ -22,7 +22,7 @@ open class JdbcDatabase(
 
     var dataSource: HikariDataSource? = null
 
-    open override val dataTypes: DataTypes = JdbcDataTypes
+    override val dataTypes: DataTypes = JdbcDataTypes
 
     override fun doConnect(url: String, user: String, password: String) {
         try {
