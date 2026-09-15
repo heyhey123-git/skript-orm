@@ -35,7 +35,7 @@ object DatabaseRegistry {
      */
     fun get(typeName: String, properties: Map<String, String>): Database {
         val factory = factories[typeName]
-            ?: error("Unsupported database type: $typeName")
+            ?: throw IllegalArgumentException("Unsupported database type: $typeName")
         return factory.create(properties)
     }
 
