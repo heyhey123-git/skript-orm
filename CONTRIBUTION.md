@@ -3,8 +3,8 @@
 [中文版](CONTRIBUTION.zh-CN.md)
 
 Xiaojie ORM is a Skript addon that exposes database operations as Skript elements. It is in early
-development: there is no test suite yet, and both the public API and the internal structure may still
-change.
+development: both the public API and the internal structure may still change. Unit tests and an
+opt-in MySQL integration suite cover the current behaviour (see §8).
 
 The guiding principles are **moderate abstraction**, **readability over cleverness**, and **a small
 surface that is pleasant to use**. When a change and a principle disagree, the principle wins.
@@ -203,7 +203,50 @@ the top reads **Project**.
 
 ---
 
-## 8. Adding a database implementation
+## 8. Testing
+
+There are two layers, run by two separate Gradle tasks.
+
+**Unit tests** (`core`, `generic-jdbc-implementation`) run on every build, need no network and no
+Docker, and cover contracts rather than line coverage: SQL rendering, parameter binding, cursor
+resource ownership, snapshot semantics, identifier validation. JDBC interfaces are mocked with MockK.
+
+```bash
+./gradlew test
+```
+
+**Integration tests** (`generic-jdbc-implementation`) run the real implementation against a real
+MySQL server. They are opt-in, because they need a container runtime and take longer:
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest
+```
+
+One `mysql:8.4` container is started per test JVM. To reuse a server you already have, point the
+tests at it instead. That database must be dedicated to testing, because the tests drop and recreate
+the tables they use:
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest \
+  -Pxiaojie.test.mysql.url="jdbc:mysql://localhost:3306/xiaojie_orm_test"
+```
+
+The same settings are read from `XIAOJIE_TEST_MYSQL_URL`, `XIAOJIE_TEST_MYSQL_USERNAME`,
+`XIAOJIE_TEST_MYSQL_PASSWORD`, `XIAOJIE_TEST_MYSQL_DRIVER`, and `XIAOJIE_TEST_MYSQL_IMAGE`. When
+neither Docker nor an external server is available, the MySQL tests abort with a reason instead of
+passing silently.
+
+The integration test classpath is deliberately the plugin runtime without a server: it includes
+Paper, Skript, and the NBT API, because `JdbcDataTypes` resolves those classes when it initializes.
+`JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true.
+
+Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only discovers `@Test` methods
+that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an
+expression-bodied test would otherwise be compiled, never run, and never reported.
+
+---
+
+## 9. Adding a database implementation
 
 1. Create a module and add it to `settings.gradle.kts`.
 2. Implement `Database`: `doConnect`, `doDisconnect`, `doRegisterTable`, and `dataTypes`.
@@ -219,7 +262,7 @@ different operation.
 
 ---
 
-## 9. What we deliberately avoid
+## 10. What we deliberately avoid
 
 - **Speculative abstraction.** Do not add an interface for one implementation, or a configuration
   object for one setting. Two similar lines are better than a premature framework.
@@ -233,7 +276,7 @@ different operation.
 
 ---
 
-## 10. Commit messages
+## 11. Commit messages
 
 Write the subject in the imperative mood and explain the **why** in the body when the change is not
 self-evident. Keep unrelated changes in separate commits.

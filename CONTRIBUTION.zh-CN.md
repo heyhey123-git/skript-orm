@@ -2,8 +2,8 @@
 
 [English version](CONTRIBUTION.md)
 
-Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：目前还没有测试，
-公开 API 和内部结构都仍可能调整。
+Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：公开 API 和内部结构
+都仍可能调整。单元测试与可选的 MySQL 集成测试覆盖了当前行为（见第 8 节）。
 
 我们遵循三个原则：**适度抽象**、**可读性优于技巧**、**对外接口小而友好**。当某处改动与原则冲突时，
 以原则为准。
@@ -177,7 +177,47 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 ---
 
-## 8. 新增一个数据库实现
+## 8. 测试
+
+测试分为两层，由两个独立的 Gradle 任务运行。
+
+**单元测试**（`core`、`generic-jdbc-implementation`）随每次构建运行，不需要网络和 Docker，覆盖的是契约
+而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验。JDBC 接口用 MockK 模拟。
+
+```bash
+./gradlew test
+```
+
+**集成测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL。它属于可选任务，因为需要容器
+运行时且耗时更长：
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest
+```
+
+每个测试 JVM 会启动一个 `mysql:8.4` 容器。若想复用已有的 MySQL，可以把测试指向它；该数据库必须专用于
+测试，因为测试会删除并重建自己使用的表：
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest \
+  -Pxiaojie.test.mysql.url="jdbc:mysql://localhost:3306/xiaojie_orm_test"
+```
+
+同样的设置也可以从环境变量读取：`XIAOJIE_TEST_MYSQL_URL`、`XIAOJIE_TEST_MYSQL_USERNAME`、
+`XIAOJIE_TEST_MYSQL_PASSWORD`、`XIAOJIE_TEST_MYSQL_DRIVER`、`XIAOJIE_TEST_MYSQL_IMAGE`。当既没有
+Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不是静默通过。
+
+集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper、Skript 和 NBT API，因为
+`JdbcDataTypes` 在初始化时会解析这些类。一旦这一点不再成立，`JdbcRuntimeClasspathIntegrationTest`
+会立刻报错。
+
+集成测试方法请写成 `= runBlocking<Unit> { ... }`。JUnit 只会发现返回 `void` 的 `@Test` 方法，而
+`assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会
+出现在任何报告里。
+
+---
+
+## 9. 新增一个数据库实现
 
 1. 新建模块并加入 `settings.gradle.kts`。
 2. 实现 `Database`：`doConnect`、`doDisconnect`、`doRegisterTable` 与 `dataTypes`。
@@ -190,7 +230,7 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 ---
 
-## 9. 我们有意避免的做法
+## 10. 我们有意避免的做法
 
 - **投机式抽象。** 不要为一个实现引入接口，也不要为一个配置项引入配置对象。两行相似代码好过一个过早的框架。
 - **按操作重复配置。** 横切关注点应当只有一处。例如查询超时，不该由每个查询各自配置。
@@ -200,6 +240,6 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 ---
 
-## 10. 提交信息
+## 11. 提交信息
 
 标题使用祈使句。当改动原因不够直观时，在正文里说明**为什么**。不相关的改动请拆成不同提交。
