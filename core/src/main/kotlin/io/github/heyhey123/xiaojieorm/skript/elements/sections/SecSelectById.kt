@@ -12,7 +12,7 @@ class SecSelectById : SecSelectBase() {
         init {
             Skript.registerSection(
                 SecSelectById::class.java,
-                "select [one] [entity] from [table] %string% by id %object% [and] store [the] [result] in %objects% [wait:and wait]"
+                "select [one] [entity] from [table] %string% by id %object% [and] store [the] [result] in %objects% [and wait]"
             )
         }
     }
@@ -21,6 +21,7 @@ class SecSelectById : SecSelectBase() {
 
     override val tableNameIndex = 0
     override val resultVarIndex = 2
+    override val supportsWhere = false
 
     @Suppress("UNCHECKED_CAST")
     override fun extractExtraParams(expressions: Array<out Expression<*>?>) {

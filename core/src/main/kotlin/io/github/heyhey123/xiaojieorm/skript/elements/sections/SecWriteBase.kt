@@ -91,13 +91,18 @@ abstract class SecWriteBase : Section() {
         }
 
         if (supportsWhere) {
-            val rawWhereNode = sectionNode.find { it.key?.startsWith("where") == true }
+            val rawWhereNode = sectionNode.find { WhereParser.isWhereSection(it) }
             if (rawWhereNode != null && rawWhereNode !is SectionNode) {
                 Skript.error("The where clause must be a section.")
                 return false
             }
             if (rawWhereNode != null) {
-                where = WhereParser.collectFromSection(rawWhereNode)
+                where = try {
+                    WhereParser.collectFromSection(rawWhereNode)
+                } catch (error: IllegalArgumentException) {
+                    Skript.error(error.message ?: "Invalid where section.")
+                    return false
+                }
                 if (where == null) {
                     Skript.error("The where section cannot be empty.")
                     return false
@@ -105,29 +110,49 @@ abstract class SecWriteBase : Section() {
             }
         }
 
+        if (!requiresValues) {
+            // Nothing is read from the body except the where clause, so any other block would be
+            // silently ignored, which is dangerous for a write that modifies every matching row.
+            val unexpectedNode = sectionNode.find { !supportsWhere || !WhereParser.isWhereSection(it) }
+            if (unexpectedNode != null) {
+                Skript.error("This write section cannot contain the section '${unexpectedNode.key}'.")
+                return false
+            }
+        }
+
         if (requiresValues) {
-            val rawValuesNode = sectionNode.find { it.key?.startsWith("values") == true }
+            val rawValuesNode = sectionNode.find { ValuesParser.isValuesSection(it) }
             if (rawValuesNode != null && rawValuesNode !is SectionNode) {
                 Skript.error("The values clause must be a section.")
                 return false
             }
-            val targetNode = rawValuesNode ?: sectionNode
+
+            val valueNodes = if (rawValuesNode != null) {
+                try {
+                    ValuesParser.requireValuesHeader(rawValuesNode)
+                } catch (error: IllegalArgumentException) {
+                    Skript.error(error.message ?: "Invalid values section.")
+                    return false
+                }
+                rawValuesNode.toList()
+            } else if (supportsWhere) {
+                // When only where is supported, we can assume that all other sections are values sections.
+                // In that case, exclude the where section from the value nodes is required, otherwise the where section will be treated as a values section and cause an error.
+                sectionNode.filter { !WhereParser.isWhereSection(it) }
+            } else {
+                sectionNode.toList()
+            }
 
             try {
-                if (supportsMultipleRows) {
-                    val (single, multiple) = ValuesParser.collect(targetNode)
-                    singleValues = single
-                    multipleValues = multiple
-                } else {
-                    singleValues = ValuesParser.collectSingle(targetNode)
-                }
+                val collected = ValuesParser.collect(valueNodes, supportsMultipleRows)
+                singleValues = collected?.first
+                multipleValues = collected?.second
             } catch (error: IllegalArgumentException) {
                 Skript.error(error.message ?: "Invalid values section.")
                 return false
             }
 
-            if ((singleValues == null || singleValues?.values?.isEmpty() == true) &&
-                (multipleValues == null || multipleValues?.valuesList?.isEmpty() == true)) {
+            if (singleValues == null && multipleValues == null) {
                 Skript.error("Values section is required and cannot be empty.")
                 return false
             }

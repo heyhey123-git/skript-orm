@@ -1,5 +1,6 @@
 package io.github.heyhey123.xiaojieorm.skript.utils
 
+import ch.njol.skript.config.Node
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.Condition
@@ -157,25 +158,61 @@ data class RawWhereClause(
  * A parser for creating WHERE clauses([WhereClause]) from raw condition strings.
  */
 object WhereParser {
+    /**
+     * Locates the header of a `where` block, for example `where`, `where any` or `where not all`.
+     *
+     * The check covers the whole keyword, so a value or condition on a column whose name merely
+     * starts with `where`, for example `where_clause: 1`, is not mistaken for a `where` block.
+     * It deliberately stays loose about what follows the keyword, so that a mistyped header is still
+     * recognised as a `where` block and can be reported by [collectFromSection] instead of being
+     * silently ignored.
+     */
+    private val WHERE_SECTION_PATTERN = Regex("^where(\\s.*)?$", RegexOption.IGNORE_CASE)
+
+    /** Parses the header of a `where` block: `where`, `where any`, `where all`, optionally negated. */
+    private val WHERE_HEADER_PATTERN = Regex(
+        "^where(?:\\s+(?:(?<neg>no|not)\\s+)?(?<mode>any|all))?$",
+        RegexOption.IGNORE_CASE
+    )
+
+    /**
+     * Checks whether a node is the header of a `where` block.
+     *
+     * @see collectFromSection
+     */
+    fun isWhereSection(node: Node): Boolean =
+        node.key?.let { WHERE_SECTION_PATTERN.matches(it) } == true
+
     private fun parseNullableExpression(table: Table, columnName: String, valueStr: String): Expression<*>? =
         if (valueStr.trim().equals("null", ignoreCase = true)) null
         else parseExpressionNonNull(table, columnName, valueStr)
 
-    private val EQUALS_PATTERN = Regex("""^(\w+)\s*=\s*(.+)$""")
-    private val NOT_EQUALS_PATTERN = Regex("""^(\w+)\s*!=\s*(.+)$""")
-    private val GREATER_THAN_OR_EQUALS_PATTERN = Regex("""^(\w+)\s*>=\s*(.+)$""")
-    private val LESS_THAN_OR_EQUALS_PATTERN = Regex("""^(\w+)\s*<=\s*(.+)$""")
-    private val GREATER_THAN_PATTERN = Regex("""^(\w+)\s*>\s*(.+)$""")
-    private val LESS_THAN_PATTERN = Regex("""^(\w+)\s*<\s*(.+)$""")
-    private val BETWEEN_PATTERN = Regex("""^(\w+)\s+between\s+(.+)\s+and\s+(.+)$""", RegexOption.IGNORE_CASE)
+    /**
+     * Column identifiers follow the same rule as [Table] and [Column]: a Unicode letter, Unicode
+     * letter number or underscore, followed by Unicode letters, marks, digits or underscores.
+     */
+    private const val COLUMN_NAME = "[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*"
+
+    private val EQUALS_PATTERN = Regex("""^($COLUMN_NAME)\s*=\s*(.+)$""")
+    private val NOT_EQUALS_PATTERN = Regex("""^($COLUMN_NAME)\s*!=\s*(.+)$""")
+    private val GREATER_THAN_OR_EQUALS_PATTERN = Regex("""^($COLUMN_NAME)\s*>=\s*(.+)$""")
+    private val LESS_THAN_OR_EQUALS_PATTERN = Regex("""^($COLUMN_NAME)\s*<=\s*(.+)$""")
+    private val GREATER_THAN_PATTERN = Regex("""^($COLUMN_NAME)\s*>\s*(.+)$""")
+    private val LESS_THAN_PATTERN = Regex("""^($COLUMN_NAME)\s*<\s*(.+)$""")
+    private val BETWEEN_PATTERN = Regex("""^($COLUMN_NAME)\s+between\s+(.+)\s+and\s+(.+)$""", RegexOption.IGNORE_CASE)
 
     /**
      * Collect raw conditions from a SectionNode (init phase)
+     *
+     * @throws IllegalArgumentException if a child is a nested section instead of a single condition
      */
     fun collect(nodes: SectionNode, any: Boolean, neg: Boolean): RawWhereClause? {
         val conditions = mutableListOf<RawCondition>()
         for (node in nodes) {
             val statement = node.key ?: continue
+            require(node !is SectionNode) {
+                "A where condition must be a single line, but '$statement' is a section."
+            }
             conditions.add(RawCondition(statement))
         }
         return if (conditions.isEmpty()) null else RawWhereClause(conditions, any, neg)
@@ -190,16 +227,25 @@ object WhereParser {
      *     age > 25
      * ```
      *
-     * The header selects the matching mode. A header containing `any` matches any condition,
-     * otherwise every condition must match. A header containing `no` or `not` negates the clause.
+     * Accepted headers are `where` and `where all` (every condition must match, the default),
+     * `where any` (at least one condition must match), and the same two forms negated with
+     * `no` or `not`, for example `where no any` or `where not all`. Matching of the header is
+     * anchored, so an unknown header is reported instead of being read as some default.
      *
      * @param section the nested `where` section, whose children are the conditions
      * @return the raw clause, or null when the section declares no conditions
+     * @throws IllegalArgumentException if the section header is not one of the accepted forms
      */
     fun collectFromSection(section: SectionNode): RawWhereClause? {
-        val header = section.key.orEmpty().lowercase()
-        val any = " any" in header
-        val neg = " no " in " $header " || " not " in " $header "
+        val header = section.key.orEmpty().trim()
+        val match = WHERE_HEADER_PATTERN.matchEntire(header)
+            ?: throw IllegalArgumentException(
+                "Invalid where section '$header'. Expected 'where', 'where any' or 'where all', " +
+                    "optionally negated with 'no' or 'not'."
+            )
+        val mode = match.groups["mode"]?.value
+        val any = mode?.equals("any", ignoreCase = true) == true
+        val neg = match.groups["neg"] != null
         return collect(section, any, neg)
     }
 

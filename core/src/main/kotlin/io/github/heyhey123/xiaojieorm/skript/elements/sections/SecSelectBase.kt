@@ -32,6 +32,13 @@ abstract class SecSelectBase : Section() {
     protected var where: RawWhereClause? = null
 
     /**
+     * Whether this select section accepts a `where` block.
+     * Select sections that filter by something else, such as the primary key, must disable it,
+     * otherwise a `where` block would be parsed and then silently ignored.
+     */
+    protected open val supportsWhere: Boolean = true
+
+    /**
      * The index of table name expression in expressions array.
      *
      * @return
@@ -69,22 +76,33 @@ abstract class SecSelectBase : Section() {
         resultVar = resultExpression as Variable<Any>
         extractExtraParams(expressions)
 
-        val unsupportedNode = sectionNode.find { it.key?.startsWith("where") == false }
+        val unsupportedNode = if (supportsWhere) {
+            sectionNode.find { !WhereParser.isWhereSection(it) }
+        } else {
+            sectionNode.firstOrNull()
+        }
         if (unsupportedNode != null) {
-            Skript.error("A select section may only contain a 'where' section.")
+            Skript.error("This select section cannot contain the section '${unsupportedNode.key}'.")
             return false
         }
 
-        val rawWhereNode = sectionNode.find { it.key?.startsWith("where") == true }
-        if (rawWhereNode != null && rawWhereNode !is SectionNode) {
-            Skript.error("The where clause must be a section.")
-            return false
-        }
-        if (rawWhereNode != null) {
-            where = WhereParser.collectFromSection(rawWhereNode)
-            if (where == null) {
-                Skript.error("The where section cannot be empty.")
+        if (supportsWhere) {
+            val rawWhereNode = sectionNode.find { WhereParser.isWhereSection(it) }
+            if (rawWhereNode != null && rawWhereNode !is SectionNode) {
+                Skript.error("The where clause must be a section.")
                 return false
+            }
+            if (rawWhereNode != null) {
+                where = try {
+                    WhereParser.collectFromSection(rawWhereNode)
+                } catch (error: IllegalArgumentException) {
+                    Skript.error(error.message ?: "Invalid where section.")
+                    return false
+                }
+                if (where == null) {
+                    Skript.error("The where section cannot be empty.")
+                    return false
+                }
             }
         }
 

@@ -10,7 +10,7 @@ import org.bukkit.event.Event
 class SecDelete : SecWriteBase() {
     companion object {
         init {
-            Skript.registerSection(SecDelete::class.java, "delete [entities] from [table] %string% [with limit %-integer%] [wait:and wait]")
+            Skript.registerSection(SecDelete::class.java, "delete [entities] from [table] %string% [with limit %integer%] [wait:and wait]")
         }
     }
 

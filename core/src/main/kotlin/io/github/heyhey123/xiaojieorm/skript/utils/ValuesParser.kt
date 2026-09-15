@@ -1,5 +1,6 @@
 package io.github.heyhey123.xiaojieorm.skript.utils
 
+import ch.njol.skript.config.Node
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.table.Table
@@ -67,60 +68,117 @@ data class ParsedValuesList(
 }
 
 object ValuesParser {
-    private val VALUE_PATTERN = Regex("""^\s*(\w+)\s*:\s*(.+)\s*$""")
+    /**
+     * Column identifiers follow the same rule as [Table] and [Column]: a Unicode letter, Unicode
+     * letter number or underscore, followed by Unicode letters, marks, digits or underscores.
+     */
+    private const val COLUMN_NAME = "[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*"
+
+    private val VALUE_PATTERN = Regex("""^\s*($COLUMN_NAME)\s*:\s*(.+)\s*$""")
 
     /**
-     * Collect single row of values (for INSERT ONE / UPDATE).
+     * Locates the header of a `values` block.
+     *
+     * The check covers the whole keyword, so a value on a column whose name merely starts with
+     * `values`, for example `values_count: 1`, is not mistaken for a `values` block. It deliberately
+     * stays loose about what follows the keyword, so that a mistyped header is still recognised as a
+     * `values` block and can be reported by [requireValuesHeader] instead of being read as a value.
      */
-    fun collectSingle(nodes: SectionNode): RawValues {
-        val rawValuesList = mutableListOf<RawValue>()
-        for (node in nodes) {
-            if (node is SectionNode) continue
-            val key = node.key ?: continue
-            val match = VALUE_PATTERN.matchEntire(key)
-                ?: throw IllegalArgumentException("Invalid value format: '$key'. Expected format: 'columnName: expression'")
-            rawValuesList.add(RawValue(match.groupValues[1].trim(), match.groupValues[2].trim()))
+    private val VALUES_SECTION_PATTERN = Regex("^values(\\s.*)?$", RegexOption.IGNORE_CASE)
+
+    /** Parses the header of a `values` block, which accepts the bare keyword only. */
+    private val VALUES_HEADER_PATTERN = Regex("^values$", RegexOption.IGNORE_CASE)
+
+    /**
+     * Checks whether a node is the header of a `values` block.
+     *
+     * @see requireValuesHeader
+     */
+    fun isValuesSection(node: Node): Boolean =
+        node.key?.let { VALUES_SECTION_PATTERN.matches(it) } == true
+
+    /**
+     * Validates the header of an explicit `values` block.
+     *
+     * @param section the `values` block whose header is validated
+     * @throws IllegalArgumentException if the header is not the bare `values` keyword
+     */
+    fun requireValuesHeader(section: SectionNode) {
+        val header = section.key.orEmpty().trim()
+        require(VALUES_HEADER_PATTERN.matches(header)) {
+            "Invalid values section '$header'. Expected 'values'."
         }
-        return RawValues(rawValuesList)
     }
 
     /**
-     * Collect multiple rows of values (for INSERT MANY).
-     * Expected format:
+     * Collects the values of a write section.
+     *
+     * @param nodes the entries holding the values: the children of an explicit `values` block, or the
+     *        body of the write section when no such block is used
+     * @param supportsMultipleRows whether the operation accepts one row per nested block
+     * @return the single row, the rows, or null when [nodes] declares no values at all
+     * @throws IllegalArgumentException if a value is malformed, if a nested block is used where a
+     *         single value is expected, or if rows and single values are mixed
+     */
+    fun collect(nodes: List<Node>, supportsMultipleRows: Boolean): Pair<RawValues?, RawValuesList?>? {
+        if (nodes.isEmpty()) return null
+
+        val rows = nodes.filterIsInstance<SectionNode>()
+        if (rows.isEmpty()) return collectSingle(nodes) to null
+
+        require(supportsMultipleRows) {
+            "This write operation expects single values, but '${rows.first().key}' is a block."
+        }
+        val singleValue = nodes.firstOrNull { it !is SectionNode }
+        require(singleValue == null) {
+            "Rows and single values cannot be mixed: '${singleValue?.key}' is not a row block."
+        }
+        return null to collectMultiple(rows)
+    }
+
+    /**
+     * Collects a single row of values (for INSERT ONE / UPDATE).
+     *
+     * @param nodes the entries of the row, each written as `column: expression`
+     * @throws IllegalArgumentException if an entry is malformed or is a nested block
+     */
+    fun collectSingle(nodes: List<Node>): RawValues {
+        val rawValues = nodes.map { node ->
+            require(node !is SectionNode) {
+                "A value must be a single line, but '${node.key}' is a block."
+            }
+            val key = requireNotNull(node.key) { "A value entry cannot be empty." }
+            val match = VALUE_PATTERN.matchEntire(key)
+                ?: throw IllegalArgumentException(
+                    "Invalid value '$key'. Expected 'column: expression'."
+                )
+            RawValue(match.groupValues[1].trim(), match.groupValues[2].trim())
+        }
+        return RawValues(rawValues)
+    }
+
+    /**
+     * Collects one row per nested block (for INSERT MANY).
+     *
+     * @param rows the row blocks, for example:
+     * ```
      * values:
      *     1:
-     *         x: 1
-     *         y: 2
+     *         name: "Alice"
      *     2:
-     *         x: 3
-     *         y: 4
+     *         name: "Bob"
+     * ```
+     * @throws IllegalArgumentException if a row declares no values
      */
-    fun collectMultiple(nodes: SectionNode): RawValuesList {
-        val allValues = mutableListOf<RawValues>()
-        for (node in nodes) {
-            if (node is SectionNode) {
-                allValues.add(collectSingle(node))
+    fun collectMultiple(rows: List<SectionNode>): RawValuesList {
+        val valuesList = rows.map { row ->
+            val values = collectSingle(row.toList())
+            require(values.values.isNotEmpty()) {
+                "Row '${row.key}' must declare at least one value."
             }
+            values
         }
-        if (allValues.isEmpty()) {
-            throw IllegalArgumentException("No values found in insert many section.")
-        }
-        return RawValuesList(allValues)
-    }
-
-    /**
-     * Auto-detect and collect values.
-     * Returns a pair: (single values or null, multiple values or null)
-     */
-    fun collect(nodes: SectionNode): Pair<RawValues?, RawValuesList?> {
-        val firstChild = nodes.firstOrNull() ?: return null to null
-
-        // 检查第一个子节点是否是 SectionNode（意味着是 insert many 格式）
-        return if (firstChild is SectionNode) {
-            null to collectMultiple(nodes)
-        } else {
-            collectSingle(nodes) to null
-        }
+        return RawValuesList(valuesList)
     }
 }
 

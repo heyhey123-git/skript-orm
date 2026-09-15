@@ -10,7 +10,7 @@ import org.bukkit.event.Event
 class SecUpdate : SecWriteBase() {
     companion object {
         init {
-            Skript.registerSection(SecUpdate::class.java, "update [entities] in [table] %string% [with limit %-integer%] [wait:and wait]")
+            Skript.registerSection(SecUpdate::class.java, "update [entities] in [table] %string% [with limit %integer%] [wait:and wait]")
         }
     }
 
