@@ -86,7 +86,7 @@ open class LocationDataType : DataType<Location> {
 }
 
 open class ConfigurationSerializableDataType : DataType<ConfigurationSerializable> {
-    override val domainType: Class<ConfigurationSerializable> = ConfigurationSerializable::class.java as Class<ConfigurationSerializable>
+    override val domainType: Class<ConfigurationSerializable> = ConfigurationSerializable::class.java
     override val typeCode: String = "bukkitserializable"
 }
 

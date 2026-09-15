@@ -188,7 +188,7 @@ object WhereParser {
         else parseExpressionNonNull(table, columnName, valueStr)
 
     /**
-     * Column identifiers follow the same rule as [Table] and [Column]: a Unicode letter, Unicode
+     * Column identifiers follow the same rule as [Table] and [io.github.heyhey123.xiaojieorm.table.Column]: a Unicode letter, Unicode
      * letter number or underscore, followed by Unicode letters, marks, digits or underscores.
      */
     private const val COLUMN_NAME = "[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*"
