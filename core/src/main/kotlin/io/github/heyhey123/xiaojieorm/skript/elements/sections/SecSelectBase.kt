@@ -212,7 +212,12 @@ abstract class SecSelectBase : Section() {
      * Executes the database query on the IO dispatcher and returns the keyed snapshot
      * that will be written to the Skript list variable on the main thread.
      *
-     * Multi-row implementations use keys in the form `rowIndex::columnName`.
+     * Single-row implementations use the column name as the key, so a row of the table `users`
+     * is stored as `{_user::name}`, `{_user::age}` and so on.
+     *
+     * Multi-row implementations always use keys in the form `rowIndex::columnName`, where the row
+     * index starts at one and is present even when the result holds a single row.
+     *
      * SQL NULL values leave their corresponding result keys unset; no ORM metadata is inserted.
      */
     protected abstract suspend fun executeQuery(

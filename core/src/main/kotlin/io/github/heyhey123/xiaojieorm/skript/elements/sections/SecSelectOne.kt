@@ -23,6 +23,7 @@ select one from table "users" and store the result in {_user::*} and wait:
     where any:
         name = "Alice"
         age > 25
+send "name: %{_user::name}%, age: %{_user::age}%"
 disconnect from database
 """
 )
@@ -51,8 +52,8 @@ class SecSelectOne : SecSelectBase() {
         val result = linkedMapOf<String, Any?>()
         queries.selectOne(whereClause).execute(table).cursor.use { cursor ->
             if (cursor.next()) {
-                table.columns.values.forEachIndexed { index, column ->
-                    result[(index + 1).toString()] = cursor.get(column.name, column.type)
+                table.columns.values.forEach { column ->
+                    result[column.name] = cursor.get(column.name, column.type)
                 }
             }
         }

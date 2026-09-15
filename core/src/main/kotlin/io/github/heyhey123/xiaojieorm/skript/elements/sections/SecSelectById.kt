@@ -40,8 +40,8 @@ class SecSelectById : SecSelectBase() {
         val result = linkedMapOf<String, Any?>()
         queries.selectById(requireNotNull(extraArguments)).execute(table).cursor.use { cursor ->
             if (cursor.next()) {
-                table.columns.values.forEachIndexed { index, column ->
-                    result[(index + 1).toString()] = cursor.get(column.name, column.type)
+                table.columns.values.forEach { column ->
+                    result[column.name] = cursor.get(column.name, column.type)
                 }
             }
         }
