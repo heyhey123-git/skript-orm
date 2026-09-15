@@ -80,9 +80,8 @@ abstract class SecSelectBase : Section() {
             Skript.error("The where clause must be a section.")
             return false
         }
-        val whereNode = rawWhereNode as? SectionNode
-        if (whereNode != null) {
-            where = WhereParser.collectFromSection(whereNode)
+        if (rawWhereNode != null) {
+            where = WhereParser.collectFromSection(rawWhereNode)
             if (where == null) {
                 Skript.error("The where section cannot be empty.")
                 return false
