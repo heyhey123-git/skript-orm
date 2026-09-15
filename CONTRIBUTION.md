@@ -205,18 +205,31 @@ the top reads **Project**.
 
 ## 8. Testing
 
-There are two layers, run by two separate Gradle tasks.
+There are three layers, run by three separate Gradle tasks.
 
 **Unit tests** (`core`, `generic-jdbc-implementation`) run on every build, need no network and no
 Docker, and cover contracts rather than line coverage: SQL rendering, parameter binding, cursor
-resource ownership, snapshot semantics, identifier validation. JDBC interfaces are mocked with MockK.
+resource ownership, snapshot semantics, identifier validation, and the global `Database` lifecycle.
+JDBC interfaces are mocked with MockK.
 
 ```bash
 ./gradlew test
 ```
 
-**Integration tests** (`generic-jdbc-implementation`) run the real implementation against a real
-MySQL server. They are opt-in, because they need a container runtime and take longer:
+**Skript tests** (`core`) exercise the parse phase of a section against Skript's real config parser,
+which the unit tests deliberately do not have on their classpath:
+
+```bash
+./gradlew :core:integrationTest
+```
+
+They cover `values` and `where` blocks: header recognition, mode and negation, malformed entries,
+mixing rows with single values, and the literal-`null` contract that keeps SQL NULL distinguishable
+from an omitted column. The reachable surface stops at expression evaluation, because parsing a real
+value expression needs Skript's syntax registry, which only exists inside a running Skript.
+
+**MySQL tests** (`generic-jdbc-implementation`) run the real implementation against a real MySQL
+server. They are opt-in, because they need a container runtime and take longer:
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest
@@ -236,13 +249,26 @@ The same settings are read from `XIAOJIE_TEST_MYSQL_URL`, `XIAOJIE_TEST_MYSQL_US
 neither Docker nor an external server is available, the MySQL tests abort with a reason instead of
 passing silently.
 
-The integration test classpath is deliberately the plugin runtime without a server: it includes
-Paper, Skript, and the NBT API, because `JdbcDataTypes` resolves those classes when it initializes.
+The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper,
+Skript, and the NBT API, because `JdbcDataTypes` resolves those classes when it initializes.
 `JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true.
 
 Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only discovers `@Test` methods
 that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an
 expression-bodied test would otherwise be compiled, never run, and never reported.
+
+### Why there is no mocked server
+
+MockBukkit cannot host Skript. It loads a plugin by generating a subclass of the main class, so a
+`final` main class cannot be loaded at all, and Skript's main class is final. This addon cannot be
+loaded alone either: `plugin.yml` declares `depend: [Skript]` and `onEnable` calls
+`Skript.registerAddon`. There is therefore no mocked-server test at all: a full boot, including
+element registration and script execution, needs a real server, which is what `run-paper` is for and
+what is still missing.
+
+MockBukkit is still used by the Skript tests, but only as a Bukkit server: Skript logs through
+`Bukkit.getConsoleSender()`, and the config parser reports through it, so without a server the parser
+NPEs instead of returning nodes.
 
 ---
 

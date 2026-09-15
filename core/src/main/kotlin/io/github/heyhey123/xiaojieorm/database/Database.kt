@@ -18,14 +18,20 @@ abstract class Database {
     companion object {
 
         /**
-         * Mutex that protects the lifecycle state of the database, including the current and pending connections,
-         * the connection state, and the active operation count.
+         * Mutex that protects the lifecycle state of the database: the current connection, the
+         * connection state, and the active operation count.
          */
         private val lifecycleMutex = Mutex()
 
         /**
-         * Mutex that serializes concurrent requests to replace or disconnect the database connection.
-         * Each request waits for any pending connection attempt to complete, disconnects the active database, and then connects the requested instance.
+         * Mutex that serializes every transition: connecting, replacing, and disconnecting.
+         *
+         * [replaceWith] performs the whole connect while holding this lock, so a connect can never
+         * overlap another transition. Nothing has to track a connection attempt that is still in
+         * flight, because by the time a transition acquires this lock the previous one has either
+         * published its database or cleaned up after failing. The same invariant is why
+         * [Database.State.CONNECTING] is only visible to observers outside the lifecycle, and why an
+         * implementation must never call back into the lifecycle from [doConnect].
          */
         private val transitionMutex = Mutex()
 
@@ -38,31 +44,22 @@ abstract class Database {
         var isShuttingDown: Boolean = false
             private set
 
-        /**
-         * The database that is currently in the process of connecting.
-         * This is not yet fully initialized and should not be used for operations.
-         */
-        private var pending: Database? = null
-
         /** Reopens the global database lifecycle when the plugin is enabled. */
         fun beginLifecycle() {
-            check(current == null && pending == null) {
+            check(current == null) {
                 "Cannot begin a database lifecycle while resources from the previous lifecycle still exist."
             }
             isShuttingDown = false
         }
 
         /**
-         * Replaces the current database connection. Concurrent replacement requests are serialized;
-         * each request waits for an earlier connection attempt, disconnects the active database, and
-         * then connects the requested instance.
+         * Replaces the current database connection. Concurrent replacement requests are serialized by
+         * the transition lock: each one waits for the previous transition, disconnects the active
+         * database, and then connects the requested instance.
          */
         suspend fun replaceWith(database: Database, url: String, user: String, password: String) {
             transitionMutex.withLock {
                 check(!isShuttingDown) { "Database lifecycle is shutting down." }
-
-                val pendingCompletion = lifecycleMutex.withLock { pending?.connectCompletion }
-                pendingCompletion?.await()
 
                 val active = lifecycleMutex.withLock { current }
                 active?.disconnectInternal()
@@ -73,16 +70,14 @@ abstract class Database {
         }
 
         /**
-         * Prevents new connections and operations, waits for a connection attempt already in progress,
-         * and then disconnects the active database.
+         * Prevents new connections and operations and then disconnects the active database. Taking
+         * the transition lock also waits for a connection attempt that is already in progress.
          */
         suspend fun shutdown() {
             lifecycleMutex.withLock {
                 isShuttingDown = true
             }
             transitionMutex.withLock {
-                val pendingCompletion = lifecycleMutex.withLock { pending?.connectCompletion }
-                pendingCompletion?.await()
                 val active = lifecycleMutex.withLock { current }
                 if (active != null) {
                     withContext(NonCancellable) {
@@ -118,23 +113,19 @@ abstract class Database {
     /** Data types supported by this database. */
     abstract val dataTypes: DataTypes
 
-    private var connectCompletion: CompletableDeferred<Unit>? = null
     private var disconnectCompletion: CompletableDeferred<Unit>? = null
     private var activeOperations: Int = 0
     private var operationsDrained: CompletableDeferred<Unit>? = null
 
     private suspend fun connectInternal(url: String, user: String, password: String) {
-        val completion = CompletableDeferred<Unit>()
         lifecycleMutex.withLock {
             check(!isShuttingDown) { "Database lifecycle is shutting down." }
             check(state == State.DISCONNECTED) { "Database is not disconnected: $state." }
-            check(current == null && pending == null) {
-                "Another database is already connected or connecting. Disconnect it before connecting a new database."
+            check(current == null) {
+                "Another database is already connected. Disconnect it before connecting a new database."
             }
 
             state = State.CONNECTING
-            connectCompletion = completion
-            pending = this
         }
 
         try {
@@ -147,10 +138,8 @@ abstract class Database {
 
             lifecycleMutex.withLock {
                 check(!isShuttingDown) { "Database lifecycle began shutting down while connecting." }
-                check(pending === this) { "This database is no longer the pending connection." }
                 state = State.CONNECTED
                 current = this
-                pending = null
             }
         } catch (error: Throwable) {
             withContext(NonCancellable) {
@@ -162,18 +151,10 @@ abstract class Database {
                 lifecycleMutex.withLock {
                     queries = null
                     state = State.DISCONNECTED
-                    if (pending === this@Database) pending = null
                     if (current === this@Database) current = null
                 }
             }
             throw error
-        } finally {
-            completion.complete(Unit)
-            withContext(NonCancellable) {
-                lifecycleMutex.withLock {
-                    if (connectCompletion === completion) connectCompletion = null
-                }
-            }
         }
     }
 
@@ -246,6 +227,9 @@ abstract class Database {
             when (state) {
                 State.DISCONNECTED -> return
 
+                // Unreachable as long as connectInternal only runs inside replaceWith, which holds
+                // the transition lock every caller of this method also takes. Kept as a guard
+                // because falling through would close a database that is still initializing.
                 State.CONNECTING -> error("Cannot disconnect a database while it is still connecting.")
 
                 State.DISCONNECTING -> existingDisconnect = disconnectCompletion
@@ -278,7 +262,6 @@ abstract class Database {
                 lifecycleMutex.withLock {
                     queries = null
                     state = State.DISCONNECTED
-                    if (pending === this@Database) pending = null
                     if (current === this@Database) current = null
                     disconnectCompletion = null
                 }

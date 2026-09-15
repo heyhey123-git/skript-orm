@@ -179,16 +179,28 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 ## 8. 测试
 
-测试分为两层，由两个独立的 Gradle 任务运行。
+测试分为三层，由三个独立的 Gradle 任务运行。
 
 **单元测试**（`core`、`generic-jdbc-implementation`）随每次构建运行，不需要网络和 Docker，覆盖的是契约
-而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验。JDBC 接口用 MockK 模拟。
+而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验，以及全局 `Database` 生命周期。
+JDBC 接口用 MockK 模拟。
 
 ```bash
 ./gradlew test
 ```
 
-**集成测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL。它属于可选任务，因为需要容器
+**Skript 测试**（`core`）用 Skript 真实的配置解析器覆盖一个 section 的解析阶段——这正是单元测试刻意不放到
+classpath 上的部分：
+
+```bash
+./gradlew :core:integrationTest
+```
+
+覆盖 `values` 与 `where` 块：头部识别、模式与取反、格式错误的值、行与单值混用，以及“字面量 `null` 与省略列
+必须可区分”这一契约。可达范围止于表达式求值，因为解析真实值表达式需要 Skript 的语法注册表，而它只存在于
+运行中的 Skript 里。
+
+**MySQL 测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL。它属于可选任务，因为需要容器
 运行时且耗时更长：
 
 ```bash
@@ -214,6 +226,16 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
 集成测试方法请写成 `= runBlocking<Unit> { ... }`。JUnit 只会发现返回 `void` 的 `@Test` 方法，而
 `assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会
 出现在任何报告里。
+
+### 为什么没有“模拟服务端”方案
+
+MockBukkit 装不下 Skript。它加载插件的方式是生成主类的子类，因此 `final` 的主类根本无法加载，而 Skript 的
+主类正是 final。本插件也无法单独加载：`plugin.yml` 声明了 `depend: [Skript]`，且 `onEnable` 会调用
+`Skript.registerAddon`。因此这里完全没有“模拟服务端”的测试：完整启动插件（元素注册、脚本执行）仍然需要真实
+服务端，那是 `run-paper` 的职责，目前尚未接入。
+
+Skript 测试里仍然用到 MockBukkit，但只把它当作一个 Bukkit 服务端：Skript 通过
+`Bukkit.getConsoleSender()` 记录日志，配置解析器也通过它上报问题，没有服务端时解析器会 NPE 而不是返回节点。
 
 ---
 
