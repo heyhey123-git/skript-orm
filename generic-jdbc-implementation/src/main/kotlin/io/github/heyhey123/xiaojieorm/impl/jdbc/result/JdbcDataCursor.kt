@@ -8,10 +8,11 @@ import java.sql.ResultSet
 import java.sql.Statement
 
 /**
- * A JDBC implementation of the DataCursor interface,
- * which provides a way to iterate over the results of a SQL query.
+ * JDBC cursor that owns its bound parameter resources, result set, statement, and connection.
  *
- * @property releaseBoundResources Releases temporary JDBC parameter resources owned by the statement.
+ * [close] is idempotent and releases those resources in ownership order. If cleanup steps fail,
+ * the first failure is thrown and later failures are attached as suppressed exceptions. Values are
+ * read with JDBC 4.2 typed `getObject`; SQL NULL is returned as Kotlin `null` before conversion.
  */
 class JdbcDataCursor(
     private val resultSet: ResultSet,

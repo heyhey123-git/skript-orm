@@ -1,12 +1,22 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
+import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
+@Name("Upsert Entity By ID")
+@Description("Updates the row with the given primary-key value or inserts it when absent. Support depends on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
+@Example("""
+upsert one entity in table "users" by id {_id} and wait:
+    values:
+        name: "Alice"
+        age: 26
+""")
+@Since("1.0")
 class SecUpsertById : SecWriteBase() {
     companion object {
         init {

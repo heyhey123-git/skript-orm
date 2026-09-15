@@ -5,8 +5,10 @@ import java.util.Collections
 import java.util.WeakHashMap
 
 /**
- * A utility object to store and retrieve database error messages associated with Skript events.
- * This is useful for capturing and displaying error messages when database operations fail during event handling.
+ * Stores the most recent database error for each live Skript event.
+ *
+ * Event keys are weak so completed events are not retained. Waiting operations can read the stored
+ * message through the `last database error` expression after their continuation resumes.
  */
 object SkriptDatabaseErrors {
     private val errors = Collections.synchronizedMap(WeakHashMap<Event, String>())

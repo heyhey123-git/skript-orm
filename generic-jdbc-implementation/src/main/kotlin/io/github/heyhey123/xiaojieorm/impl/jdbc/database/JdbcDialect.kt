@@ -5,7 +5,9 @@ import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.JDBCType
 
 /**
- * Owns every SQL grammar and identifier-rendering decision made by the generic JDBC implementation.
+ * Defines SQL rendering decisions for the JDBC implementation: identifier quoting, complete SQL
+ * fragments, pagination placeholder order, DDL type names, write limits, and auto-increment syntax.
+ * Default implementations of non-portable features fail with [UnsupportedOperationException].
  */
 interface JdbcDialect {
     /**
@@ -155,14 +157,18 @@ data class JdbcPageSql(
     }
 }
 
-/** ANSI-oriented default. Vendor-specific features fail explicitly. */
+/**
+ * ANSI-oriented default dialect. Insert-if-absent, upsert, limited writes, and auto-increment
+ * deliberately throw [UnsupportedOperationException].
+ */
 object GenericJdbcDialect : JdbcDialect {
     override fun renderIdentifier(identifier: String): String =
         "\"${identifier.replace("\"", "\"\"")}\""
 }
 
 /**
- * MySQL dialect implementation. Uses backticks for identifiers and supports MySQL-specific features like INSERT IGNORE and ON DUPLICATE KEY UPDATE.ATE.
+ * MySQL rendering with backtick identifiers, LIMIT/OFFSET, INSERT IGNORE,
+ * ON DUPLICATE KEY UPDATE, limited writes, and AUTO_INCREMENT.
  */
 object MysqlJdbcDialect : JdbcDialect {
     override fun renderIdentifier(identifier: String): String =

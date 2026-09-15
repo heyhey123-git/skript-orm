@@ -1,6 +1,7 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
+import ch.njol.skript.doc.*
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
@@ -24,6 +25,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
+@Name("Register Database Table")
+@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Failures are exposed as the last database error.")
+@Example("""
+register a database table "users":
+    id: bigint, primary key, auto increment, not null
+    name: string(64), not null
+    age: int, nullable
+""")
+@Since("1.0")
 class SecRegisterTable : Section() {
 
     companion object {

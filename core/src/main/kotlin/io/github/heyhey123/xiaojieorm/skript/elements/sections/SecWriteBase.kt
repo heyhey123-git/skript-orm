@@ -26,36 +26,25 @@ abstract class SecWriteBase : Section() {
     protected lateinit var tableNameExpr: Expression<String>
 
     /**
-     * If true, the section will wait for the write operation to complete before continuing.
-     * If false, the section will continue immediately after starting the write operation.
-     * It's recommended to set this to true for most cases,
-     * as it allows for error handling and ensures that the write operation has completed before proceeding.
-     * In order to follow the Skript error handling style, the error usually will only be optionally handled,
-     * so the most of the time, people won't want to wait for the write operation to complete,
-     * also they won't want to handle the error explicitly, so the default value is false.
-     * In "select" operations, the wait is always true, because the result of the select operation is usually needed immediately after the operation.
+     * Whether the continuation waits for this write. Waiting preserves the event continuation and
+     * exposes failures through `last database error`; fire-and-forget writes continue immediately
+     * and can only report later failures to the server log.
      */
     protected var waitFlag: Boolean = false
 
-    // 单行值（用于 INSERT ONE / UPDATE）
+    /** Values for single-row writes. */
     protected var singleValues: RawValues? = null
 
-    // 多行值（用于 INSERT MANY）
+    /** Rows for multi-row writes. */
     protected var multipleValues: RawValuesList? = null
 
-    /**
-     * Whether the section supports a where clause. If true, the section will parse a where clause from the section node.
-     */
+    /** Whether a nested `where` block is accepted. */
     protected open val supportsWhere: Boolean = false
 
-    /**
-     * Whether the section supports multiple rows of values. If true, the section will parse multiple rows of values from the section node.
-     */
+    /** Whether the values payload may contain multiple rows. */
     protected open val supportsMultipleRows: Boolean = false
 
-    /**
-     * Whether the section requires values to be provided. If true, the section will parse values from the section node and will throw an error if no values are provided.
-     */
+    /** Whether a non-empty values payload is required. */
     protected open val requiresValues: Boolean = true
 
     protected var where: RawWhereClause? = null

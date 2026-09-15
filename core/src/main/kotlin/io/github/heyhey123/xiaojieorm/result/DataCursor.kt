@@ -4,10 +4,12 @@ import io.github.heyhey123.xiaojieorm.type.DataType
 import java.lang.AutoCloseable
 
 /**
- * A generic data cursor interface for iterating over query results.
+ * Closeable, forward-only cursor over query results.
  *
+ * The cursor starts before the first row. Call [next] before reading values and close the cursor
+ * after use to release implementation-owned resources. Behavior after [close] is implementation-defined.
  */
-interface DataCursor: AutoCloseable {
+interface DataCursor : AutoCloseable {
 
     /**
      * Moves the cursor to the next row in the result set.

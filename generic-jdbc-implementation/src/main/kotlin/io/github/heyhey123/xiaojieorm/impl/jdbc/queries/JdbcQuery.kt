@@ -11,15 +11,26 @@ import java.sql.PreparedStatement
 import javax.sql.DataSource
 
 /**
- * Shared JDBC query execution boundary.
- * Connections are acquired only when execute is called.
+ * Shared blocking JDBC execution boundary; `suspend` methods do not switch dispatchers.
+ *
+ * Each execution borrows a connection. Update executions close all JDBC resources before returning.
+ * Cursor executions transfer the result set, statement, connection, and bound-resource cleanup to
+ * the returned [JdbcDataCursor], which the caller must close.
  */
 interface JdbcQuery {
     val dataSource: DataSource
     val dialect: JdbcDialect
+    /**
+     * Statement timeout in seconds. Zero leaves the driver's default unchanged; negative values
+     * are rejected when a statement is configured.
+     */
     val queryTimeoutSeconds: Int
         get() = 0
 
+    /**
+     * Binds [where] from the 1-based [startIndex] and returns the next free parameter index.
+     * Referenced columns must exist; null equality conditions consume no placeholder.
+     */
     fun bindWhere(table: Table, where: WhereClause?, statement: PreparedStatement, startIndex: Int = 1): Int {
         var index = startIndex
         where?.conditions?.forEach { condition ->

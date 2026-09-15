@@ -4,9 +4,8 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 
 /**
- * Selects a single entity based on a specified condition.
- *
- * @property where The WHERE clause defining the selection condition.
+ * Selects at most one entity matching [where]. A null clause applies no filter.
+ * Which matching entity is returned is implementation-defined unless the backend provides an order.
  */
 abstract class SelectOne(
     val where: WhereClause?

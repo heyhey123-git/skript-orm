@@ -1,10 +1,11 @@
 package io.github.heyhey123.xiaojieorm.result
 
 /**
- * Write result. Used to represent the outcome of write operations such as insert, update, or delete.
+ * Result of a write operation.
  *
- * @property affectedCount The number of rows affected by the write operation.
- * @property countExact Indicates whether the affected count is exact or not. If false, it means the count may not be accurate.
+ * @property affectedCount Number of affected entities reported by the backend.
+ * @property countExact Whether [affectedCount] is exact; false when the backend reports successful
+ * writes without an exact per-operation count.
  */
 data class WriteResult(
     val affectedCount: Long,

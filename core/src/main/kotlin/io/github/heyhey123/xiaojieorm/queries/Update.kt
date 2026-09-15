@@ -4,11 +4,10 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 
 /**
- * Update the records matched the where clause
+ * Updates entities matching [where]; a null clause targets every entity.
  *
- * @param values the values to be updated
- * @param limit the maximum number of records to be updated
- * @param where the where clause to filter records to be updated
+ * [values] is snapshotted at construction. A non-null [limit] must be positive when validated by
+ * the implementation, and limited updates may be unsupported by some backends.
  */
 abstract class Update(
     values: Map<String, Any?>,

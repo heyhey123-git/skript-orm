@@ -1,10 +1,8 @@
 package io.github.heyhey123.xiaojieorm.database
 
 /**
- * Database factory interface.
- * The classes implementing this interface in this project provide a static block to register themselves,
- * so that we can register different database types by calling [Class.forName] on their class names.
- *
+ * Creates unconnected database instances from implementation-specific properties.
+ * Factories become discoverable after registration in [DatabaseRegistry].
  */
 interface DatabaseFactory {
 

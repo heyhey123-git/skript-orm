@@ -1,13 +1,11 @@
 package io.github.heyhey123.xiaojieorm.condition
 
 /**
- * Represents a WHERE clause in a database query.
- * A WHERE clause composes of a list of conditions and can be either negated or not.
+ * Non-empty group of conditions joined by AND or OR, optionally negated as a whole.
+ * Implementations defensively copy the supplied condition list.
  */
 sealed class WhereClause {
-    /**
-     * Indicates whether the clause is negated (i.e., NO ANY or NOT ALL).
-     */
+    /** Whether the combined predicate is negated (`NOT ANY` or `NOT ALL`). */
     abstract val negated: Boolean
 
     /**

@@ -1,27 +1,20 @@
 package io.github.heyhey123.xiaojieorm.type
 
-
 /**
- * Abstract class for types can be stored in database.
+ * Describes a domain type supported by a database implementation.
  *
- * @param D the domain type
+ * @param D non-null domain value type
  */
 @Suppress("UNCHECKED_CAST")
-interface DataType<D: Any>{
+interface DataType<D : Any> {
 
-    /*
-     * The domain type class.
-     */
+    /** Runtime class accepted for domain values. */
     val domainType: Class<D>
 
-    /**
-     * The unique type code.
-     */
+    /** Stable code used to register and resolve this logical type. */
     val typeCode: String
 
-    /**
-     * The value converter for this data type.
-     */
+    /** Converts domain values to backend storage values; defaults to identity conversion. */
     val converter: ValueConverter<D, *>
         get() = DefaultValueConverter(domainType) as ValueConverter<D, *>
 }

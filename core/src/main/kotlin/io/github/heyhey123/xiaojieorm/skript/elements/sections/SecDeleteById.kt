@@ -1,12 +1,21 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
+import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
+@Name("Delete Entity By ID")
+@Description("Deletes one row by its registered primary-key value. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
+@Example("""
+delete one entity from table "users" by id {_id} and wait
+if last database error is set:
+    send "Delete failed: %last database error%"
+""")
+@Since("1.0")
 class SecDeleteById : SecWriteBase() {
     companion object {
         init {

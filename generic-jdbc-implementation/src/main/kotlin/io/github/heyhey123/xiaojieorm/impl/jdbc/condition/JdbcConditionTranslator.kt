@@ -8,8 +8,9 @@ import io.github.heyhey123.xiaojieorm.type.DataType
 import java.sql.PreparedStatement
 
 /**
- * Translates Condition and WhereClause objects into SQL WHERE clause strings.
- *
+ * Renders [Condition] and [WhereClause] values as SQL and binds their placeholders in condition order.
+ * Column identifiers are quoted by the selected [JdbcDialect]. Null equality uses `IS NULL` or
+ * `IS NOT NULL` and therefore consumes no placeholder.
  */
 object JdbcConditionTranslator {
 

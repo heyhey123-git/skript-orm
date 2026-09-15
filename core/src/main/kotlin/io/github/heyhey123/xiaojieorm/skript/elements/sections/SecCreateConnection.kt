@@ -2,9 +2,7 @@ package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
 import ch.njol.skript.config.SectionNode
-import ch.njol.skript.doc.Description
-import ch.njol.skript.doc.Example
-import ch.njol.skript.doc.Name
+import ch.njol.skript.doc.*
 import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
@@ -27,21 +25,17 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.lang.entry.EntryValidator
 import org.skriptlang.skript.lang.entry.util.LiteralEntryData
 
-@Name("Create Connection")
-@Description(
-    "Creates a connection to a specified database with given properties.",
-    "Supported databases must be registered in the Database Registry.",
-    "The section requires properties must contain URL, username, and password.",
-    "Other properties should be supported by the specific database implementation."
-)
-@Example(
-    """
-connect to database "MySQL" with properties:
+@Name("Create Database Connection")
+@Description("Connects to a registered database implementation and makes it current. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
+@Example("""
+create a connection to database "MySQL" with properties:
     url: "jdbc:mysql://localhost:3306/mydb"
     username: "root"
     password: "123456"
-"""
-)
+if last database error is set:
+    send "Connection failed: %last database error%"
+""")
+@Since("1.0")
 class SecCreateConnection : Section() {
 
     companion object {

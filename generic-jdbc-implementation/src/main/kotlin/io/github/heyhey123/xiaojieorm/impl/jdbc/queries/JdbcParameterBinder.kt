@@ -7,10 +7,7 @@ import java.sql.Blob
 import java.sql.PreparedStatement
 import java.util.WeakHashMap
 
-/**
- * A map that tracks bound Blob values for each PreparedStatement.
- * This is used to ensure that Blob resources are properly freed after statement execution.
- */
+// Weak keys avoid retaining abandoned statements; synchronized access protects the shared registry.
 private val boundBlobs = WeakHashMap<PreparedStatement, MutableList<Blob>>()
 
 /**
@@ -50,6 +47,10 @@ internal fun PreparedStatement.bindValue(index: Int, value: Any?, type: DataType
     }
 }
 
+/**
+ * Runs [action] and always releases temporary JDBC values bound to this statement.
+ * Cleanup failures are suppressed onto an action failure; otherwise the cleanup failure is thrown.
+ */
 internal inline fun <T> PreparedStatement.withBoundResources(action: () -> T): T {
     var failure: Throwable? = null
     try {
@@ -70,11 +71,9 @@ internal inline fun <T> PreparedStatement.withBoundResources(action: () -> T): T
     }
 }
 /**
- * Releases any bound resources (e.g., Blob values) associated with this PreparedStatement.
- * This is called after the statement is executed to free any resources that were bound to it.
+ * Frees temporary JDBC values owned by this statement.
  *
- * @throws it if any errors occur while freeing the bound resources.
- * If multiple errors occur, they will be suppressed and added to the first error.
+ * The first cleanup failure is thrown; later failures are attached as suppressed exceptions.
  */
 internal fun PreparedStatement.releaseBoundResources() {
     val blobs = synchronized(boundBlobs) { boundBlobs.remove(this) }.orEmpty()

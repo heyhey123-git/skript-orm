@@ -7,6 +7,11 @@ import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.Statement
 import javax.sql.DataSource
 
+/**
+ * JDBC batch insert. Every row must have the same column set; the first row's key order determines
+ * binding order. An empty batch succeeds with an exact count of zero. `SUCCESS_NO_INFO` makes the
+ * returned [WriteResult] count inexact, while `EXECUTE_FAILED` fails the operation.
+ */
 open class JdbcInsertMany(
     valuesList: List<Map<String, Any?>>,
     override val dataSource: DataSource,

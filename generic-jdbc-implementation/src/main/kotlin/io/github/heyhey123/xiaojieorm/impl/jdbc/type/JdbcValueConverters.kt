@@ -17,8 +17,8 @@ import java.util.*
 import javax.sql.rowset.serial.SerialBlob
 
 /**
- * Consumes the bytes from the receiver [Blob] and applies the given operation.
- *
+ * Reads all bytes from this BLOB, applies [operation], and always frees the BLOB.
+ * A free failure is suppressed onto an earlier failure or thrown when it is the only failure.
  */
 private inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
     var failure: Throwable? = null
@@ -36,6 +36,7 @@ private inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
     }
 }
 
+/** Stores UUIDs as 16 big-endian bytes: most-significant bits followed by least-significant bits. */
 object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
     UUID::class.java, ByteArray::class.java
 ) {
@@ -56,6 +57,7 @@ object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
     }
 }
 
+/** Stores ItemStacks as Bukkit's binary item format in a statement-owned BLOB. */
 object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
     ItemStack::class.java, Blob::class.java
 ) {
@@ -70,6 +72,7 @@ object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
     }
 }
 
+/** Stores Bukkit Locations as Bukkit object-serialization bytes. */
 object LocationJdbcConverter : ValueConverter<Location, ByteArray>(
     Location::class.java, ByteArray::class.java
 ) {
@@ -121,6 +124,7 @@ object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
     }
 }
 
+/** Stores Skript dates as [Date] values. */
 object SkriptDateJdbcConverter : ValueConverter<SkriptDate, Date>(
     SkriptDate::class.java, Date::class.java
 ) {
@@ -128,6 +132,7 @@ object SkriptDateJdbcConverter : ValueConverter<SkriptDate, Date>(
     override fun fromStorage(value: Date): SkriptDate = SkriptDate(value.time)
 }
 
+/** Stores Skript times as their integer tick count. */
 object SkriptTimeJdbcConverter : ValueConverter<SkriptTime, Int>(
     SkriptTime::class.java, Integer.TYPE
 ) {
@@ -135,6 +140,7 @@ object SkriptTimeJdbcConverter : ValueConverter<SkriptTime, Int>(
     override fun fromStorage(value: Int): SkriptTime = SkriptTime(value)
 }
 
+/** Stores Skript timespans as milliseconds. */
 object SkriptTimespanJdbcConverter : ValueConverter<SkriptTimespan, Long>(
     SkriptTimespan::class.java, Long::class.java
 ) {

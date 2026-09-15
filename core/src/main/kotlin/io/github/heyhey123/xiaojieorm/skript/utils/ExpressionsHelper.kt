@@ -8,12 +8,10 @@ import io.github.heyhey123.xiaojieorm.table.Table
 object ExpressionsHelper {
 
     /**
-     * Parse an expression string for a given column in the table.
+     * Parses [valueStr] as the domain type of [columnName].
      *
-     * @param table the table containing the column
-     * @param columnName the name of the column
-     * @param valueStr the expression string to parse
-     * @return the parsed Expression, or null if parsing fails
+     * @return the parsed expression, or `null` when Skript cannot parse it
+     * @throws IllegalArgumentException if [columnName] is not in [table]
      */
     fun parseExpression(table: Table, columnName: String, valueStr: String): Expression<*>? {
         val column = table.getColumnByName(columnName)

@@ -1,11 +1,21 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
+import ch.njol.skript.doc.*
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
+@Name("Select Many Entities")
+@Description("Selects matching rows using row-index and column-name keys such as {_users::1::name}. The one-based row index remains even for one result. Selects always wait and expose failures as the last database error.")
+@Example("""
+select many entities from table "users" and store the results in {_users::*}:
+    where all:
+        active = true
+send "%{_users::1::name}%"
+""")
+@Since("1.0")
 class SecSelectMany : SecSelectBase() {
 
     companion object {

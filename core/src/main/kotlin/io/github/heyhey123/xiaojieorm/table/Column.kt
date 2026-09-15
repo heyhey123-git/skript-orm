@@ -3,14 +3,15 @@ package io.github.heyhey123.xiaojieorm.table
 import io.github.heyhey123.xiaojieorm.type.DataType
 
 /**
- * Represents a column in a database table.
+ * Defines a logical column in a database table.
  *
- * @property name The name of the column.
- * @property type The JDBC type of the column.
- * @property isPrimaryKey Indicates if the column is a primary key.
- * @property isAutoIncrement Indicates if the column is auto-incremented. Not allow if isPrimaryKey is false.
- * @property isNullable Indicates if the column can contain null values.
- * @property size The size of the column (if applicable).
+ * @property name Identifier validated with the same Unicode identifier rules as [Table].
+ * @property type Logical data type and value converter for the column.
+ * @property isPrimaryKey Whether this column is the table primary key.
+ * @property isAutoIncrement Whether values are generated automatically; valid only for a primary key.
+ * @property isNullable Whether stored values may be null.
+ * @property size Optional positive storage size hint.
+ * @throws IllegalArgumentException if the identifier, auto-increment combination, or size is invalid.
  */
 data class Column<T : Any>(
     val name: String,

@@ -9,12 +9,7 @@ object ErrorPrinter {
     private val logger: Logger
         get() = XiaojieOrm.instance.logger
 
-    /**
-     * Prints an error message with detailed information about the Skript trigger and the error itself that occurred.
-     *
-     * @param trigger
-     * @param error
-     */
+    /** Logs [error] with the trigger and source location when available. */
     fun printErrorWithDetail(trigger: Trigger, error: Throwable) {
         logger.severe("An error occurred while executing the Skript trigger:")
         logger.severe("In trigger: ${trigger.name}")

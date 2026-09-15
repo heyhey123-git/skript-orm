@@ -1,22 +1,11 @@
 package io.github.heyhey123.xiaojieorm.result
 
-/**
- * Execution result, which can be either a DataCursor or a WriteResult.
- *
- */
+/** Common result type for query execution. Use the projection methods to inspect its variant. */
 interface ExecutionResult {
 
-    /**
-     * Converts the result to a DataCursor if possible.
-     *
-     * @return The DataCursor or null if the result is not a cursor.
-     */
+    /** Returns the cursor when this is a [CursorResult], otherwise `null`. */
     fun asCursorOrNull(): DataCursor?
 
-    /**
-     * Converts the result to a WriteResult if possible.
-     *
-     * @return The WriteResult or null if the result is not a write result.
-     */
+    /** Returns this result when it is a [WriteResult], otherwise `null`. */
     fun asWriteResultOrNull(): WriteResult?
 }

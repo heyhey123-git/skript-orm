@@ -7,6 +7,13 @@ import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
 
+/**
+ * Hikari-backed JDBC database configured with a driver class and [dialect].
+ *
+ * Connecting creates the pool and query factory. Disconnecting closes the pool. Failed connection
+ * attempts close any partially created pool and clear JDBC state. Table registration executes the
+ * dialect's `CREATE TABLE IF NOT EXISTS` statement using a borrowed connection.
+ */
 open class JdbcDatabase(
     val driver: String,
     val dialect: JdbcDialect

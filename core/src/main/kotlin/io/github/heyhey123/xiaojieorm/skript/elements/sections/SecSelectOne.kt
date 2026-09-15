@@ -1,32 +1,22 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
-import ch.njol.skript.doc.Description
-import ch.njol.skript.doc.Example
-import ch.njol.skript.doc.Name
+import ch.njol.skript.doc.*
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
-@Name("Select One")
-@Description("Select one entity from a table and store the result in a variable. Whatever 'wait' or not," +
-        " the section will wait for the query to finish before continuing," +
-        " within the main thread.")
-@Example(
-    """
-create a connection to database "MySQL" with properties:
-    url: "jdbc:mysql://localhost:3306/mydb"
-    username: "root"
-    password: "123456"
-select one from table "users" and store the result in {_user::*} and wait:
+@Name("Select One Entity")
+@Description("Selects at most one row and stores it by column name, such as {_user::name}. A nested where block may filter it. Selects always wait, whether or not and wait is written, and failures are exposed as the last database error.")
+@Example("""
+select one entity from table "users" and store the result in {_user::*}:
     where any:
         name = "Alice"
         age > 25
 send "name: %{_user::name}%, age: %{_user::age}%"
-disconnect from database
-"""
-)
+""")
+@Since("1.0")
 
 class SecSelectOne : SecSelectBase() {
 

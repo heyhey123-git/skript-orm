@@ -1,11 +1,12 @@
 package io.github.heyhey123.xiaojieorm.table
 
 /**
- * Represents a database table.
+ * Defines a database table and snapshots its columns into registration order.
  *
- * @property name The name of the table.
- * @property columns The columns in the table.
- * @throws IllegalArgumentException if more than one primary key column is defined.
+ * @property name Unicode identifier used by database implementations.
+ * @property columns Columns keyed by name; later changes to the constructor list are not observed.
+ * @throws IllegalArgumentException if the name is invalid, no columns are supplied, names are
+ * duplicated, or more than one primary key is defined.
  */
 class Table(
     val name: String,

@@ -4,11 +4,10 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 
 /**
- * Select a page of results
+ * Selects the 1-based page [pageIndex] with [pageSize] positive items, filtered by [where].
+ * A null clause applies no filter. Implementations may require a primary key to provide stable order.
  *
- * @param pageSize The number of items per page
- * @param pageIndex The index of the page to select (1-based)
- * @param where The WHERE clause defining the selection condition
+ * @throws IllegalArgumentException if [pageSize] is not positive or [pageIndex] is less than one
  */
 abstract class SelectPage(
     val pageSize: Int,
