@@ -6,6 +6,7 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.type.DataTypes
 
 /**
  * Hikari-backed JDBC database configured with a driver class and [dialect].
@@ -21,7 +22,7 @@ open class JdbcDatabase(
 
     var dataSource: HikariDataSource? = null
 
-    override val dataTypes: JdbcDataTypes = JdbcDataTypes
+    open override val dataTypes: DataTypes = JdbcDataTypes
 
     override fun doConnect(url: String, user: String, password: String) {
         try {

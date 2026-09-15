@@ -1,8 +1,12 @@
 package io.github.heyhey123.xiaojieorm.impl.pg.database
 
 import io.github.heyhey123.xiaojieorm.database.DatabaseFactory
+import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 
-class PgDatabaseFactory: DatabaseFactory {
+object PgDatabaseFactory : DatabaseFactory {
+    init {
+        DatabaseRegistry.register(this)
+    }
 
     override val typeName: String
         get() = "PostgreSQL"

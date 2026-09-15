@@ -1,11 +1,9 @@
 package io.github.heyhey123.xiaojieorm.impl.pg.database
 
 import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDatabase
-import io.github.heyhey123.xiaojieorm.impl.pg.queries.PgQueries
+import io.github.heyhey123.xiaojieorm.impl.pg.type.PgDataTypes
+import io.github.heyhey123.xiaojieorm.type.DataTypes
 
-class PgDatabase: JdbcDatabase("org.postgresql.Driver") {
-    override fun doConnect(url: String, user: String, password: String) {
-        super.doConnect(url, user, password)
-        queries = PgQueries(dataSource!!)
-    }
+class PgDatabase : JdbcDatabase("org.postgresql.Driver", PgJdbcDialect) {
+    override val dataTypes: DataTypes = PgDataTypes
 }
