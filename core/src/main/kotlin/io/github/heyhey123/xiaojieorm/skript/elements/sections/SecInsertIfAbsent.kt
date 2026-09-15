@@ -8,22 +8,29 @@ import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
 @Name("Insert Entity If Absent")
-@Description("Inserts one row only when the database implementation considers it absent. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
+@Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
 @Example("""
 insert entity if absent into table "users" and wait:
     values:
         id: {_id}
         name: "Alice"
 """)
+@Example("""
+insert entity {_user::*} if absent into table "archived_users"
+""")
 @Since("1.0")
 class SecInsertIfAbsent : SecWriteBase() {
     companion object {
         init {
-            Skript.registerSection(SecInsertIfAbsent::class.java, "insert [one] [entity] if absent into [table] %string% [wait:and wait]")
+            Skript.registerSection(
+                SecInsertIfAbsent::class.java,
+                "insert [one] [entity] if absent into [table] %string% [wait:and wait]",
+                "insert [one] [entity] %objects% if absent into [table] %string% [wait:and wait]"
+            )
         }
     }
 
-    override val tableNameIndex = 0
+    override fun valuesExpressionIndex(matchedPattern: Int) = if (matchedPattern == 0) -1 else 0
 
     override suspend fun executeWrite(
         queries: Queries,
@@ -33,6 +40,8 @@ class SecInsertIfAbsent : SecWriteBase() {
         whereClause: WhereClause?,
         extraArguments: Any?
     ) {
+        // As in SecInsertOne: a column the values omit is absent from the statement, so the database
+        // default applies rather than a NULL written by the ORM.
         queries.insertIfAbsent(requireNotNull(singleValues)).execute(table)
     }
 

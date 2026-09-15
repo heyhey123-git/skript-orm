@@ -17,6 +17,10 @@ data class RawValues(
     fun bind(table: Table): ParsedValues {
         val parsedMap = mutableMapOf<String, Expression<*>?>()
         for (rawValue in values) {
+            // A literal `null` is the only way to store SQL NULL. It becomes a present key whose
+            // value is null, which the query layer binds as NULL. A list variable cannot express
+            // this, because Skript removes a key that is set to null, and the write sections read an
+            // absent key as "not supplied" rather than as NULL.
             val expression = if (rawValue.rawExpression.equals("null", ignoreCase = true)) {
                 null
             } else {

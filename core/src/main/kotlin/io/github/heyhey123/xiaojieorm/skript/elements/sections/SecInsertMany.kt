@@ -8,7 +8,7 @@ import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
 @Name("Insert Many Entities")
-@Description("Inserts multiple rows. Under values, each nested block is one row. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
+@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example("""
 insert many entities into table "users" and wait:
     values:
@@ -19,16 +19,34 @@ insert many entities into table "users" and wait:
             name: "Bob"
             age: 30
 """)
+@Example("""
+select many entities from table "users" and store the results in {_rows::*}:
+    where all:
+        active = false
+insert many {_rows::*} into table "archived_users" and wait
+""")
 @Since("1.0")
 class SecInsertMany : SecWriteBase() {
     companion object {
         init {
-            Skript.registerSection(SecInsertMany::class.java, "insert many [entities] into [table] %string% [wait:and wait]")
+            Skript.registerSection(
+                SecInsertMany::class.java,
+                "insert many [entities] into [table] %string% [wait:and wait]",
+                "insert many [entities] %objects% into [table] %string% [wait:and wait]"
+            )
         }
     }
 
-    override val tableNameIndex = 0
+    /**
+     * Multi-row writes accept the `{_rows::rowIndex::columnName}` shape. The reader fills every row
+     * to a common column set, because one statement can only bind one column list, so a column that
+     * only some rows supply is written as NULL for the rows that omit it. A column that no row
+     * supplies stays absent from the statement and falls back to the database default. This is the
+     * only write that fills missing columns, and it does so because a batch cannot vary its columns.
+     */
     override val supportsMultipleRows = true
+
+    override fun valuesExpressionIndex(matchedPattern: Int) = if (matchedPattern == 0) -1 else 0
 
     override suspend fun executeWrite(
         queries: Queries,

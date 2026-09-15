@@ -24,12 +24,11 @@ class SecDeleteById : SecWriteBase() {
     }
 
     private lateinit var idExpr: Expression<Any>
-    override val tableNameIndex = 0
     override val requiresValues = false
 
     @Suppress("UNCHECKED_CAST")
-    override fun extractExtraParams(expressions: Array<out Expression<*>?>) {
-        idExpr = expressions[1] as Expression<Any>
+    override fun extractExtraParams(expressions: Array<out Expression<*>?>, matchedPattern: Int) {
+        idExpr = expressions[extraParamsIndex(matchedPattern)] as Expression<Any>
     }
 
     override fun resolveExtraArguments(event: Event?): Any =

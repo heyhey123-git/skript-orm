@@ -17,6 +17,11 @@ open class JdbcUpdate(
 ) : Update(values, limit, where), JdbcQuery {
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Update values cannot be empty." }
+        // The SET list is exactly the supplied keys, so the map has to stay sparse: an absent key
+        // means the column is not updated and keeps its stored value. A key that is present and holds
+        // null is a different thing entirely and is bound as SQL NULL. Callers must not pad the map
+        // with the remaining columns, because that would turn every update into a full-row write and
+        // clear any column the caller did not supply.
         val columns = values.keys.toList()
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
         val sql = dialect.update(table.name, columns, whereSql, limit)

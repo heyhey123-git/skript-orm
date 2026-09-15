@@ -7,6 +7,7 @@ import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
+import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
@@ -21,6 +22,34 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
+/**
+ * Shared behaviour of write sections.
+ *
+ * A write either reads its values from the section body, from a list variable given as an expression,
+ * or has no values at all, as a delete does. The first two sources are mutually exclusive, and both
+ * are resolved on the main thread into the same rows before the operation is dispatched.
+ *
+ * ## Missing columns
+ *
+ * Both sources resolve to a map keyed by column name, and both may leave a column out. They do not
+ * agree on what leaving a column out means:
+ *
+ * - The body source can tell an omitted key from a key written as `null`, because the latter resolves
+ *   to a present entry holding null and is bound as SQL NULL.
+ * - A list variable cannot. Skript deletes a key when it is set to null, so "not supplied" and
+ *   "supplied as NULL" are both just an absent key.
+ *
+ * An absent key is therefore never read as NULL. The column simply does not reach the statement,
+ * which makes every write except `insert many` a patch: an omitted column is not part of the `SET`
+ * or `ON DUPLICATE KEY UPDATE` list and keeps its stored value, while an insert omits it so that the
+ * database default applies. [VariableValuesReader] documents the full contract, including why
+ * `insert many` has to fill a common column set instead.
+ *
+ * Reading an absent key as null would only be meaningful for an explicit full-row replacement
+ * operation. That is deliberately not offered: the same input would otherwise clear every column a
+ * dynamic variable happens to miss, and an unknown column name is the only mistake this reader can
+ * reject, while a forgotten column passes silently.
+ */
 abstract class SecWriteBase : Section() {
 
     protected lateinit var tableNameExpr: Expression<String>
@@ -32,34 +61,61 @@ abstract class SecWriteBase : Section() {
      */
     protected var waitFlag: Boolean = false
 
-    /** Values for single-row writes. */
+    /** Values for single-row writes. Resolves to the columns the author wrote, and only those. */
     protected var singleValues: RawValues? = null
 
     /** Rows for multi-row writes. */
     protected var multipleValues: RawValuesList? = null
 
+    /**
+     * List variable that supplies the values instead of the section body, resolved on the main
+     * thread while local variables are still attached to the event.
+     */
+    private var valuesVariable: Variable<*>? = null
+
     /** Whether a nested `where` block is accepted. */
     protected open val supportsWhere: Boolean = false
 
-    /** Whether the values payload may contain multiple rows. */
+    /**
+     * Whether the values payload may contain multiple rows. Sections that reject it require exactly
+     * one row from either value source.
+     */
     protected open val supportsMultipleRows: Boolean = false
 
-    /** Whether a non-empty values payload is required. */
+    /** Whether the operation needs values, from either the section body or a list variable. */
     protected open val requiresValues: Boolean = true
 
     protected var where: RawWhereClause? = null
 
-    protected abstract val tableNameIndex: Int
+    /**
+     * Position of the table name expression for the matched pattern.
+     *
+     * The forms that read their values from a list variable place that expression before the table
+     * name, so the table name moves back by one slot whenever [valuesExpressionIndex] matches.
+     */
+    protected open fun tableNameIndex(matchedPattern: Int): Int =
+        if (valuesExpressionIndex(matchedPattern) >= 0) 1 else 0
 
     /**
-     * Override this method to extract any extra parameters from the expressions array.
-     * The default implementation does nothing.
-     * This method is called during the initialization of the section, after the table name expression has been extracted.
-     * You can use this method to extract any additional parameters that your section may require, such as limit, offset, or other options.
-     * The extracted parameters can be stored in member variables for later use in the executeWrite method.
-     * @param expressions The array of expressions passed to the section. You can extract any additional parameters from this array.
+     * Position of the expression that supplies the values from a list variable, or -1 when the
+     * matched pattern reads its values from the section body instead.
      */
-    protected open fun extractExtraParams(expressions: Array<out Expression<*>?>) {}
+    protected open fun valuesExpressionIndex(matchedPattern: Int): Int = -1
+
+    /** Position of the first expression after the table name, for example a limit or a primary key. */
+    protected fun extraParamsIndex(matchedPattern: Int): Int = tableNameIndex(matchedPattern) + 1
+
+    /**
+     * Extracts the expressions specific to the matched pattern, after the table name has been read.
+     *
+     * @param expressions the expressions of the section, padded with nulls for omitted optional groups
+     * @param matchedPattern the index of the matched pattern, for sections that register several
+     */
+    protected open fun extractExtraParams(
+        expressions: Array<out Expression<*>?>,
+        matchedPattern: Int
+    ) {
+    }
 
     protected open fun resolveExtraArguments(event: Event?): Any? = Unit
 
@@ -72,11 +128,21 @@ abstract class SecWriteBase : Section() {
         sectionNode: SectionNode,
         triggerItems: List<TriggerItem?>
     ): Boolean {
-        tableNameExpr = expressions[tableNameIndex] as Expression<String>
-        extractExtraParams(expressions)
+        tableNameExpr = expressions[tableNameIndex(matchedPattern)] as Expression<String>
+        extractExtraParams(expressions, matchedPattern)
         waitFlag = parseResult.hasTag("wait")
         if (waitFlag) {
             parser.hasDelayBefore = Kleenean.TRUE
+        }
+
+        val valuesIndex = valuesExpressionIndex(matchedPattern)
+        if (valuesIndex >= 0) {
+            val valuesExpression = expressions[valuesIndex]
+            if (valuesExpression !is Variable<*> || !valuesExpression.isList) {
+                Skript.error("Write values must be stored in a list variable, for example {_values::*}.")
+                return false
+            }
+            valuesVariable = valuesExpression
         }
 
         if (supportsWhere) {
@@ -141,8 +207,15 @@ abstract class SecWriteBase : Section() {
                 return false
             }
 
-            if (singleValues == null && multipleValues == null) {
+            if (singleValues == null && multipleValues == null && valuesVariable == null) {
                 Skript.error("Values section is required and cannot be empty.")
+                return false
+            }
+
+            if (valuesVariable != null && (singleValues != null || multipleValues != null)) {
+                Skript.error(
+                    "This write section cannot take its values from both a list variable and a values block."
+                )
                 return false
             }
         }
@@ -186,11 +259,31 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
+        // Resolved rows stay sparse so that an omitted column keeps its meaning: not part of this
+        // statement. The one exception is a variable holding several rows, which the reader fills to
+        // a common column set, because a single statement can only bind one column list.
         val resolvedSingle: Map<String, Any?>?
         val resolvedMultiple: List<Map<String, Any?>>?
         try {
-            resolvedSingle = singleValues?.bind(table)?.resolve(event)
-            resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
+            val variable = valuesVariable
+            if (variable != null) {
+                val rows = VariableValuesReader.read(variable, table, event)
+                if (supportsMultipleRows) {
+                    resolvedSingle = null
+                    resolvedMultiple = rows
+                } else {
+                    // Rejecting more than one row keeps this write a patch over a single row. The row
+                    // itself is not padded, so a column the variable omits is left untouched.
+                    require(rows.size == 1) {
+                        "$variable holds ${rows.size} rows, but this write expects exactly one row of values."
+                    }
+                    resolvedSingle = rows.first()
+                    resolvedMultiple = null
+                }
+            } else {
+                resolvedSingle = singleValues?.bind(table)?.resolve(event)
+                resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
+            }
         } catch (error: Exception) {
             val message = "Failed to parse write values: ${error.message}"
             if (event != null) SkriptDatabaseErrors.set(event, message)

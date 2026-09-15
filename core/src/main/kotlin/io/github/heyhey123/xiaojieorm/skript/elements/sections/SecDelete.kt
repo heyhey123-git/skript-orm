@@ -25,13 +25,12 @@ class SecDelete : SecWriteBase() {
     }
 
     private var limitExpr: Expression<Int>? = null
-    override val tableNameIndex = 0
     override val supportsWhere = true
     override val requiresValues = false
 
     @Suppress("UNCHECKED_CAST")
-    override fun extractExtraParams(expressions: Array<out Expression<*>?>) {
-        limitExpr = expressions[1] as Expression<Int>?
+    override fun extractExtraParams(expressions: Array<out Expression<*>?>, matchedPattern: Int) {
+        limitExpr = expressions[extraParamsIndex(matchedPattern)] as Expression<Int>?
     }
 
     override fun resolveExtraArguments(event: Event?): Any? = limitExpr?.getSingle(event)?.also {
