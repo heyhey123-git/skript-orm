@@ -23,16 +23,11 @@ data class RawValues(
             // value is null, which the query layer binds as NULL. A list variable cannot express
             // this, because Skript removes a key that is set to null, and the write sections read an
             // absent key as "not supplied" rather than as NULL.
-            val expression = if (rawValue.rawExpression.equals("null", ignoreCase = true)) {
-                null
-            } else {
-                ExpressionsHelper.parseExpressionNonNull(
-                    table,
-                    rawValue.columnName,
-                    rawValue.rawExpression
-                )
-            }
-            parsedMap[rawValue.columnName] = expression
+            parsedMap[rawValue.columnName] = ExpressionsHelper.parseNullableExpression(
+                table,
+                rawValue.columnName,
+                rawValue.rawExpression
+            )
         }
         return ParsedValues(table, parsedMap)
     }
@@ -56,9 +51,7 @@ data class ParsedValues(
     fun resolve(event: Event?): Map<String, Any?> {
         val resolvedMap = mutableMapOf<String, Any?>()
         for ((columnName, expression) in values) {
-            checkNotNull(table.getColumnByName(columnName)) {
-                "Column '$columnName' does not exist in table '${table.name}'"
-            }
+            ExpressionsHelper.requireColumn(table, columnName)
             resolvedMap[columnName] = expression?.getSingle(event)
         }
         return resolvedMap

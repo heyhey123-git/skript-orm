@@ -130,11 +130,7 @@ class WhereParserTest : SkriptConfigTestBase() {
         val equals = assertIs<ParsedCondition.Equals>(condition)
         assertEquals("name", equals.columnName)
         assertNull(equals.valueExpr, "a literal null must not be parsed as an expression")
-
-        // Condition carries no value equality, so its fields are compared.
-        val resolved = assertIs<Condition.Equals>(equals.resolve(null))
-        assertEquals("name", resolved.left)
-        assertNull(resolved.right)
+        assertEquals(Condition.Equals("name", null), equals.resolve(null))
     }
 
     @Test
@@ -143,10 +139,7 @@ class WhereParserTest : SkriptConfigTestBase() {
 
         val notEquals = assertIs<ParsedCondition.NotEquals>(condition)
         assertNull(notEquals.valueExpr)
-
-        val resolved = assertIs<Condition.NotEquals>(notEquals.resolve(null))
-        assertEquals("name", resolved.left)
-        assertNull(resolved.right)
+        assertEquals(Condition.NotEquals("name", null), notEquals.resolve(null))
     }
 
     @Test
@@ -159,10 +152,12 @@ class WhereParserTest : SkriptConfigTestBase() {
     }
 
     @Test
-    fun `a column the table does not declare is rejected when the condition resolves`() {
-        val condition = WhereParser.parseCondition(users, "missing = null")
+    fun `a column the table does not declare is rejected while parsing`() {
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            WhereParser.parseCondition(users, "missing = null")
+        }
 
-        assertFailsWith<IllegalStateException> { condition.resolve(null) }
+        assertEquals("Column 'missing' does not exist in table 'users'", thrown.message)
     }
 
     // ------------------------------------------------------------------ resolving a clause
@@ -188,12 +183,10 @@ class WhereParserTest : SkriptConfigTestBase() {
 
         val all = assertIs<WhereClause.All>(resolved)
         assertTrue(all.negated)
-        assertEquals(listOf("name", "nickname"), all.conditions.map { it.left })
-
-        val equals = assertIs<Condition.Equals>(all.conditions[0])
-        assertNull(equals.right)
-        val notEquals = assertIs<Condition.NotEquals>(all.conditions[1])
-        assertNull(notEquals.right)
+        assertEquals(
+            listOf(Condition.Equals("name", null), Condition.NotEquals("nickname", null)),
+            all.conditions
+        )
     }
 
     private companion object {

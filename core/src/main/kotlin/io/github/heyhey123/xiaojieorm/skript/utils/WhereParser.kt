@@ -6,6 +6,7 @@ import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.Condition
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpressionNonNull
+import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseNullableExpression
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser.collectFromSection
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
@@ -24,9 +25,7 @@ sealed class ParsedCondition {
         valueExpr: Expression<*>?,
         event: Event?
     ): Any? {
-        checkNotNull(table.getColumnByName(columnName)) {
-            "Column '$columnName' does not exist in table '${table.name}'"
-        }
+        ExpressionsHelper.requireColumn(table, columnName)
         return valueExpr?.getSingle(event)
     }
 
@@ -195,13 +194,6 @@ object WhereParser {
      */
     fun isWhereSection(node: Node): Boolean =
         node.key?.let { WHERE_SECTION_PATTERN.matches(it) } == true
-
-    private fun parseNullableExpression(table: Table, columnName: String, valueStr: String): Expression<*>? =
-        if (valueStr.trim().equals("null", ignoreCase = true)) {
-            null
-        } else {
-            parseExpressionNonNull(table, columnName, valueStr)
-        }
 
     /**
      * Column identifiers follow the same rule as [Table] and [io.github.heyhey123.xiaojieorm.table.Column]: a Unicode letter, Unicode

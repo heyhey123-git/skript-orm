@@ -219,13 +219,18 @@ class ValuesParserTest : SkriptConfigTestBase() {
     }
 
     @Test
-    fun `a column the table does not declare cannot be resolved`() {
-        // A literal null skips expression parsing, so bind() never looks the column up; the check
-        // happens when the value is resolved. A spelled-out value fails earlier, inside bind(),
-        // because that path has to find the column to know which type to parse the value against.
-        val parsed = ValuesParser.collectSingle(body("values:\n${TAB}missing: null")).bind(users)
+    fun `a column the table does not declare is rejected while parsing`() {
+        val literalNull = assertFailsWith<IllegalArgumentException> {
+            ValuesParser.collectSingle(body("values:\n${TAB}missing: null")).bind(users)
+        }
+        assertEquals("Column 'missing' does not exist in table 'users'", literalNull.message)
 
-        assertFailsWith<IllegalStateException> { parsed.resolve(null) }
+        // The same typo next to a spelled-out value must fail at the same point, so the error
+        // surfaces next to the line that caused it rather than when the statement runs.
+        val spelledOut = assertFailsWith<IllegalArgumentException> {
+            ValuesParser.collectSingle(body("values:\n${TAB}missing: 1")).bind(users)
+        }
+        assertEquals("Column 'missing' does not exist in table 'users'", spelledOut.message)
     }
 
     private companion object {

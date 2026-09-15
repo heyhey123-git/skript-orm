@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
@@ -21,6 +22,23 @@ class ConditionTest {
         val between = Condition.Between("a", marker, 2)
         assertSame(marker, between.start)
         assertEquals(2, between.end)
+    }
+
+    @Test
+    fun `conditions compare by content`() {
+        assertEquals(Condition.Equals("a", 1), Condition.Equals("a", 1))
+        assertEquals(Condition.Equals("a", null), Condition.Equals("a", null))
+        assertEquals(Condition.NotEquals("a", 1), Condition.NotEquals("a", 1))
+        assertEquals(Condition.GreaterThan("a", 1), Condition.GreaterThan("a", 1))
+        assertEquals(Condition.GreaterThanOrEquals("a", 1), Condition.GreaterThanOrEquals("a", 1))
+        assertEquals(Condition.LessThan("a", 1), Condition.LessThan("a", 1))
+        assertEquals(Condition.LessThanOrEquals("a", 1), Condition.LessThanOrEquals("a", 1))
+        assertEquals(Condition.Between("a", 1, 2), Condition.Between("a", 1, 2))
+        assertEquals(Condition.Equals("a", 1).hashCode(), Condition.Equals("a", 1).hashCode())
+
+        assertNotEquals(Condition.Equals("a", 1), Condition.Equals("b", 1))
+        assertNotEquals(Condition.Equals("a", 1), Condition.Equals("a", 2))
+        assertNotEquals<Condition>(Condition.Equals("a", 1), Condition.GreaterThan("a", 1))
     }
 
     @Test
