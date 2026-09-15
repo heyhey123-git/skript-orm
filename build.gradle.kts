@@ -111,6 +111,8 @@ tasks {
             exclude(dependency("org.slf4j:.*"))
         }
 
+        relocate("org.postgresql.", "$shadePrefix.org.postgresql.")
+
         // MongoDB
         relocate("com.mongodb.", "$shadePrefix.com.mongodb.")
         relocate("org.bson.", "$shadePrefix.org.bson.")
