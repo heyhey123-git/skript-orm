@@ -41,3 +41,9 @@ ij_kotlin_packages_to_use_import_on_demand = java.util.*, ch.njol.skript.doc.*, 
 # Keep multi-line argument and parameter lists without a trailing comma.
 ij_kotlin_allow_trailing_comma = false
 ij_kotlin_allow_trailing_comma_on_call_site = false
+
+# Let ktlint clean and normalize imports whenever auto-correction or ktlintFormat runs.
+# Wildcard imports listed in ij_kotlin_packages_to_use_import_on_demand remain allowed.
+ktlint_standard_no-unused-imports = enabled
+ktlint_standard_import-ordering = enabled
+ktlint_standard_no-wildcard-imports = enabled
