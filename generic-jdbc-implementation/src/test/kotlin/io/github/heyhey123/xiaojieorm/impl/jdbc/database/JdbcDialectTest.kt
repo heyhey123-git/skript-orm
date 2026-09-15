@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class JdbcDialectTest {
+
     @Test
     fun `generic dialect renders quoted ansi sql`() {
         assertEquals("SELECT * FROM \"users\"", GenericJdbcDialect.select("users"))
@@ -36,7 +37,7 @@ class JdbcDialectTest {
         assertEquals("INSERT IGNORE INTO `users` (`id`) VALUES (?)", MysqlJdbcDialect.insertIfAbsent("users", listOf("id")))
         assertEquals(
             "INSERT INTO `users` (`id`, `name`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)",
-            MysqlJdbcDialect.upsertById("users", "id", listOf("name")),
+            MysqlJdbcDialect.upsertById("users", "id", listOf("name"))
         )
         assertEquals("UPDATE `users` SET `name` = ? LIMIT 2", MysqlJdbcDialect.update("users", listOf("name"), null, 2))
         assertEquals("DELETE FROM `users` LIMIT 2", MysqlJdbcDialect.delete("users", null, 2))
@@ -70,13 +71,13 @@ class JdbcDialectTest {
             "users",
             listOf(
                 Column("id", IntJdbcDataType(), isPrimaryKey = true, isAutoIncrement = true),
-                Column("name", StringJdbcDataType(), size = 40, isNullable = true),
-            ),
+                Column("name", StringJdbcDataType(), size = 40, isNullable = true)
+            )
         )
 
         assertEquals(
             "CREATE TABLE IF NOT EXISTS `users` (`id` INT PRIMARY KEY AUTO_INCREMENT, `name` VARCHAR(40))",
-            MysqlJdbcDialect.createTable(table),
+            MysqlJdbcDialect.createTable(table)
         )
     }
 

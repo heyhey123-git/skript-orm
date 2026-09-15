@@ -12,6 +12,7 @@ class RocksSelectById(
     id: Any,
     override val database: RocksdbDatabase
 ) : SelectById(id), RocksQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         val primaryKey = RocksRowKeyEncoder.encodePrimaryKey(table, id)
         val cfHandle = database.columnFamilyHandles[table.name]

@@ -14,6 +14,7 @@ class MongoUpsertById(
     values: Map<String, Any?>,
     override val database: MongoDatabase
 ) : UpsertById(id, values), MongoQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Document>(table.name)
         val primaryKeyColumn = table.primaryKey!!

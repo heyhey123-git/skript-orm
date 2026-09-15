@@ -17,6 +17,7 @@ open class JdbcInsertMany(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : InsertMany(valuesList), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         if (valuesList.isEmpty()) return WriteResult(0)
         val columns = valuesList.first().keys.toList()
@@ -48,9 +49,12 @@ open class JdbcInsertMany(
                     counts.forEach { count ->
                         when {
                             count >= 0L -> affected = Math.addExact(affected, count)
+
                             count == Statement.SUCCESS_NO_INFO.toLong() -> countExact = false
+
                             count == Statement.EXECUTE_FAILED.toLong() ->
                                 error("A JDBC batch insert operation failed.")
+
                             else -> error("The JDBC driver returned an invalid batch update count: $count.")
                         }
                     }

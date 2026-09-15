@@ -72,48 +72,49 @@ object JdbcConditionTranslator {
      * @param type The SqlType of the column being compared.
      * @return The next offset after filling the parameters.
      */
-    fun fillConditionParameters(condition: Condition, statement: PreparedStatement, offset: Int, type: DataType<*>): Int {
-        return when (condition) {
-            is Condition.Equals -> {
-                if (condition.right == null) offset else {
-                    statement.bindValue(offset, condition.right, type)
-                    offset + 1
-                }
-            }
-
-            is Condition.NotEquals -> {
-                if (condition.right == null) offset else {
-                    statement.bindValue(offset, condition.right, type)
-                    offset + 1
-                }
-            }
-
-            is Condition.Between -> {
-                statement.bindValue(offset, condition.start, type)
-                statement.bindValue(offset + 1, condition.end, type)
-                offset + 2
-            }
-
-            is Condition.GreaterThan -> {
-                statement.bindValue(offset, condition.right, type)
-                offset + 1
-            }
-
-            is Condition.GreaterThanOrEquals -> {
-                statement.bindValue(offset, condition.right, type)
-                offset + 1
-            }
-
-            is Condition.LessThan -> {
-                statement.bindValue(offset, condition.right, type)
-                offset + 1
-            }
-
-            is Condition.LessThanOrEquals -> {
+    fun fillConditionParameters(condition: Condition, statement: PreparedStatement, offset: Int, type: DataType<*>): Int = when (condition) {
+        is Condition.Equals -> {
+            if (condition.right == null) {
+                offset
+            } else {
                 statement.bindValue(offset, condition.right, type)
                 offset + 1
             }
         }
-    }
 
+        is Condition.NotEquals -> {
+            if (condition.right == null) {
+                offset
+            } else {
+                statement.bindValue(offset, condition.right, type)
+                offset + 1
+            }
+        }
+
+        is Condition.Between -> {
+            statement.bindValue(offset, condition.start, type)
+            statement.bindValue(offset + 1, condition.end, type)
+            offset + 2
+        }
+
+        is Condition.GreaterThan -> {
+            statement.bindValue(offset, condition.right, type)
+            offset + 1
+        }
+
+        is Condition.GreaterThanOrEquals -> {
+            statement.bindValue(offset, condition.right, type)
+            offset + 1
+        }
+
+        is Condition.LessThan -> {
+            statement.bindValue(offset, condition.right, type)
+            offset + 1
+        }
+
+        is Condition.LessThanOrEquals -> {
+            statement.bindValue(offset, condition.right, type)
+            offset + 1
+        }
+    }
 }

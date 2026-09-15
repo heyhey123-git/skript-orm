@@ -15,7 +15,7 @@ import org.bson.Document
  * Mongodb database implementation.
  *
  */
-class MongodbDatabase: Database() {
+class MongodbDatabase : Database() {
 
     /**
      * The MongoDB client.

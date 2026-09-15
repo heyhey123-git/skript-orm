@@ -14,6 +14,7 @@ open class JdbcDelete(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : Delete(limit, where), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
         val sql = dialect.delete(table.name, whereSql, limit)

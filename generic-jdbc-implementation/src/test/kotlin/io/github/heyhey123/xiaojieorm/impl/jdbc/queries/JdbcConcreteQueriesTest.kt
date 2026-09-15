@@ -19,18 +19,18 @@ import java.sql.PreparedStatement
 import java.sql.ResultSet
 import javax.sql.DataSource
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class JdbcConcreteQueriesTest {
+
     private val table = Table(
         "users",
         listOf(
             Column("id", IntJdbcDataType(), isPrimaryKey = true),
             Column("name", StringJdbcDataType()),
-            Column("age", IntJdbcDataType()),
-        ),
+            Column("age", IntJdbcDataType())
+        )
     )
     private val noPrimaryKey = Table("users", listOf(Column("age", IntJdbcDataType())))
 
@@ -186,6 +186,6 @@ class JdbcConcreteQueriesTest {
     private data class Fixture(
         val dataSource: DataSource,
         val connection: Connection,
-        val statement: PreparedStatement,
+        val statement: PreparedStatement
     )
 }

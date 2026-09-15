@@ -14,7 +14,9 @@ import java.util.concurrent.ConcurrentHashMap
  * Represents a generic database connection and operations.
  */
 abstract class Database {
+
     companion object {
+
         /**
          * Mutex that protects the lifecycle state of the database, including the current and pending connections,
          * the connection state, and the active operation count.
@@ -243,8 +245,11 @@ abstract class Database {
         lifecycleMutex.withLock {
             when (state) {
                 State.DISCONNECTED -> return
+
                 State.CONNECTING -> error("Cannot disconnect a database while it is still connecting.")
+
                 State.DISCONNECTING -> existingDisconnect = disconnectCompletion
+
                 State.CONNECTED -> {
                     state = State.DISCONNECTING
                     completion = CompletableDeferred()

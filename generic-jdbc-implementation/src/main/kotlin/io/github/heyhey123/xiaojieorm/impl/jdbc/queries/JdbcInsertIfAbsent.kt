@@ -11,6 +11,7 @@ open class JdbcInsertIfAbsent(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : InsertIfAbsent(values), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Insert values cannot be empty." }
         val columns = values.keys.toList()

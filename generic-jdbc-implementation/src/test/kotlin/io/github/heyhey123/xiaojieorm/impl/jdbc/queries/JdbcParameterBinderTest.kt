@@ -16,6 +16,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class JdbcParameterBinderTest {
+
     @Test
     fun `null uses jdbc vendor type without conversion`() {
         val statement = mockk<PreparedStatement>(relaxed = true)

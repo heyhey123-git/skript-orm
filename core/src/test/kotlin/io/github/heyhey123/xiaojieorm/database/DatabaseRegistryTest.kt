@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.database
 
-import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataType
 import io.github.heyhey123.xiaojieorm.type.DataTypes
@@ -13,12 +12,16 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DatabaseRegistryTest {
+
     @Test
     fun `registered factory is discoverable and receives original properties`() {
         val name = "test-${UUID.randomUUID()}"
         var received: Map<String, String>? = null
         val database = FakeDatabase()
-        val factory = factory(name) { properties -> received = properties; database }
+        val factory = factory(name) { properties ->
+            received = properties
+            database
+        }
         val properties = linkedMapOf("url" to "value")
 
         DatabaseRegistry.register(factory)
@@ -52,9 +55,11 @@ class DatabaseRegistryTest {
     }
 
     private class FakeDatabase : Database() {
+
         override val dataTypes = object : DataTypes() {
             override val typesRegistry = mutableMapOf<TypeId, DataType<*>>()
         }
+
         override fun doConnect(url: String, user: String, password: String) = Unit
         override fun doDisconnect() = Unit
         override suspend fun doRegisterTable(table: Table) = Unit

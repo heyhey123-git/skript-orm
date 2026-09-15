@@ -6,6 +6,7 @@ import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.Condition
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpressionNonNull
+import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser.collectFromSection
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -13,6 +14,7 @@ import org.bukkit.event.Event
  * The parsed condition, which can be resolved to a Condition by evaluating expressions with a given event.
  */
 sealed class ParsedCondition {
+
     abstract val table: Table
 
     abstract fun resolve(event: Event?): Condition
@@ -33,6 +35,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>?
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.Equals(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)
@@ -44,6 +47,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>?
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.NotEquals(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)
@@ -55,6 +59,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.GreaterThan(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)!!
@@ -66,6 +71,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.LessThan(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)!!
@@ -77,6 +83,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.GreaterThanOrEquals(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)!!
@@ -88,6 +95,7 @@ sealed class ParsedCondition {
         val columnName: String,
         val valueExpr: Expression<*>
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.LessThanOrEquals(
             columnName,
             resolveValueExpr(columnName, valueExpr, event)!!
@@ -100,6 +108,7 @@ sealed class ParsedCondition {
         val startExpr: Expression<*>,
         val endExpr: Expression<*>
     ) : ParsedCondition() {
+
         override fun resolve(event: Event?) = Condition.Between(
             columnName,
             resolveValueExpr(columnName, startExpr, event)!!,
@@ -124,10 +133,12 @@ sealed class ParsedWhereClause {
     abstract fun resolve(event: Event?): WhereClause
 
     data class Any(val neg: Boolean, val conditions: List<ParsedCondition>) : ParsedWhereClause() {
+
         override fun resolve(event: Event?) = WhereClause.Any(neg, conditions.map { it.resolve(event) })
     }
 
     data class All(val neg: Boolean, val conditions: List<ParsedCondition>) : ParsedWhereClause() {
+
         override fun resolve(event: Event?) = WhereClause.All(neg, conditions.map { it.resolve(event) })
     }
 }
@@ -145,6 +156,7 @@ data class RawWhereClause(
     val any: Boolean,
     val neg: Boolean
 ) {
+
     /**
      * Bind the raw where clause to a specific table, parsing the condition statements.
      */
@@ -158,6 +170,7 @@ data class RawWhereClause(
  * A parser for creating WHERE clauses([WhereClause]) from raw condition strings.
  */
 object WhereParser {
+
     /**
      * Locates the header of a `where` block, for example `where`, `where any` or `where not all`.
      *
@@ -184,8 +197,11 @@ object WhereParser {
         node.key?.let { WHERE_SECTION_PATTERN.matches(it) } == true
 
     private fun parseNullableExpression(table: Table, columnName: String, valueStr: String): Expression<*>? =
-        if (valueStr.trim().equals("null", ignoreCase = true)) null
-        else parseExpressionNonNull(table, columnName, valueStr)
+        if (valueStr.trim().equals("null", ignoreCase = true)) {
+            null
+        } else {
+            parseExpressionNonNull(table, columnName, valueStr)
+        }
 
     /**
      * Column identifiers follow the same rule as [Table] and [io.github.heyhey123.xiaojieorm.table.Column]: a Unicode letter, Unicode

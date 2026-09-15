@@ -1,6 +1,7 @@
 package io.github.heyhey123.xiaojieorm.skript.utils
 
 import ch.njol.skript.lang.Variable
+import io.github.heyhey123.xiaojieorm.skript.utils.VariableValuesReader.fillMissingColumns
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 import org.skriptlang.skript.lang.converter.Converters

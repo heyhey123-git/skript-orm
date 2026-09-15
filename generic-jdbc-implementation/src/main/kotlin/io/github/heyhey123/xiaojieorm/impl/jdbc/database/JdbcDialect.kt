@@ -10,6 +10,7 @@ import java.sql.JDBCType
  * Default implementations of non-portable features fail with [UnsupportedOperationException].
  */
 interface JdbcDialect {
+
     /**
      * Quotes an SQL identifier (table name, column name, etc.) according to the dialect's rules.
      * Valid identifiers may contain Unicode letters, combining marks, digits, and underscores;
@@ -123,6 +124,7 @@ interface JdbcDialect {
         throw UnsupportedOperationException("$feature is not supported by this JDBC dialect.")
 
     companion object {
+
         /**
          * Valid SQL identifiers may contain Unicode letters, combining marks, digits, and underscores;
          * they must not begin with a digit. This regex pattern is used to validate identifiers before quoting them.
@@ -146,6 +148,7 @@ data class JdbcPageSql(
     val sql: String,
     val parameterOrder: List<JdbcPageParameter>
 ) {
+
     init {
         require(
             parameterOrder.size == 2 &&
@@ -162,6 +165,7 @@ data class JdbcPageSql(
  * deliberately throw [UnsupportedOperationException].
  */
 object GenericJdbcDialect : JdbcDialect {
+
     override fun renderIdentifier(identifier: String): String =
         "\"${identifier.replace("\"", "\"\"")}\""
 }
@@ -171,6 +175,7 @@ object GenericJdbcDialect : JdbcDialect {
  * ON DUPLICATE KEY UPDATE, limited writes, and AUTO_INCREMENT.
  */
 object MysqlJdbcDialect : JdbcDialect {
+
     override fun renderIdentifier(identifier: String): String =
         "`${identifier.replace("`", "``")}`"
 

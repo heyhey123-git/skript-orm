@@ -11,7 +11,7 @@ import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
-import java.util.*
+import java.util.UUID
 
 /**
  * RocksDB value converter base class.
@@ -23,26 +23,21 @@ import java.util.*
 abstract class RocksValueConverter<D : Any>(domainType: Class<D>) : ValueConverter<D, ByteArray>(domainType, ByteArray::class.java)
 
 object BooleanRocksConverter : RocksValueConverter<Boolean>(Boolean::class.java) {
-    override fun toStorage(value: Boolean): ByteArray {
-        return byteArrayOf(if (value) 1 else 0)
-    }
 
-    override fun fromStorage(value: ByteArray): Boolean {
-        return value.isNotEmpty() && value[0].toInt() != 0
-    }
+    override fun toStorage(value: Boolean): ByteArray = byteArrayOf(if (value) 1 else 0)
+
+    override fun fromStorage(value: ByteArray): Boolean = value.isNotEmpty() && value[0].toInt() != 0
 }
 
 object TinyIntRocksConverter : RocksValueConverter<Byte>(Byte::class.java) {
-    override fun toStorage(value: Byte): ByteArray {
-        return byteArrayOf(value)
-    }
 
-    override fun fromStorage(value: ByteArray): Byte {
-        return if (value.isNotEmpty()) value[0] else 0
-    }
+    override fun toStorage(value: Byte): ByteArray = byteArrayOf(value)
+
+    override fun fromStorage(value: ByteArray): Byte = if (value.isNotEmpty()) value[0] else 0
 }
 
 object IntRocksConverter : RocksValueConverter<Int>(Int::class.java) {
+
     override fun toStorage(value: Int): ByteArray =
         ByteBuffer.allocate(4).putInt(value).array()
 
@@ -51,6 +46,7 @@ object IntRocksConverter : RocksValueConverter<Int>(Int::class.java) {
 }
 
 object BigIntRocksConverter : RocksValueConverter<Long>(Long::class.java) {
+
     override fun toStorage(value: Long): ByteArray =
         ByteBuffer.allocate(8).putLong(value).array()
 
@@ -59,6 +55,7 @@ object BigIntRocksConverter : RocksValueConverter<Long>(Long::class.java) {
 }
 
 object DoubleRocksConverter : RocksValueConverter<Double>(Double::class.java) {
+
     override fun toStorage(value: Double): ByteArray =
         ByteBuffer.allocate(8).putDouble(value).array()
 
@@ -67,6 +64,7 @@ object DoubleRocksConverter : RocksValueConverter<Double>(Double::class.java) {
 }
 
 object FloatRocksConverter : RocksValueConverter<Float>(Float::class.java) {
+
     override fun toStorage(value: Float): ByteArray =
         ByteBuffer.allocate(4).putFloat(value).array()
 
@@ -75,6 +73,7 @@ object FloatRocksConverter : RocksValueConverter<Float>(Float::class.java) {
 }
 
 object StringRocksConverter : RocksValueConverter<String>(String::class.java) {
+
     override fun toStorage(value: String): ByteArray =
         value.toByteArray(Charsets.UTF_8)
 
@@ -83,6 +82,7 @@ object StringRocksConverter : RocksValueConverter<String>(String::class.java) {
 }
 
 object UuidRocksConverter : RocksValueConverter<UUID>(UUID::class.java) {
+
     override fun toStorage(value: UUID): ByteArray {
         val buffer = ByteBuffer.allocate(16)
         buffer.putLong(value.mostSignificantBits)
@@ -106,6 +106,7 @@ object ItemStackRocksConverter : RocksValueConverter<ItemStack>(ItemStack::class
 }
 
 object LocationRocksConverter : RocksValueConverter<Location>(Location::class.java) {
+
     override fun toStorage(value: Location): ByteArray {
         val outputStream = SerializationUtils.BukkitSerialization.serialize(value)
         outputStream.use {
@@ -126,6 +127,7 @@ object ConfigurationSerializableRocksConverter :
     RocksValueConverter<ConfigurationSerializable>(
         ConfigurationSerializable::class.java
     ) {
+
     override fun toStorage(value: ConfigurationSerializable): ByteArray {
         val outputStream = SerializationUtils.BukkitSerialization.serialize(value)
         outputStream.use {
@@ -143,8 +145,10 @@ object ConfigurationSerializableRocksConverter :
 }
 
 object NbtRocksConverter : ValueConverter<NBTCompound, ByteArray>(
-    NBTCompound::class.java, ByteArray::class.java
+    NBTCompound::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: NBTCompound): ByteArray =
         SerializationUtils.NbtSerialization
             .serialize(value)
@@ -157,8 +161,10 @@ object NbtRocksConverter : ValueConverter<NBTCompound, ByteArray>(
 }
 
 object SkriptDateRocksConverter : ValueConverter<SkriptDate, ByteArray>(
-    SkriptDate::class.java, ByteArray::class.java
+    SkriptDate::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: SkriptDate) =
         BigIntRocksConverter.toStorage(value.time)
 
@@ -167,8 +173,10 @@ object SkriptDateRocksConverter : ValueConverter<SkriptDate, ByteArray>(
 }
 
 object SkriptTimeRocksConverter : ValueConverter<SkriptTime, ByteArray>(
-    SkriptTime::class.java, ByteArray::class.java
+    SkriptTime::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: SkriptTime) =
         IntRocksConverter.toStorage(value.ticks)
 
@@ -177,8 +185,10 @@ object SkriptTimeRocksConverter : ValueConverter<SkriptTime, ByteArray>(
 }
 
 object SkriptTimespanRocksConverter : ValueConverter<SkriptTimespan, ByteArray>(
-    SkriptTimespan::class.java, ByteArray::class.java
+    SkriptTimespan::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: SkriptTimespan) =
         BigIntRocksConverter.toStorage(value.duration.toMillis())
 

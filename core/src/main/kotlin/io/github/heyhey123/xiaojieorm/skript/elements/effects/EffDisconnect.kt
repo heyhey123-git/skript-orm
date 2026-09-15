@@ -15,6 +15,7 @@ import org.bukkit.event.Event
 @Example("disconnect from the current database")
 @Since("1.0")
 class EffDisconnect : AsyncEffect() {
+
     companion object {
         init {
             Skript.registerEffect(

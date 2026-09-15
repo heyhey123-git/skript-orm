@@ -10,6 +10,7 @@ import kotlin.test.assertNotSame
 import kotlin.test.assertSame
 
 class QuerySnapshotTest {
+
     @Test
     fun `single-row write queries snapshot their values`() {
         val source = linkedMapOf<String, Any?>("name" to "before")
@@ -17,7 +18,7 @@ class QuerySnapshotTest {
             TestInsertOne(source).values,
             TestInsertIfAbsent(source).values,
             TestUpdateById(1, source).values,
-            TestUpsertById(1, source).values,
+            TestUpsertById(1, source).values
         )
 
         source["name"] = "after"
@@ -43,9 +44,9 @@ class QuerySnapshotTest {
         assertEquals(
             listOf(
                 mapOf("id" to 1, "name" to "first"),
-                mapOf("id" to 2, "name" to "second"),
+                mapOf("id" to 2, "name" to "second")
             ),
-            query.valuesList,
+            query.valuesList
         )
         assertNotSame(source, query.valuesList)
         assertNotSame(first, query.valuesList[0])
@@ -79,30 +80,36 @@ class QuerySnapshotTest {
     }
 
     private class TestInsertOne(values: Map<String, Any?>) : InsertOne(values) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 
     private class TestInsertIfAbsent(values: Map<String, Any?>) : InsertIfAbsent(values) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 
     private class TestUpdateById(id: Any, values: Map<String, Any?>) : UpdateById(id, values) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 
     private class TestUpsertById(id: Any, values: Map<String, Any?>) : UpsertById(id, values) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 
     private class TestInsertMany(valuesList: List<Map<String, Any?>>) : InsertMany(valuesList) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 
     private class TestUpdate(
         values: Map<String, Any?>,
         limit: Int?,
-        where: WhereClause?,
+        where: WhereClause?
     ) : Update(values, limit, where) {
+
         override suspend fun execute(table: Table) = WriteResult(0)
     }
 }

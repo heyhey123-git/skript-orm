@@ -8,6 +8,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class TypeRegistryTest {
+
     @Test
     fun `type id codes round trip exactly`() {
         TypeId.entries.forEach { typeId -> assertSame(typeId, TypeId.fromCode(typeId.code)) }
@@ -49,6 +50,6 @@ class TypeRegistryTest {
     }
 
     private class TestDataTypes(
-        override val typesRegistry: MutableMap<TypeId, DataType<*>>,
+        override val typesRegistry: MutableMap<TypeId, DataType<*>>
     ) : DataTypes()
 }

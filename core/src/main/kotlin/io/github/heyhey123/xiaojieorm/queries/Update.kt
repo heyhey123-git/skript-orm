@@ -14,5 +14,6 @@ abstract class Update(
     val limit: Int?,
     val where: WhereClause?
 ) : Query<WriteResult>() {
+
     val values: Map<String, Any?> = values.toMap()
 }

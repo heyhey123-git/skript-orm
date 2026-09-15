@@ -10,13 +10,16 @@ import org.bukkit.event.Event
 
 @Name("Delete Entity By ID")
 @Description("Deletes one row by its registered primary-key value. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
-@Example("""
+@Example(
+    """
 delete one entity from table "users" by id {_id} and wait
 if last database error is set:
     send "Delete failed: %last database error%"
-""")
+"""
+)
 @Since("1.0")
 class SecDeleteById : SecWriteBase() {
+
     companion object {
         init {
             Skript.registerSection(SecDeleteById::class.java, "delete [one] [entity] from [table] %string% by id %object% [wait:and wait]")

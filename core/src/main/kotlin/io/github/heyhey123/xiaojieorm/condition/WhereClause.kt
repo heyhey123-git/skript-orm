@@ -5,6 +5,7 @@ package io.github.heyhey123.xiaojieorm.condition
  * Implementations defensively copy the supplied condition list.
  */
 sealed class WhereClause {
+
     /** Whether the combined predicate is negated (`NOT ANY` or `NOT ALL`). */
     abstract val negated: Boolean
 
@@ -22,6 +23,7 @@ sealed class WhereClause {
         override val negated: Boolean,
         conditions: List<Condition>
     ) : WhereClause() {
+
         override val conditions: List<Condition> = conditions.toList()
 
         init {
@@ -36,6 +38,7 @@ sealed class WhereClause {
         override val negated: Boolean,
         conditions: List<Condition>
     ) : WhereClause() {
+
         override val conditions: List<Condition> = conditions.toList()
 
         init {
@@ -43,4 +46,3 @@ sealed class WhereClause {
         }
     }
 }
-

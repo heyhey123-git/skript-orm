@@ -21,6 +21,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class JdbcInsertManyTest {
+
     private val table = Table(
         "items",
         listOf(

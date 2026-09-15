@@ -1,8 +1,8 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
 import ch.njol.skript.Skript
-import ch.njol.skript.doc.*
 import ch.njol.skript.config.SectionNode
+import ch.njol.skript.doc.*
 import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
@@ -27,16 +27,19 @@ import org.bukkit.event.Event
 
 @Name("Register Database Table")
 @Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Failures are exposed as the last database error.")
-@Example("""
+@Example(
+    """
 register a database table "users":
     id: bigint, primary key, auto increment, not null
     name: string(64), not null
     age: int, nullable
-""")
+"""
+)
 @Since("1.0")
 class SecRegisterTable : Section() {
 
     companion object {
+
         private val COLUMN_PATTERN = Regex("^\\s*([\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*)\\s*:\\s*([a-zA-Z][a-zA-Z0-9]*)(?:\\s*\\(\\s*(\\d+)\\s*\\))?(.*)$")
 
         init {
@@ -149,12 +152,15 @@ class SecRegisterTable : Section() {
         }
 
         val table = try {
-            Table(tableName, columns.map { raw ->
-                val type = requireNotNull(database.dataTypes[raw.typeCode]) {
-                    "Data type '${raw.typeCode}' is not supported by the connected database."
+            Table(
+                tableName,
+                columns.map { raw ->
+                    val type = requireNotNull(database.dataTypes[raw.typeCode]) {
+                        "Data type '${raw.typeCode}' is not supported by the connected database."
+                    }
+                    createColumn(raw, type)
                 }
-                createColumn(raw, type)
-            })
+            )
         } catch (error: IllegalArgumentException) {
             return fail(actualEvent, trigger, error.message ?: "Invalid table definition.")
         }

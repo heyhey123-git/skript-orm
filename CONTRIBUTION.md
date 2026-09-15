@@ -13,13 +13,13 @@ surface that is pleasant to use**. When a change and a principle disagree, the p
 
 ## 1. Project layout
 
-| Module | Responsibility |
-| --- | --- |
-| `core` | Abstractions, the public API, and all Skript integration |
-| `generic-jdbc-implementation` | Shared JDBC behaviour, including the MySQL dialect |
-| `postgresql-implementation` | PostgreSQL-specific JDBC behaviour |
-| `mongodb-implementation` | MongoDB behaviour |
-| `rocksdb-implementation` | RocksDB behaviour |
+| Module                        | Responsibility                                           |
+|-------------------------------|----------------------------------------------------------|
+| `core`                        | Abstractions, the public API, and all Skript integration |
+| `generic-jdbc-implementation` | Shared JDBC behaviour, including the MySQL dialect       |
+| `postgresql-implementation`   | PostgreSQL-specific JDBC behaviour                       |
+| `mongodb-implementation`      | MongoDB behaviour                                        |
+| `rocksdb-implementation`      | RocksDB behaviour                                        |
 
 The root project builds the shaded plugin jar. `-PbundleModules=a,b` selects which implementations
 are bundled; it defaults to `generic-jdbc-implementation`.
@@ -169,7 +169,9 @@ In short:
 
 - 4 spaces, LF, UTF-8, no trailing whitespace, one final newline.
 - Imports are ordered `*`, `java.**`, `javax.**`, `kotlin.**`. Wildcards are rejected, except for
-  the two paths the `.editorconfig` allows: `java.util.*` and `ch.njol.skript.doc.*`.
+  the single package the `.editorconfig` allows: `ch.njol.skript.doc.*`. Every other import is
+  written out; `java.util` in particular, because ktlint cannot reliably parse more than the first
+  entry of that list.
 - No trailing commas in multi-line argument lists.
 - Colons in supertype lists and type-parameter bounds are written `Foo : Bar`.
 - **Code, KDoc, and comments are written in English.** Chinese is fine in documentation and in

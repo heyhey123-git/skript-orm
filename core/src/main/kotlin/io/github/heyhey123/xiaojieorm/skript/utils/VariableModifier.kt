@@ -5,6 +5,7 @@ import ch.njol.skript.lang.Variable
 import org.bukkit.event.Event
 
 object VariableModifier {
+
     /** Deletes all entries under [variable]. */
     fun clear(variable: Variable<*>, event: Event?) {
         variable.change(event, null, ChangeMode.DELETE)

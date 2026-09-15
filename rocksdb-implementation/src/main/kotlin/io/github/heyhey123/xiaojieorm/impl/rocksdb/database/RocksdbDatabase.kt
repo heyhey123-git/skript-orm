@@ -23,6 +23,7 @@ import java.util.concurrent.ConcurrentHashMap
 class RocksdbDatabase : Database() {
 
     companion object {
+
         /** Name of the column family reserved for ORM metadata. */
         const val METADATA_COLUMN_FAMILY = "__xiaojieorm_metadata__"
 

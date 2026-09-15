@@ -16,6 +16,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class JdbcDataCursorTest {
+
     @Test
     fun `next delegates to result set`() {
         val resultSet = mockk<ResultSet>()
@@ -103,6 +104,6 @@ class JdbcDataCursorTest {
     private fun cursor(
         resultSet: ResultSet = mockk(relaxed = true),
         statement: Statement = mockk(relaxed = true),
-        connection: Connection = mockk(relaxed = true),
+        connection: Connection = mockk(relaxed = true)
     ) = JdbcDataCursor(resultSet, statement, connection)
 }

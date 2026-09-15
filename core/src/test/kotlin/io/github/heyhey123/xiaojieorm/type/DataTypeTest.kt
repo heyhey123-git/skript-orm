@@ -6,6 +6,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class DataTypeTest {
+
     @Test
     fun `primitive data types accept boxed JVM values`() {
         val cases = listOf(
@@ -14,13 +15,13 @@ class DataTypeTest {
             IntDataType().domainType to 1,
             BigIntDataType().domainType to 1L,
             FloatDataType().domainType to 1.0f,
-            DoubleDataType().domainType to 1.0,
+            DoubleDataType().domainType to 1.0
         )
 
         cases.forEach { (domainType, value) ->
             assertTrue(
                 domainType.isInstance(value),
-                "${domainType.name} should accept boxed value ${value::class.java.name}",
+                "${domainType.name} should accept boxed value ${value::class.java.name}"
             )
             assertTrue(!domainType.isPrimitive, "${domainType.name} must be a boxed JVM class")
         }
@@ -29,6 +30,7 @@ class DataTypeTest {
     @Test
     fun `default converter preserves values and runtime types`() {
         val dataType = IntDataType()
+
         @Suppress("UNCHECKED_CAST")
         val converter = dataType.converter as ValueConverter<Int, Int>
         val value = 42

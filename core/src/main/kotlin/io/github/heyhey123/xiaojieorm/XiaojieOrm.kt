@@ -11,6 +11,7 @@ import org.bukkit.plugin.java.JavaPlugin
 
 class XiaojieOrm : JavaPlugin() {
     companion object {
+
         lateinit var instance: XiaojieOrm
             private set
 
@@ -36,7 +37,8 @@ class XiaojieOrm : JavaPlugin() {
         for (candidate in candidates) {
             try {
                 Class.forName(candidate)
-            } catch (_: ClassNotFoundException) { }
+            } catch (_: ClassNotFoundException) {
+            }
         }
     }
 

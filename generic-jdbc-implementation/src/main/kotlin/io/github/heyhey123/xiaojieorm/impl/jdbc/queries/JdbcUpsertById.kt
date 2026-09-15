@@ -12,6 +12,7 @@ open class JdbcUpsertById(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : UpsertById(id, values), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Upsert values cannot be empty." }
         val primaryKey = requireNotNull(table.primaryKey) { "Table ${table.name} does not have a primary key." }

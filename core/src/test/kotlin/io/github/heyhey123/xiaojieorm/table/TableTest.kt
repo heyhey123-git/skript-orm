@@ -9,6 +9,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class TableTest {
+
     @Test
     fun `table snapshots columns in registration order`() {
         val id = Column("id", IntDataType(), isPrimaryKey = true)
@@ -31,8 +32,8 @@ class TableTest {
                 "users",
                 listOf(
                     Column("id", IntDataType()),
-                    Column("id", IntDataType()),
-                ),
+                    Column("id", IntDataType())
+                )
             )
         }
     }
@@ -44,8 +45,8 @@ class TableTest {
                 "users",
                 listOf(
                     Column("id", IntDataType(), isPrimaryKey = true),
-                    Column("external_id", StringDataType(), isPrimaryKey = true),
-                ),
+                    Column("external_id", StringDataType(), isPrimaryKey = true)
+                )
             )
         }
     }
@@ -82,7 +83,7 @@ class TableTest {
             isPrimaryKey = false,
             isAutoIncrement = false,
             isNullable = false,
-            size = 32,
+            size = 32
         )
         val table = Table("values_table", listOf(column))
 

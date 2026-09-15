@@ -13,7 +13,8 @@ abstract class SelectPage(
     val pageSize: Int,
     val pageIndex: Int,
     val where: WhereClause?
-): Query<CursorResult>() {
+) : Query<CursorResult>() {
+
     init {
         require(pageSize > 0) { "Page size must be positive." }
         require(pageIndex >= 1) { "Page index must be at least one." }

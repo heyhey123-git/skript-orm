@@ -27,7 +27,7 @@ interface DataCursor : AutoCloseable {
      * @param dataType The SQL type to use for conversion.
      * @return The value of the column converted to the specified type, or null if the value is SQL NULL.
      */
-    fun <T: Any> get(column: String, dataType: DataType<T>): T?
+    fun <T : Any> get(column: String, dataType: DataType<T>): T?
 
     /**
      * Retrieves the value of the specified column index as the specified SQL type.
@@ -38,5 +38,4 @@ interface DataCursor : AutoCloseable {
      * @return The value of the column converted to the specified type, or null if the value is SQL NULL.
      */
     fun <T : Any> get(index: Int, dataType: DataType<T>): T?
-
 }

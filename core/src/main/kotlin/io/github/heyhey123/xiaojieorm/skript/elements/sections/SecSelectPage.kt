@@ -11,12 +11,14 @@ import org.bukkit.event.Event
 
 @Name("Select Page")
 @Description("Selects a one-based page with positive size. Results use page-local row-index and column-name keys, even for one result. Pagination requires a registered primary key. Selects always wait and expose failures as the last database error.")
-@Example("""
+@Example(
+    """
 select page 2 with size 20 from table "users" and store the results in {_page::*}:
     where all:
         active = true
 send "%{_page::1::name}%"
-""")
+"""
+)
 @Since("1.0")
 class SecSelectPage : SecSelectBase() {
 

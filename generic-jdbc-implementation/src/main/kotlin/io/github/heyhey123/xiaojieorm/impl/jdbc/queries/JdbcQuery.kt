@@ -18,8 +18,10 @@ import javax.sql.DataSource
  * the returned [JdbcDataCursor], which the caller must close.
  */
 interface JdbcQuery {
+
     val dataSource: DataSource
     val dialect: JdbcDialect
+
     /**
      * Statement timeout in seconds. Zero leaves the driver's default unchanged; negative values
      * are rejected when a statement is configured.

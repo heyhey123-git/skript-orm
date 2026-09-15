@@ -10,7 +10,8 @@ import org.bson.Document
 class MongoDeleteById(
     id: Any,
     override val database: MongoDatabase
-): DeleteById(id), MongoQuery {
+) : DeleteById(id), MongoQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Document>(table.name)
         val primaryKeyColumn = table.primaryKey

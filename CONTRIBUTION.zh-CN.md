@@ -12,13 +12,13 @@ Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 
 ## 1. 项目结构
 
-| 模块 | 职责 |
-| --- | --- |
-| `core` | 抽象、公开 API，以及全部 Skript 集成 |
-| `generic-jdbc-implementation` | 通用 JDBC 行为，含 MySQL 方言 |
-| `postgresql-implementation` | PostgreSQL 专属 JDBC 行为 |
-| `mongodb-implementation` | MongoDB 行为 |
-| `rocksdb-implementation` | RocksDB 行为 |
+| 模块                            | 职责                       |
+|-------------------------------|--------------------------|
+| `core`                        | 抽象、公开 API，以及全部 Skript 集成 |
+| `generic-jdbc-implementation` | 通用 JDBC 行为，含 MySQL 方言    |
+| `postgresql-implementation`   | PostgreSQL 专属 JDBC 行为    |
+| `mongodb-implementation`      | MongoDB 行为               |
+| `rocksdb-implementation`      | RocksDB 行为               |
 
 根项目负责产出 shadow 插件 jar。`-PbundleModules=a,b` 选择打包哪些实现，默认只打包
 `generic-jdbc-implementation`。

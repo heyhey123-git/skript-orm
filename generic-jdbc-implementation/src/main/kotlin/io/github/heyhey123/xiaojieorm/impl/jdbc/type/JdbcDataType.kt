@@ -8,6 +8,7 @@ import java.sql.JDBCType
  *
  */
 interface JdbcDataType<T : Any> : DataType<T> {
+
     /**
      * The corresponding JDBC type.
      */

@@ -7,6 +7,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 class JdbcValueConvertersTest {
+
     @Test
     fun `uuid round trips through exactly sixteen bytes`() {
         val value = UUID.fromString("00112233-4455-6677-8899-aabbccddeeff")
@@ -16,7 +17,7 @@ class JdbcValueConvertersTest {
         assertEquals(16, bytes.size)
         assertContentEquals(
             byteArrayOf(0x00, 0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, -120, -103, -86, -69, -52, -35, -18, -1),
-            bytes,
+            bytes
         )
         assertEquals(value, UuidJdbcConverter.fromStorage(bytes))
     }

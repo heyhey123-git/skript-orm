@@ -11,6 +11,7 @@ import java.util.WeakHashMap
  * message through the `last database error` expression after their continuation resumes.
  */
 object SkriptDatabaseErrors {
+
     private val errors = Collections.synchronizedMap(WeakHashMap<Event, String>())
 
     fun clear(event: Event) {

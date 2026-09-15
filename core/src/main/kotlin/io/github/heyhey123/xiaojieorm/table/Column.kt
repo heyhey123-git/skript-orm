@@ -21,7 +21,9 @@ data class Column<T : Any>(
     val isNullable: Boolean = true,
     val size: Int? = null
 ) {
+
     companion object {
+
         private val IDENTIFIER_PATTERN = Regex("[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*")
     }
 

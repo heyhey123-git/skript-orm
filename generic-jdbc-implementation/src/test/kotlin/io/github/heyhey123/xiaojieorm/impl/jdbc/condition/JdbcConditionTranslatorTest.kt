@@ -12,6 +12,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class JdbcConditionTranslatorTest {
+
     @Test
     fun `translate renders every comparison and null equality`() {
         val conditions = listOf(

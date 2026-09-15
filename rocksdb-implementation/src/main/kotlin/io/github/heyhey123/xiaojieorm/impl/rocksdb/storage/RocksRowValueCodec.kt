@@ -53,7 +53,7 @@ class RocksRowValueCodec private constructor(
          */
         data class EncodedCol(
             val nameBytes: ByteArray,
-            val valueBytes: ByteArray?,
+            val valueBytes: ByteArray?
         )
 
         val encoded = ArrayList<EncodedCol>(columns.size)

@@ -8,6 +8,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ConditionTest {
+
     @Test
     fun `condition variants preserve domain values`() {
         val marker = Any()

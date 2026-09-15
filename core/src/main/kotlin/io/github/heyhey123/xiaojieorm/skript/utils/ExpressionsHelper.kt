@@ -29,8 +29,6 @@ object ExpressionsHelper {
      * @return the parsed Expression
      * @throws IllegalArgumentException if parsing fails
      */
-    fun parseExpressionNonNull(table: Table, columnName: String, valueStr: String): Expression<*> {
-        return parseExpression(table, columnName, valueStr)
-            ?: throw IllegalArgumentException("Cannot parse expression for column '$columnName': $valueStr")
-    }
+    fun parseExpressionNonNull(table: Table, columnName: String, valueStr: String): Expression<*> = parseExpression(table, columnName, valueStr)
+        ?: throw IllegalArgumentException("Cannot parse expression for column '$columnName': $valueStr")
 }

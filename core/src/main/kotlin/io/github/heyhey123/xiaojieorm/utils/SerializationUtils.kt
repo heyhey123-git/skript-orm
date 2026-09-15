@@ -1,4 +1,5 @@
 @file:Suppress("DEPRECATION")
+
 package io.github.heyhey123.xiaojieorm.utils
 
 import de.tr7zw.nbtapi.NBTCompound
@@ -17,6 +18,7 @@ import java.io.InputStream
 object SerializationUtils {
 
     object BukkitSerialization {
+
         fun serialize(serializable: ConfigurationSerializable): ByteArrayOutputStream {
             val outputStream = ByteArrayOutputStream()
             BukkitObjectOutputStream(outputStream).use {
@@ -38,6 +40,7 @@ object SerializationUtils {
      *
      */
     object NbtSerialization {
+
         fun serialize(serializable: NBTCompound): ByteArrayOutputStream {
             val outputStream = ByteArrayOutputStream()
             serializable.writeCompound(outputStream)

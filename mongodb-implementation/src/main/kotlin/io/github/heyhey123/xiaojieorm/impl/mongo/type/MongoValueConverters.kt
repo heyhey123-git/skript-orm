@@ -12,11 +12,11 @@ import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
 import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
-import java.util.*
-
+import java.util.UUID
 
 object TinyIntMongoValueConverter : ValueConverter<Byte, Int>(
-    Byte::class.java, Int::class.java
+    Byte::class.java,
+    Int::class.java
 ) {
 
     override fun toStorage(value: Byte): Int = value.toInt()
@@ -25,7 +25,8 @@ object TinyIntMongoValueConverter : ValueConverter<Byte, Int>(
 }
 
 object FloatMongoValueConverter : ValueConverter<Float, Double>(
-    Float::class.java, Double::class.java
+    Float::class.java,
+    Double::class.java
 ) {
 
     override fun toStorage(value: Float): Double = value.toDouble()
@@ -34,8 +35,10 @@ object FloatMongoValueConverter : ValueConverter<Float, Double>(
 }
 
 object UuidMongoConverter : ValueConverter<UUID, Binary>(
-    UUID::class.java, Binary::class.java
+    UUID::class.java,
+    Binary::class.java
 ) {
+
     override fun toStorage(value: UUID): Binary {
         val bytes = ByteArray(16)
         val buffer = ByteBuffer.wrap(bytes).apply {
@@ -54,21 +57,23 @@ object UuidMongoConverter : ValueConverter<UUID, Binary>(
 }
 
 object ItemStackMongoConverter : ValueConverter<ItemStack, Binary>(
-    ItemStack::class.java, Binary::class.java
+    ItemStack::class.java,
+    Binary::class.java
 ) {
+
     override fun toStorage(value: ItemStack): Binary {
         val bytes = value.serializeAsBytes()
         return Binary(bytes)
     }
 
-    override fun fromStorage(value: Binary): ItemStack {
-        return ItemStack.deserializeBytes(value.data)
-    }
+    override fun fromStorage(value: Binary): ItemStack = ItemStack.deserializeBytes(value.data)
 }
 
 object LocationMongoConverter : ValueConverter<Location, Binary>(
-    Location::class.java, Binary::class.java
+    Location::class.java,
+    Binary::class.java
 ) {
+
     override fun toStorage(value: Location): Binary {
         val outputStream = SerializationUtils.BukkitSerialization.serialize(value)
         outputStream.use {
@@ -85,7 +90,8 @@ object LocationMongoConverter : ValueConverter<Location, Binary>(
 }
 
 object ConfigurationSerializableMongoConverter : ValueConverter<ConfigurationSerializable, Binary>(
-    ConfigurationSerializable::class.java, Binary::class.java
+    ConfigurationSerializable::class.java,
+    Binary::class.java
 ) {
 
     override fun toStorage(value: ConfigurationSerializable): Binary {
@@ -104,7 +110,8 @@ object ConfigurationSerializableMongoConverter : ValueConverter<ConfigurationSer
 }
 
 object NbtMongoConverter : ValueConverter<NBTCompound, Binary>(
-    NBTCompound::class.java, Binary::class.java
+    NBTCompound::class.java,
+    Binary::class.java
 ) {
 
     override fun toStorage(value: NBTCompound): Binary {
@@ -123,7 +130,8 @@ object NbtMongoConverter : ValueConverter<NBTCompound, Binary>(
 }
 
 object SkriptDateMongoConverter : ValueConverter<SkriptDate, Long>(
-    SkriptDate::class.java, Long::class.java
+    SkriptDate::class.java,
+    Long::class.java
 ) {
 
     override fun toStorage(value: SkriptDate): Long = value.time
@@ -132,7 +140,8 @@ object SkriptDateMongoConverter : ValueConverter<SkriptDate, Long>(
 }
 
 object SkriptTimeMongoConverter : ValueConverter<SkriptTime, Int>(
-    SkriptTime::class.java, Int::class.java
+    SkriptTime::class.java,
+    Int::class.java
 ) {
 
     override fun toStorage(value: SkriptTime): Int = value.ticks
@@ -141,7 +150,8 @@ object SkriptTimeMongoConverter : ValueConverter<SkriptTime, Int>(
 }
 
 object SkriptTimespanMongoConverter : ValueConverter<SkriptTimespan, Long>(
-    SkriptTimespan::class.java, Long::class.java
+    SkriptTimespan::class.java,
+    Long::class.java
 ) {
 
     override fun toStorage(value: SkriptTimespan): Long = value.duration.toMillis()

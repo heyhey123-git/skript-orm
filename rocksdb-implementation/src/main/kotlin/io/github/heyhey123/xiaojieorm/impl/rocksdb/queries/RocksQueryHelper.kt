@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
-import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowKeyEncoder
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.table.Table

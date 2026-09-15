@@ -1,8 +1,8 @@
 package io.github.heyhey123.xiaojieorm.impl.mongo.queries
 
 import com.mongodb.kotlin.client.coroutine.MongoDatabase
-import io.github.heyhey123.xiaojieorm.impl.mongo.condition.MongoConditionTranslator
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
+import io.github.heyhey123.xiaojieorm.impl.mongo.condition.MongoConditionTranslator
 import io.github.heyhey123.xiaojieorm.impl.mongo.result.MongoDataCursor
 import io.github.heyhey123.xiaojieorm.queries.SelectOne
 import io.github.heyhey123.xiaojieorm.result.CursorResult
@@ -14,6 +14,7 @@ class MongoSelectOne(
     where: WhereClause?,
     override val database: MongoDatabase
 ) : SelectOne(where), MongoQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         val collection = database.getCollection<Document>(table.name)
         val filter = where?.let {

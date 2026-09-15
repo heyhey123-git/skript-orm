@@ -13,6 +13,7 @@ class RocksSelectMany(
     where: WhereClause?,
     override val database: RocksdbDatabase
 ) : SelectMany(where), RocksQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         val conditions = RocksConditionTranslator.translate(where, table)
         val cfHandle = database.columnFamilyHandles[table.name]

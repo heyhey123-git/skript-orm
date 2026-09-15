@@ -20,6 +20,7 @@ class JdbcDataCursor(
     private val connection: Connection,
     private val releaseBoundResources: (() -> Unit)? = null
 ) : DataCursor {
+
     private var closed = false
 
     override fun next(): Boolean = resultSet.next()
@@ -56,14 +57,24 @@ class JdbcDataCursor(
         if (closed) return
         closed = true
         var failure: Throwable? = null
-        try { releaseBoundResources?.invoke() } catch (error: Throwable) { failure = error }
-        try { resultSet.close() } catch (error: Throwable) {
+        try {
+            releaseBoundResources?.invoke()
+        } catch (error: Throwable) {
+            failure = error
+        }
+        try {
+            resultSet.close()
+        } catch (error: Throwable) {
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
-        try { statement.close() } catch (error: Throwable) {
+        try {
+            statement.close()
+        } catch (error: Throwable) {
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
-        try { connection.close() } catch (error: Throwable) {
+        try {
+            connection.close()
+        } catch (error: Throwable) {
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
         failure?.let { throw it }

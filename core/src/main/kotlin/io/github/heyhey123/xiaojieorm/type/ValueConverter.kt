@@ -12,6 +12,7 @@ abstract class ValueConverter<D : Any, S : Any>(
     val domainType: Class<D>,
     val storageType: Class<S>
 ) {
+
     /**
      * Converts a value from the domain type to the storage type.
      *

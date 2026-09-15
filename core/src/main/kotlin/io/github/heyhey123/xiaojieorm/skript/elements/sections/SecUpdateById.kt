@@ -10,17 +10,22 @@ import org.bukkit.event.Event
 
 @Name("Update Entity By ID")
 @Description("Updates one row by its registered primary-key value. The new values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
-@Example("""
+@Example(
+    """
 update one entity in table "users" by id {_id} and wait:
     values:
         name: "Alice"
         age: 26
-""")
-@Example("""
+"""
+)
+@Example(
+    """
 update one entity {_changes::*} in table "users" by id {_id}
-""")
+"""
+)
 @Since("1.0")
 class SecUpdateById : SecWriteBase() {
+
     companion object {
         init {
             Skript.registerSection(

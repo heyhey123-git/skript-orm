@@ -15,6 +15,7 @@ open class JdbcUpdate(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : Update(values, limit, where), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Update values cannot be empty." }
         // The SET list is exactly the supplied keys, so the map has to stay sparse: an absent key

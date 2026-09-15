@@ -3,6 +3,7 @@ package io.github.heyhey123.xiaojieorm.skript.utils
 import ch.njol.skript.config.Node
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
+import io.github.heyhey123.xiaojieorm.skript.utils.ValuesParser.requireValuesHeader
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
@@ -14,6 +15,7 @@ data class RawValue(
 data class RawValues(
     val values: List<RawValue>
 ) {
+
     fun bind(table: Table): ParsedValues {
         val parsedMap = mutableMapOf<String, Expression<*>?>()
         for (rawValue in values) {
@@ -42,15 +44,15 @@ data class RawValues(
 data class RawValuesList(
     val valuesList: List<RawValues>
 ) {
-    fun bind(table: Table): ParsedValuesList {
-        return ParsedValuesList(valuesList.map { it.bind(table) })
-    }
+
+    fun bind(table: Table): ParsedValuesList = ParsedValuesList(valuesList.map { it.bind(table) })
 }
 
 data class ParsedValues(
     val table: Table,
     val values: Map<String, Expression<*>?>
 ) {
+
     fun resolve(event: Event?): Map<String, Any?> {
         val resolvedMap = mutableMapOf<String, Any?>()
         for ((columnName, expression) in values) {
@@ -66,12 +68,12 @@ data class ParsedValues(
 data class ParsedValuesList(
     val valuesList: List<ParsedValues>
 ) {
-    fun resolve(event: Event?): List<Map<String, Any?>> {
-        return valuesList.map { it.resolve(event) }
-    }
+
+    fun resolve(event: Event?): List<Map<String, Any?>> = valuesList.map { it.resolve(event) }
 }
 
 object ValuesParser {
+
     /**
      * Column identifiers follow the same rule as [Table] and [io.github.heyhey123.xiaojieorm.table.Column]: a Unicode letter, Unicode
      * letter number or underscore, followed by Unicode letters, marks, digits or underscores.
@@ -185,4 +187,3 @@ object ValuesParser {
         return RawValuesList(valuesList)
     }
 }
-

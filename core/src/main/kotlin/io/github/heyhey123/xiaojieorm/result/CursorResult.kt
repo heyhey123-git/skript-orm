@@ -7,7 +7,7 @@ package io.github.heyhey123.xiaojieorm.result
  */
 data class CursorResult(
     val cursor: DataCursor
-): ExecutionResult {
+) : ExecutionResult {
 
     override fun asCursorOrNull(): DataCursor = cursor
 

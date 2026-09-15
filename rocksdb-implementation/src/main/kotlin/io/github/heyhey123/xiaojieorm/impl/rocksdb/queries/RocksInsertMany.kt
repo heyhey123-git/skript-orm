@@ -134,6 +134,7 @@ class RocksInsertMany(
     )
 
     private class ByteArrayKey(private val bytes: ByteArray) {
+
         override fun equals(other: Any?): Boolean =
             other is ByteArrayKey && bytes.contentEquals(other.bytes)
 

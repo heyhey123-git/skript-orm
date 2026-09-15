@@ -10,21 +10,26 @@ import org.bukkit.event.Event
 
 @Name("Update Entities")
 @Description("Updates rows, optionally with a positive limit and nested where block. The new values may be written in the section body, or taken from a list variable shaped like a select result. Omitting where updates all rows allowed by the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
-@Example("""
+@Example(
+    """
 update entities in table "users" with limit 10 and wait:
     values:
         active: false
     where all:
         last_seen < {_cutoff}
         active = true
-""")
-@Example("""
+"""
+)
+@Example(
+    """
 update entities {_changes::*} in table "users" and wait:
     where all:
         name = "Alice"
-""")
+"""
+)
 @Since("1.0")
 class SecUpdate : SecWriteBase() {
+
     companion object {
         init {
             Skript.registerSection(

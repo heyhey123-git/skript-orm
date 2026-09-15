@@ -6,7 +6,8 @@ import io.github.heyhey123.xiaojieorm.queries.Queries
 
 class RocksQueries(
     val database: RocksdbDatabase
-): Queries {
+) : Queries {
+
     override fun selectById(id: Any) = RocksSelectById(id, database)
 
     override fun selectOne(where: WhereClause?) = RocksSelectOne(where, database)

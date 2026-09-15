@@ -10,17 +10,22 @@ import org.bukkit.event.Event
 
 @Name("Upsert Entity By ID")
 @Description("Updates the row with the given primary-key value or inserts it when absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support depends on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
-@Example("""
+@Example(
+    """
 upsert one entity in table "users" by id {_id} and wait:
     values:
         name: "Alice"
         age: 26
-""")
-@Example("""
+"""
+)
+@Example(
+    """
 upsert one entity {_user::*} in table "users" by id {_id}
-""")
+"""
+)
 @Since("1.0")
 class SecUpsertById : SecWriteBase() {
+
     companion object {
         init {
             Skript.registerSection(

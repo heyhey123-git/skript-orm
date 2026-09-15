@@ -11,6 +11,7 @@ open class JdbcSelectById(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : SelectById(id), JdbcQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         val primaryKey = requireNotNull(table.primaryKey) { "Table ${table.name} does not have a primary key." }
         val whereSql = "WHERE ${dialect.quoteIdentifier(primaryKey.name)} = ?"

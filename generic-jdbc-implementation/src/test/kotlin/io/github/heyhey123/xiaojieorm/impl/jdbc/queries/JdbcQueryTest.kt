@@ -22,6 +22,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class JdbcQueryTest {
+
     private val table = Table("items", listOf(Column("id", IntJdbcDataType(), isPrimaryKey = true)))
 
     @Test
@@ -30,7 +31,7 @@ class JdbcQueryTest {
         val statement = mockk<PreparedStatement>(relaxed = true)
         val where = WhereClause.All(
             false,
-            listOf(Condition.Equals("id", null), Condition.Between("id", 2, 3)),
+            listOf(Condition.Equals("id", null), Condition.Between("id", 2, 3))
         )
 
         val next = query.bindWhere(table, where, statement, startIndex = 4)
@@ -164,6 +165,6 @@ class JdbcQueryTest {
     private class TestJdbcQuery(
         override val dataSource: DataSource,
         override val queryTimeoutSeconds: Int = 0,
-        override val dialect: JdbcDialect = GenericJdbcDialect,
+        override val dialect: JdbcDialect = GenericJdbcDialect
     ) : JdbcQuery
 }

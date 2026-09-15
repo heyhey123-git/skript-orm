@@ -17,6 +17,7 @@ open class JdbcSelectPage(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : SelectPage(pageSize, pageIndex, where), JdbcQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         require(pageSize > 0) { "Page size must be positive." }
         require(pageIndex >= 1) { "Page index must be at least one." }

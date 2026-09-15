@@ -9,7 +9,8 @@ import org.bson.Document
 class MongoInsertOne(
     values: Map<String, Any?>,
     override val database: MongoDatabase
-): InsertOne(values), MongoQuery {
+) : InsertOne(values), MongoQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Document>(table.name)
         val document = Document(values)

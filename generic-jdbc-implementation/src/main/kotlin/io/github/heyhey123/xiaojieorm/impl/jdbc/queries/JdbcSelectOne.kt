@@ -13,6 +13,7 @@ open class JdbcSelectOne(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : SelectOne(where), JdbcQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
         return executeCursor(dialect.selectOne(table.name, whereSql)) { statement ->

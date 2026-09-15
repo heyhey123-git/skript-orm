@@ -13,6 +13,7 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class QueryContractTest {
+
     private val where = WhereClause.All(false, listOf(Condition.Equals("id", 1)))
 
     @Test
@@ -46,16 +47,40 @@ class QueryContractTest {
     }
 
     private class EmptyCursor : DataCursor {
+
         override fun next() = false
         override fun <T : Any> get(column: String, dataType: DataType<T>): T? = null
         override fun <T : Any> get(index: Int, dataType: DataType<T>): T? = null
         override fun close() = Unit
     }
 
-    private class TestSelectById(id: Any) : SelectById(id) { override suspend fun execute(table: Table) = CursorResult(EmptyCursor()) }
-    private class TestDeleteById(id: Any) : DeleteById(id) { override suspend fun execute(table: Table) = WriteResult(0) }
-    private class TestSelectOne(where: WhereClause?) : SelectOne(where) { override suspend fun execute(table: Table) = CursorResult(EmptyCursor()) }
-    private class TestSelectMany(where: WhereClause?) : SelectMany(where) { override suspend fun execute(table: Table) = CursorResult(EmptyCursor()) }
-    private class TestSelectPage(size: Int, index: Int, where: WhereClause?) : SelectPage(size, index, where) { override suspend fun execute(table: Table) = CursorResult(EmptyCursor()) }
-    private class TestDelete(limit: Int?, where: WhereClause?) : Delete(limit, where) { override suspend fun execute(table: Table) = WriteResult(0) }
+    private class TestSelectById(id: Any) : SelectById(id) {
+
+        override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
+    }
+
+    private class TestDeleteById(id: Any) : DeleteById(id) {
+
+        override suspend fun execute(table: Table) = WriteResult(0)
+    }
+
+    private class TestSelectOne(where: WhereClause?) : SelectOne(where) {
+
+        override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
+    }
+
+    private class TestSelectMany(where: WhereClause?) : SelectMany(where) {
+
+        override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
+    }
+
+    private class TestSelectPage(size: Int, index: Int, where: WhereClause?) : SelectPage(size, index, where) {
+
+        override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
+    }
+
+    private class TestDelete(limit: Int?, where: WhereClause?) : Delete(limit, where) {
+
+        override suspend fun execute(table: Table) = WriteResult(0)
+    }
 }

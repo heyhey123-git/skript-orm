@@ -12,7 +12,8 @@ class MongoUpdateById(
     id: Any,
     values: Map<String, Any?>,
     override val database: MongoDatabase
-): UpdateById(id, values), MongoQuery {
+) : UpdateById(id, values), MongoQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Document>(table.name)
         val primaryKeyColumn = table.primaryKey

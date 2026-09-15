@@ -11,7 +11,7 @@ import org.bson.Document
 class MongoSelectById(
     id: Any,
     override val database: MongoDatabase
-): SelectById(id), MongoQuery {
+) : SelectById(id), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
         val collection = database.getCollection<Document>(table.name)

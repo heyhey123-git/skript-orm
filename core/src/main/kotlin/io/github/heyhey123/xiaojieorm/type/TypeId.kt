@@ -6,6 +6,7 @@ package io.github.heyhey123.xiaojieorm.type
  * @property code The code of the type.
  */
 enum class TypeId(val code: String) {
+
     BOOLEAN("boolean"),
     TINYINT("tinyint"),
     INT("int"),
@@ -23,6 +24,7 @@ enum class TypeId(val code: String) {
     TIMESPAN("timespan");
 
     companion object {
+
         fun fromCode(code: String): TypeId? = entries.find { it.code == code }
     }
 }

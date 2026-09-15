@@ -32,6 +32,7 @@ internal object RocksInsertPrimaryKeyResolver {
             )
 
             column.isAutoIncrement -> resolveGenerated(column, currentHighWaterMark)
+
             else -> throw IllegalArgumentException(
                 "Primary key value for column ${column.name} is missing"
             )

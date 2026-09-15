@@ -38,8 +38,10 @@ private inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
 
 /** Stores UUIDs as 16 big-endian bytes: most-significant bits followed by least-significant bits. */
 object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
-    UUID::class.java, ByteArray::class.java
+    UUID::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: UUID): ByteArray {
         val bytes = ByteArray(16)
         val buffer = ByteBuffer.wrap(bytes).apply {
@@ -59,8 +61,10 @@ object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
 
 /** Stores ItemStacks as Bukkit's binary item format in a statement-owned BLOB. */
 object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
-    ItemStack::class.java, Blob::class.java
+    ItemStack::class.java,
+    Blob::class.java
 ) {
+
     override fun toStorage(value: ItemStack): Blob = SerialBlob(value.serializeAsBytes())
 
     override fun fromStorage(value: Blob): ItemStack = value.consumeBytes { bytes ->
@@ -74,8 +78,10 @@ object ItemStackJdbcConverter : ValueConverter<ItemStack, Blob>(
 
 /** Stores Bukkit Locations as Bukkit object-serialization bytes. */
 object LocationJdbcConverter : ValueConverter<Location, ByteArray>(
-    Location::class.java, ByteArray::class.java
+    Location::class.java,
+    ByteArray::class.java
 ) {
+
     override fun toStorage(value: Location): ByteArray =
         SerializationUtils.BukkitSerialization.serialize(value).use { it.toByteArray() }
 
@@ -93,6 +99,7 @@ object ConfigurationSerializableJdbcConverter :
         ConfigurationSerializable::class.java,
         Blob::class.java
     ) {
+
     override fun toStorage(value: ConfigurationSerializable): Blob =
         SerializationUtils.BukkitSerialization.serialize(value).use { SerialBlob(it.toByteArray()) }
 
@@ -108,8 +115,10 @@ object ConfigurationSerializableJdbcConverter :
 }
 
 object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
-    NBTCompound::class.java, Blob::class.java
+    NBTCompound::class.java,
+    Blob::class.java
 ) {
+
     override fun toStorage(value: NBTCompound): Blob =
         SerializationUtils.NbtSerialization.serialize(value).use { SerialBlob(it.toByteArray()) }
 
@@ -126,24 +135,30 @@ object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
 
 /** Stores Skript dates as [Date] values. */
 object SkriptDateJdbcConverter : ValueConverter<SkriptDate, Date>(
-    SkriptDate::class.java, Date::class.java
+    SkriptDate::class.java,
+    Date::class.java
 ) {
+
     override fun toStorage(value: SkriptDate): Date = Date(value.time)
     override fun fromStorage(value: Date): SkriptDate = SkriptDate(value.time)
 }
 
 /** Stores Skript times as their integer tick count. */
 object SkriptTimeJdbcConverter : ValueConverter<SkriptTime, Int>(
-    SkriptTime::class.java, Integer.TYPE
+    SkriptTime::class.java,
+    Integer.TYPE
 ) {
+
     override fun toStorage(value: SkriptTime): Int = value.ticks
     override fun fromStorage(value: Int): SkriptTime = SkriptTime(value)
 }
 
 /** Stores Skript timespans as milliseconds. */
 object SkriptTimespanJdbcConverter : ValueConverter<SkriptTimespan, Long>(
-    SkriptTimespan::class.java, Long::class.java
+    SkriptTimespan::class.java,
+    Long::class.java
 ) {
+
     override fun toStorage(value: SkriptTimespan): Long = value.duration.toMillis()
     override fun fromStorage(value: Long): SkriptTimespan = SkriptTimespan(value)
 }

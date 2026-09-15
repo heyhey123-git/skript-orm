@@ -11,6 +11,7 @@ open class JdbcDeleteById(
     override val dataSource: DataSource,
     override val dialect: JdbcDialect
 ) : DeleteById(id), JdbcQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val primaryKey = requireNotNull(table.primaryKey) { "Table ${table.name} does not have a primary key." }
         val whereSql = "WHERE ${dialect.quoteIdentifier(primaryKey.name)} = ?"

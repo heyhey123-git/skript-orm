@@ -27,14 +27,16 @@ import org.skriptlang.skript.lang.entry.util.LiteralEntryData
 
 @Name("Create Database Connection")
 @Description("Connects to a registered database implementation and makes it current. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
-@Example("""
+@Example(
+    """
 create a connection to database "MySQL" with properties:
     url: "jdbc:mysql://localhost:3306/mydb"
     username: "root"
     password: "123456"
 if last database error is set:
     send "Connection failed: %last database error%"
-""")
+"""
+)
 @Since("1.0")
 class SecCreateConnection : Section() {
 

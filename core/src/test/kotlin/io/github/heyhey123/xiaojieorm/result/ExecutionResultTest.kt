@@ -9,6 +9,7 @@ import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class ExecutionResultTest {
+
     @Test
     fun `cursor result exposes only cursor projection`() {
         val cursor = EmptyCursor()
@@ -31,6 +32,7 @@ class ExecutionResultTest {
     }
 
     private class EmptyCursor : DataCursor {
+
         override fun next() = false
         override fun <T : Any> get(column: String, dataType: DataType<T>): T? = null
         override fun <T : Any> get(index: Int, dataType: DataType<T>): T? = null

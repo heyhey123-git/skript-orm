@@ -6,6 +6,7 @@ import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcPageSql
 
 /** PostgreSQL-specific SQL rendering; query execution remains in the generic JDBC implementation. */
 object PgJdbcDialect : JdbcDialect {
+
     override fun renderIdentifier(identifier: String): String =
         "\"${identifier.replace("\"", "\"\"")}\""
 

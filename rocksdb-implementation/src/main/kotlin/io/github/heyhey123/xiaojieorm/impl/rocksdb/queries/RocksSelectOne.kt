@@ -34,11 +34,10 @@ class RocksSelectOne(
                     conditions.predicate,
                     database.database!!,
                     cfHandle,
-                    limit = 1,
+                    limit = 1
                 )
                 return CursorResult(RocksDataCursor(rows))
             }
         }
     }
-
 }

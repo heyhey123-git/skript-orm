@@ -56,12 +56,16 @@ object RocksConditionTranslator {
             }
 
             is Condition.GreaterThan -> ordered(column, condition.left, condition.right) { it > 0 }
+
             is Condition.GreaterThanOrEquals -> ordered(column, condition.left, condition.right) { it >= 0 }
+
             is Condition.LessThan -> ordered(column, condition.left, condition.right) { it < 0 }
+
             is Condition.LessThanOrEquals -> ordered(column, condition.left, condition.right) { it <= 0 }
+
             is Condition.Between -> { row ->
                 RocksValueComparator.compare(column, row[condition.left], condition.start) >= 0 &&
-                        RocksValueComparator.compare(column, row[condition.left], condition.end) <= 0
+                    RocksValueComparator.compare(column, row[condition.left], condition.end) <= 0
             }
         }
     }

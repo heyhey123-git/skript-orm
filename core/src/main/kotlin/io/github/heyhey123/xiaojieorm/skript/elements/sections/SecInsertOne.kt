@@ -9,22 +9,27 @@ import org.bukkit.event.Event
 
 @Name("Insert One Entity")
 @Description("Inserts one row. The values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
-@Example("""
+@Example(
+    """
 insert one entity into table "users" and wait:
     values:
         name: "Alice"
         age: 25
 if last database error is set:
     send "Insert failed: %last database error%"
-""")
-@Example("""
+"""
+)
+@Example(
+    """
 select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = "Alice"
 insert one {_user::*} into table "archived_users"
-""")
+"""
+)
 @Since("1.0")
 class SecInsertOne : SecWriteBase() {
+
     companion object {
         init {
             Skript.registerSection(

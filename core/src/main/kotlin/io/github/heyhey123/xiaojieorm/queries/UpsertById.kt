@@ -12,5 +12,6 @@ abstract class UpsertById(
     val id: Any,
     values: Map<String, Any?>
 ) : Query<WriteResult>() {
+
     val values: Map<String, Any?> = values.toMap()
 }

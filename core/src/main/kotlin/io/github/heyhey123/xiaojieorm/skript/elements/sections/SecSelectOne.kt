@@ -9,15 +9,16 @@ import org.bukkit.event.Event
 
 @Name("Select One Entity")
 @Description("Selects at most one row and stores it by column name, such as {_user::name}. A nested where block may filter it. Selects always wait, whether or not and wait is written, and failures are exposed as the last database error.")
-@Example("""
+@Example(
+    """
 select one entity from table "users" and store the result in {_user::*}:
     where any:
         name = "Alice"
         age > 25
 send "name: %{_user::name}%, age: %{_user::age}%"
-""")
+"""
+)
 @Since("1.0")
-
 class SecSelectOne : SecSelectBase() {
 
     companion object {

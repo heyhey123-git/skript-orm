@@ -26,6 +26,7 @@ class Table(
     }
 
     companion object {
+
         private val IDENTIFIER_PATTERN = Regex("[\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*")
     }
 

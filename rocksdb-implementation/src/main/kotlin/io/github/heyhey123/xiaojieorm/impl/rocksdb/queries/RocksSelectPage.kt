@@ -15,6 +15,7 @@ class RocksSelectPage(
     where: WhereClause?,
     override val database: RocksdbDatabase
 ) : SelectPage(pageSize, pageIndex, where), RocksQuery {
+
     override suspend fun execute(table: Table): CursorResult {
         require(pageSize > 0) { "Page size must be positive." }
         require(pageIndex >= 1) { "Page index must be 1-based and positive." }

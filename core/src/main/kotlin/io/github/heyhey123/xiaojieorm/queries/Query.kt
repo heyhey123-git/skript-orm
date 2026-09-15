@@ -9,6 +9,7 @@ import io.github.heyhey123.xiaojieorm.table.Table
  * @param T The type of the result returned by the query.
  */
 abstract class Query<T : ExecutionResult> {
+
     /**
      * Executes the query asynchronously.
      *

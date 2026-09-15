@@ -7,6 +7,7 @@ import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
  *
  */
 interface RocksQuery {
+
     /**
      * The RocksDB database instance.
      */

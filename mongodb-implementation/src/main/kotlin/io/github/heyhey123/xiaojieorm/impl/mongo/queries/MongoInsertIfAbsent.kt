@@ -11,6 +11,7 @@ class MongoInsertIfAbsent(
     values: Map<String, Any?>,
     override val database: MongoDatabase
 ) : InsertIfAbsent(values), MongoQuery {
+
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Document>(table.name)
         val document = Document(values)

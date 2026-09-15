@@ -12,6 +12,7 @@ import kotlin.coroutines.CoroutineContext
  * @constructor Create empty Sync dispatcher
  */
 object SyncDispatcher : CoroutineDispatcher() {
+
     override fun dispatch(context: CoroutineContext, block: Runnable) {
         if (Bukkit.isPrimaryThread()) {
             block.run()

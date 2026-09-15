@@ -6,6 +6,7 @@ import java.util.logging.Level
 import java.util.logging.Logger
 
 object ErrorPrinter {
+
     private val logger: Logger
         get() = XiaojieOrm.instance.logger
 

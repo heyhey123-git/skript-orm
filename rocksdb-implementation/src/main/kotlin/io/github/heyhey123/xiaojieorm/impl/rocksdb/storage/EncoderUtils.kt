@@ -6,6 +6,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
 
 object EncoderUtils {
+
     /**
      * A counter to ensure uniqueness within the same second.
      */
@@ -52,7 +53,6 @@ object EncoderUtils {
             Random.nextInt() and KEEP_THREE_BYTES_MASK
         }
     }
-
 
     /**
      * The current process ID.

@@ -10,5 +10,6 @@ import io.github.heyhey123.xiaojieorm.result.WriteResult
 abstract class InsertIfAbsent(
     values: Map<String, Any?>
 ) : Query<WriteResult>() {
+
     val values: Map<String, Any?> = values.toMap()
 }
