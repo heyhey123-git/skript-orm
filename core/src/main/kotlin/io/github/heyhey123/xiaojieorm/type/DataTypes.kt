@@ -4,7 +4,7 @@ import de.tr7zw.nbtapi.NBTCompound
 import org.bukkit.Location
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
-import java.util.*
+import java.util.UUID
 import kotlin.jvm.javaObjectType
 
 typealias SkriptDate = ch.njol.skript.util.Date
@@ -90,7 +90,7 @@ open class ConfigurationSerializableDataType : DataType<ConfigurationSerializabl
     override val typeCode: String = "bukkitserializable"
 }
 
-open class NbtDataType: DataType<NBTCompound> {
+open class NbtDataType : DataType<NBTCompound> {
     override val domainType: Class<NBTCompound> = NBTCompound::class.java
     override val typeCode: String = "nbtcompound"
 }

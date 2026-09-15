@@ -46,14 +46,6 @@ class Table(
     }
 
     /**
-     * Checks if the table has a column with the specified name.
-     *
-     * @param columnName The name of the column to check.
-     * @return True if the column exists, false otherwise.
-     */
-    fun hasColumn(columnName: String): Boolean = columnName in columns
-
-    /**
      * Gets the column with the specified name.
      *
      * @param columnName The name of the column to retrieve.

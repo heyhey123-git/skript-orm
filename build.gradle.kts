@@ -4,8 +4,8 @@ plugins {
     java
     kotlin("jvm") version "2.3.21"
     id("com.gradleup.shadow") version "9.2.2"
+    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
 }
-
 
 val kotlinVersion = "2.3.21"
 val kotlinCoroutinesVersion = "1.10.2"
@@ -32,13 +32,11 @@ val bundledModules: List<String> = run {
 // 确保先评估这些子模块
 bundledModules.forEach { evaluationDependsOn(":$it") }
 
-
 allprojects {
     group = "io.github.heyhey123"
     version = "1.0-SNAPSHOT"
 
     repositories {
-        // 当前网络访问 repo.maven.apache.org 会返回 403；镜像优先，官方仓库保留为回退。
         maven("https://maven.aliyun.com/repository/central")
         maven("https://maven-central.storage-download.googleapis.com/maven2/")
         maven("https://repo.papermc.io/repository/maven-public/")
@@ -51,6 +49,18 @@ allprojects {
 subprojects {
     apply(plugin = "java")
     apply(plugin = "org.jetbrains.kotlin.jvm")
+
+    // Formatting and import rules come from the root .editorconfig, so IntelliJ and the
+    // command line agree without duplicating them here.
+    //   ./gradlew ktlintCheck   reports violations; ktlintCheck is wired into check.
+    //   ./gradlew ktlintFormat  fixes everything that is mechanically fixable.
+    // The plugin defaults to the ktlint version it ships with. To pin one, or to report
+    // without failing the build, configure the extension:
+    //   configure<org.jlleitschuh.gradle.ktlint.KtlintExtension> {
+    //       version.set("1.7.1")
+    //       ignoreFailures.set(true)
+    //   }
+    apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     dependencies {
         compileOnly("io.papermc.paper:paper-api:$paperVersion")
@@ -94,14 +104,14 @@ tasks {
         destinationDirectory.set(file("$rootDir/build/dist"))
 
         // Kotlin
-        relocate("kotlin.", "$shadePrefix.kotlin${kotlinEscapedVersion}.")
+        relocate("kotlin.", "$shadePrefix.kotlin$kotlinEscapedVersion.")
         relocate("org.jetbrains.annotations.", "$shadePrefix.org.jetbrains.annotations2602.")
         relocate("org.intellij.", "$shadePrefix.org.intellij.")
 
         // kotlinx.coroutines
         val kotlinCoroutinesEscapedVersion = kotlinCoroutinesVersion.filter { it != '.' }
-        relocate("kotlinx.coroutines.", "$shadePrefix.kotlinx.coroutines${kotlinCoroutinesEscapedVersion}.")
-        relocate("_COROUTINE.", "${shadePrefix}._COROUTINE.")
+        relocate("kotlinx.coroutines.", "$shadePrefix.kotlinx.coroutines$kotlinCoroutinesEscapedVersion.")
+        relocate("_COROUTINE.", "$shadePrefix._COROUTINE.")
         relocate("reactor.", "$shadePrefix.reactor.")
         relocate("org.reactivestreams.", "$shadePrefix.org.reactivestreams.")
 

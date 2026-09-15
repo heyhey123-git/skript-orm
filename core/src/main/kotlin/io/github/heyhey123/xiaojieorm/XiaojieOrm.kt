@@ -9,7 +9,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.bukkit.plugin.java.JavaPlugin
 
-class XiaojieOrm: JavaPlugin() {
+class XiaojieOrm : JavaPlugin() {
     companion object {
         lateinit var instance: XiaojieOrm
             private set

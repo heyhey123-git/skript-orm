@@ -13,7 +13,7 @@ import java.io.ByteArrayInputStream
 import java.nio.ByteBuffer
 import java.sql.Blob
 import java.sql.Date
-import java.util.*
+import java.util.UUID
 import javax.sql.rowset.serial.SerialBlob
 
 /**

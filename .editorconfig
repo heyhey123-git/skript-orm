@@ -1,0 +1,43 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 4
+
+# Kotlin style rules, shared by IntelliJ IDEA and ktlint.
+# IntelliJ reads the ij_ properties, ktlint reads the ktlint_ properties, and both read
+# the generic properties above, so the IDE and the command line agree.
+[*.{kt,kts}]
+
+# Base the rules on the IntelliJ defaults this code base was written with. The
+# ktlint_official style would additionally require a trailing comma and one parameter
+# per line in every multi-line signature, which this code base does not use.
+ktlint_code_style = intellij_idea
+
+# Long single-line artifacts are intentional and not worth wrapping:
+#   - @Description annotations, whose text reads better as one literal string,
+#   - executeWrite overrides, whose parameter list mirrors the base declaration.
+# This also keeps the wrapping rules inert, so no expression is reflowed just to fit.
+# The intellij_idea code style defaults to "off" here anyway; stating it keeps the intent
+# explicit. IDEA's own right margin is a separate setting and lives in
+# .idea/codeStyles/Project.xml.
+max_line_length = off
+
+# With max_line_length off, both rules would collapse every multi-line signature that
+# happens to fit on one line. This code base writes signatures multi-line on purpose,
+# so the choice stays with the author.
+ktlint_standard_class-signature = disabled
+ktlint_standard_function-signature = disabled
+
+# Replaces the IntelliJ default of "java.util.*, kotlinx.android.synthetic.**".
+# Every Skript addon imports the doc annotations this way (@Name, @Description,
+# @Example). Remove "ch.njol.skript.doc.*" to require explicit imports instead.
+ij_kotlin_packages_to_use_import_on_demand = java.util.*, ch.njol.skript.doc.*, kotlinx.android.synthetic.**
+
+# Keep multi-line argument and parameter lists without a trailing comma.
+ij_kotlin_allow_trailing_comma = false
+ij_kotlin_allow_trailing_comma_on_call_site = false

@@ -2,7 +2,6 @@ package io.github.heyhey123.xiaojieorm.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 
-
 /**
  * Queries factory interface for creating different types of query objects.
  *

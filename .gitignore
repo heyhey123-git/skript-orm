@@ -5,7 +5,22 @@ build/
 !**/src/test/**/build/
 
 ### IntelliJ IDEA ###
-.idea/
+# Only the settings that every contributor should share are tracked. The rest of .idea
+# is per-user or machine-specific and stays ignored: workspace.xml and shelf/, the local
+# JDK name in misc.xml, the Gradle and compiler configuration IDEA regenerates on import,
+# and plugin bookkeeping such as copilot.data.migration.*.xml.
+#
+# .editorconfig stays the source of truth for formatting. The shared code style in
+# .idea/codeStyles mirrors it for the IDEA formatter, so "Reformat Code" and
+# "./gradlew ktlintCheck" agree.
+.idea/*
+!.idea/.gitignore
+!.idea/codeStyles/
+!.idea/dictionaries/
+!.idea/inspectionProfiles/
+!.idea/kotlinc.xml
+!.idea/ktlint-plugin.xml
+!.idea/vcs.xml
 *.iws
 *.iml
 *.ipr

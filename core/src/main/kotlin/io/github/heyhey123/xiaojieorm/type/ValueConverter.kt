@@ -8,7 +8,7 @@ package io.github.heyhey123.xiaojieorm.type
  * @property domainType The Class object representing the domain type.
  * @property storageType The Class object representing the storage type.
  */
-abstract class ValueConverter<D: Any, S: Any>(
+abstract class ValueConverter<D : Any, S : Any>(
     val domainType: Class<D>,
     val storageType: Class<S>
 ) {

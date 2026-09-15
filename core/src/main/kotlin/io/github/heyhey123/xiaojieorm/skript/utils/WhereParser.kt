@@ -35,7 +35,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.Equals(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)
+            resolveValueExpr(columnName, valueExpr, event)
         )
     }
 
@@ -46,7 +46,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.NotEquals(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)
+            resolveValueExpr(columnName, valueExpr, event)
         )
     }
 
@@ -57,7 +57,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.GreaterThan(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName, valueExpr, event)!!
         )
     }
 
@@ -68,7 +68,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.LessThan(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName, valueExpr, event)!!
         )
     }
 
@@ -79,7 +79,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.GreaterThanOrEquals(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName, valueExpr, event)!!
         )
     }
 
@@ -90,7 +90,7 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.LessThanOrEquals(
             columnName,
-            resolveValueExpr(columnName,valueExpr, event)!!
+            resolveValueExpr(columnName, valueExpr, event)!!
         )
     }
 
@@ -102,8 +102,8 @@ sealed class ParsedCondition {
     ) : ParsedCondition() {
         override fun resolve(event: Event?) = Condition.Between(
             columnName,
-            resolveValueExpr(columnName,startExpr, event)!!,
-            resolveValueExpr(columnName,endExpr, event)!!
+            resolveValueExpr(columnName, startExpr, event)!!,
+            resolveValueExpr(columnName, endExpr, event)!!
         )
     }
 }

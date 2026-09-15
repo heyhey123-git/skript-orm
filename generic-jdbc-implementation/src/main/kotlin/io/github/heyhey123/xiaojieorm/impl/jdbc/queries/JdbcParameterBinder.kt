@@ -70,6 +70,7 @@ internal inline fun <T> PreparedStatement.withBoundResources(action: () -> T): T
         }
     }
 }
+
 /**
  * Frees temporary JDBC values owned by this statement.
  *

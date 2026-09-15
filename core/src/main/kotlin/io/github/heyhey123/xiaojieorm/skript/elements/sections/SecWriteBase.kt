@@ -13,7 +13,15 @@ import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.queries.Queries
-import io.github.heyhey123.xiaojieorm.skript.utils.*
+import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
+import io.github.heyhey123.xiaojieorm.skript.utils.RawValues
+import io.github.heyhey123.xiaojieorm.skript.utils.RawValuesList
+import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
+import io.github.heyhey123.xiaojieorm.skript.utils.ValuesParser
+import io.github.heyhey123.xiaojieorm.skript.utils.VariableValuesReader
+import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
@@ -222,7 +230,6 @@ abstract class SecWriteBase : Section() {
 
         return true
     }
-
 
     override fun walk(event: Event?): TriggerItem? {
         val trigger = this.trigger ?: return walk(event, false)

@@ -3,7 +3,7 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.database
 import io.github.heyhey123.xiaojieorm.database.DatabaseFactory
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 
-object JdbcDatabaseFactory: DatabaseFactory {
+object JdbcDatabaseFactory : DatabaseFactory {
 
     init {
         DatabaseRegistry.register(this)

@@ -1,8 +1,8 @@
-﻿package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
+package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.impl.jdbc.condition.JdbcConditionTranslator
+import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.Update
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table

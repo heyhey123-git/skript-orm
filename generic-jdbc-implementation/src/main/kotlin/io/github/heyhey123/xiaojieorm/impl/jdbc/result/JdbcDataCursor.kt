@@ -38,16 +38,18 @@ class JdbcDataCursor(
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> get(column: String, dataType: DataType<T>): T? {
-        val storageValue = resultSet.getObject(column, boxed(dataType.converter.storageType))
+        val converter = dataType.converter as ValueConverter<T, Any>
+        val storageValue = resultSet.getObject(column, boxed(converter.storageType))
         if (resultSet.wasNull()) return null
-        return (dataType.converter as ValueConverter<T, Any>).fromStorage(storageValue)
+        return converter.fromStorage(storageValue)
     }
 
     @Suppress("UNCHECKED_CAST")
     override fun <T : Any> get(index: Int, dataType: DataType<T>): T? {
-        val storageValue = resultSet.getObject(index, boxed(dataType.converter.storageType))
+        val converter = dataType.converter as ValueConverter<T, Any>
+        val storageValue = resultSet.getObject(index, boxed(converter.storageType))
         if (resultSet.wasNull()) return null
-        return (dataType.converter as ValueConverter<T, Any>).fromStorage(storageValue)
+        return converter.fromStorage(storageValue)
     }
 
     override fun close() {
