@@ -16,11 +16,15 @@ data class RawValues(
     fun bind(table: Table): ParsedValues {
         val parsedMap = mutableMapOf<String, Expression<*>?>()
         for (rawValue in values) {
-            val expression = ExpressionsHelper.parseExpression(
-                table,
-                rawValue.columnName,
-                rawValue.rawExpression
-            )
+            val expression = if (rawValue.rawExpression.equals("null", ignoreCase = true)) {
+                null
+            } else {
+                ExpressionsHelper.parseExpressionNonNull(
+                    table,
+                    rawValue.columnName,
+                    rawValue.rawExpression
+                )
+            }
             parsedMap[rawValue.columnName] = expression
         }
         return ParsedValues(table, parsedMap)
@@ -71,6 +75,7 @@ object ValuesParser {
     fun collectSingle(nodes: SectionNode): RawValues {
         val rawValuesList = mutableListOf<RawValue>()
         for (node in nodes) {
+            if (node is SectionNode) continue
             val key = node.key ?: continue
             val match = VALUE_PATTERN.matchEntire(key)
                 ?: throw IllegalArgumentException("Invalid value format: '$key'. Expected format: 'columnName: expression'")

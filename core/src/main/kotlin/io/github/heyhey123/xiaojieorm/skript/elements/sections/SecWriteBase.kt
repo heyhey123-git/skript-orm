@@ -25,6 +25,16 @@ abstract class SecWriteBase : Section() {
 
     protected lateinit var tableNameExpr: Expression<String>
 
+    /**
+     * If true, the section will wait for the write operation to complete before continuing.
+     * If false, the section will continue immediately after starting the write operation.
+     * It's recommended to set this to true for most cases,
+     * as it allows for error handling and ensures that the write operation has completed before proceeding.
+     * In order to follow the Skript error handling style, the error usually will only be optionally handled,
+     * so the most of the time, people won't want to wait for the write operation to complete,
+     * also they won't want to handle the error explicitly, so the default value is false.
+     * In "select" operations, the wait is always true, because the result of the select operation is usually needed immediately after the operation.
+     */
     protected var waitFlag: Boolean = false
 
     // 单行值（用于 INSERT ONE / UPDATE）
@@ -33,13 +43,36 @@ abstract class SecWriteBase : Section() {
     // 多行值（用于 INSERT MANY）
     protected var multipleValues: RawValuesList? = null
 
+    /**
+     * Whether the section supports a where clause. If true, the section will parse a where clause from the section node.
+     */
     protected open val supportsWhere: Boolean = false
 
+    /**
+     * Whether the section supports multiple rows of values. If true, the section will parse multiple rows of values from the section node.
+     */
     protected open val supportsMultipleRows: Boolean = false
+
+    /**
+     * Whether the section requires values to be provided. If true, the section will parse values from the section node and will throw an error if no values are provided.
+     */
+    protected open val requiresValues: Boolean = true
 
     protected var where: RawWhereClause? = null
 
     protected abstract val tableNameIndex: Int
+
+    /**
+     * Override this method to extract any extra parameters from the expressions array.
+     * The default implementation does nothing.
+     * This method is called during the initialization of the section, after the table name expression has been extracted.
+     * You can use this method to extract any additional parameters that your section may require, such as limit, offset, or other options.
+     * The extracted parameters can be stored in member variables for later use in the executeWrite method.
+     * @param expressions The array of expressions passed to the section. You can extract any additional parameters from this array.
+     */
+    protected open fun extractExtraParams(expressions: Array<out Expression<*>?>) {}
+
+    protected open fun resolveExtraArguments(event: Event?): Any? = Unit
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -51,38 +84,53 @@ abstract class SecWriteBase : Section() {
         triggerItems: List<TriggerItem?>
     ): Boolean {
         tableNameExpr = expressions[tableNameIndex] as Expression<String>
+        extractExtraParams(expressions)
         waitFlag = parseResult.hasTag("wait")
         if (waitFlag) {
             parser.hasDelayBefore = Kleenean.TRUE
         }
 
-        // 解析 WHERE 子句（如果支持）
         if (supportsWhere) {
-            val whereNode = sectionNode.find { it.key?.startsWith("where") == true } as? SectionNode
-            if (whereNode != null) {
-                val negTag = whereNode.key?.contains("no") == true || whereNode.key?.contains("not") == true
-                val anyTag = whereNode.key?.contains("any") == true
-                where = WhereParser.collect(whereNode, anyTag, negTag)
+            val rawWhereNode = sectionNode.find { it.key?.startsWith("where") == true }
+            if (rawWhereNode != null && rawWhereNode !is SectionNode) {
+                Skript.error("The where clause must be a section.")
+                return false
+            }
+            if (rawWhereNode != null) {
+                where = WhereParser.collectFromSection(rawWhereNode)
+                if (where == null) {
+                    Skript.error("The where section cannot be empty.")
+                    return false
+                }
             }
         }
 
-        // 解析 VALUES
-        val valuesNode = sectionNode.find { it.key?.startsWith("values") == true } as? SectionNode
+        if (requiresValues) {
+            val rawValuesNode = sectionNode.find { it.key?.startsWith("values") == true }
+            if (rawValuesNode != null && rawValuesNode !is SectionNode) {
+                Skript.error("The values clause must be a section.")
+                return false
+            }
+            val targetNode = rawValuesNode ?: sectionNode
 
-        // 确定要解析的目标节点：有 values: 块就用它，否则用整个 sectionNode
-        val targetNode = valuesNode ?: sectionNode
+            try {
+                if (supportsMultipleRows) {
+                    val (single, multiple) = ValuesParser.collect(targetNode)
+                    singleValues = single
+                    multipleValues = multiple
+                } else {
+                    singleValues = ValuesParser.collectSingle(targetNode)
+                }
+            } catch (error: IllegalArgumentException) {
+                Skript.error(error.message ?: "Invalid values section.")
+                return false
+            }
 
-        if (supportsMultipleRows) {
-            val (single, multiple) = ValuesParser.collect(targetNode)
-            singleValues = single
-            multipleValues = multiple
-        } else {
-            singleValues = ValuesParser.collectSingle(targetNode)
-        }
-
-        if (singleValues == null && multipleValues == null) {
-            Skript.error("Values section is required and cannot be empty.")
-            return false
+            if ((singleValues == null || singleValues?.values?.isEmpty() == true) &&
+                (multipleValues == null || multipleValues?.valuesList?.isEmpty() == true)) {
+                Skript.error("Values section is required and cannot be empty.")
+                return false
+            }
         }
 
         return true
@@ -139,6 +187,15 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
+        val extraArguments = try {
+            resolveExtraArguments(event)
+        } catch (error: Exception) {
+            val message = "Failed to parse write arguments: ${error.message}"
+            if (event != null) SkriptDatabaseErrors.set(event, message)
+            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+            return walk(event, false)
+        }
+
         if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
             if (event != null) SkriptDatabaseErrors.set(event, "Database lifecycle is shutting down.")
             ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
@@ -159,7 +216,7 @@ abstract class SecWriteBase : Section() {
             var failure: Throwable? = null
             try {
                 database.withQueries { queries ->
-                    executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, event)
+                    executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, extraArguments)
                 }
             } catch (_: CancellationException) {
                 return@launch
@@ -204,6 +261,6 @@ abstract class SecWriteBase : Section() {
         singleValues: Map<String, Any?>?,
         multipleValues: List<Map<String, Any?>>?,
         whereClause: WhereClause?,
-        event: Event?
+        extraArguments: Any?
     )
 }

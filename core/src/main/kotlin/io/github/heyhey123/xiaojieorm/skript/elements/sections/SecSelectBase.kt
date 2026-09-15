@@ -69,10 +69,22 @@ abstract class SecSelectBase : Section() {
         resultVar = resultExpression as Variable<Any>
         extractExtraParams(expressions)
 
-        if (parseResult.hasTag("where")) {
-            where = WhereParser.collect(sectionNode, parseResult.hasTag("any"), parseResult.hasTag("neg"))
+        val unsupportedNode = sectionNode.find { it.key?.startsWith("where") == false }
+        if (unsupportedNode != null) {
+            Skript.error("A select section may only contain a 'where' section.")
+            return false
+        }
+
+        val rawWhereNode = sectionNode.find { it.key?.startsWith("where") == true }
+        if (rawWhereNode != null && rawWhereNode !is SectionNode) {
+            Skript.error("The where clause must be a section.")
+            return false
+        }
+        val whereNode = rawWhereNode as? SectionNode
+        if (whereNode != null) {
+            where = WhereParser.collectFromSection(whereNode)
             if (where == null) {
-                Skript.error("The where section cannot be empty when using where clause.")
+                Skript.error("The where section cannot be empty.")
                 return false
             }
         }

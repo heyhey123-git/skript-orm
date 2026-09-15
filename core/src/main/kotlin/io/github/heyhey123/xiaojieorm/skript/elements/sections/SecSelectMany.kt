@@ -12,7 +12,7 @@ class SecSelectMany : SecSelectBase() {
         init {
             Skript.registerSection(
                 SecSelectMany::class.java,
-                "select many [entities] from [table] %string% [and] store [the] [results] in %objects% [wait:and wait] [where:where (any:[neg:no] any|all:[neg:not] all)]"
+                "select many [entities] from [table] %string% [and] store [the] [results] in %objects% [and wait]"
             )
         }
     }

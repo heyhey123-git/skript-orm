@@ -14,7 +14,7 @@ class SecSelectPage : SecSelectBase() {
         init {
             Skript.registerSection(
                 SecSelectPage::class.java,
-                "select page %integer% [with] size %integer% from [table] %string% [and] store [the] [results] in %objects% [wait:and wait] [where:where (any:[neg:no] any|all:[neg:not] all)]"
+                "select page %integer% [with] size %integer% from [table] %string% [and] store [the] [results] in %objects% [and wait]"
             )
         }
     }

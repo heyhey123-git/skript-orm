@@ -1,0 +1,36 @@
+package io.github.heyhey123.xiaojieorm.skript.elements.sections
+
+import ch.njol.skript.Skript
+import ch.njol.skript.lang.Expression
+import io.github.heyhey123.xiaojieorm.condition.WhereClause
+import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.table.Table
+import org.bukkit.event.Event
+
+class SecDelete : SecWriteBase() {
+    companion object {
+        init {
+            Skript.registerSection(SecDelete::class.java, "delete [entities] from [table] %string% [with limit %-integer%] [wait:and wait]")
+        }
+    }
+
+    private var limitExpr: Expression<Int>? = null
+    override val tableNameIndex = 0
+    override val supportsWhere = true
+    override val requiresValues = false
+
+    @Suppress("UNCHECKED_CAST")
+    override fun extractExtraParams(expressions: Array<out Expression<*>?>) {
+        limitExpr = expressions[1] as Expression<Int>?
+    }
+
+    override fun resolveExtraArguments(event: Event?): Any? = limitExpr?.getSingle(event)?.also {
+        require(it > 0) { "Delete limit must be positive." }
+    }
+
+    override suspend fun executeWrite(queries: Queries, table: Table, singleValues: Map<String, Any?>?, multipleValues: List<Map<String, Any?>>?, whereClause: WhereClause?, extraArguments: Any?) {
+        queries.delete(extraArguments as Int?, whereClause).execute(table)
+    }
+
+    override fun toString(event: Event?, debug: Boolean) = "delete entities from table $tableNameExpr"
+}

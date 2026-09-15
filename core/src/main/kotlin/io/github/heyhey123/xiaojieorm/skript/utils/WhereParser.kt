@@ -2,17 +2,14 @@ package io.github.heyhey123.xiaojieorm.skript.utils
 
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
-import ch.njol.skript.lang.ParseContext
-import ch.njol.skript.lang.SkriptParser
 import io.github.heyhey123.xiaojieorm.condition.Condition
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
-import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpression
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpressionNonNull
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
 
 /**
- * 预解析的条件，保存表达式而非值
+ * The parsed condition, which can be resolved to a Condition by evaluating expressions with a given event.
  */
 sealed class ParsedCondition {
     abstract val table: Table
@@ -111,7 +108,8 @@ sealed class ParsedCondition {
 }
 
 /**
- * 预解析的 WHERE 子句
+ * The parsed where clause, which can be resolved to a WhereClause by evaluating expressions with a given event.
+ * The evaluation of [Expression] didn't happen yet, so the expressions are still present in the parsed where clause.
  */
 sealed class ParsedWhereClause {
 
@@ -155,7 +153,14 @@ data class RawWhereClause(
     }
 }
 
+/**
+ * A parser for creating WHERE clauses([WhereClause]) from raw condition strings.
+ */
 object WhereParser {
+    private fun parseNullableExpression(table: Table, columnName: String, valueStr: String): Expression<*>? =
+        if (valueStr.trim().equals("null", ignoreCase = true)) null
+        else parseExpressionNonNull(table, columnName, valueStr)
+
     private val EQUALS_PATTERN = Regex("""^(\w+)\s*=\s*(.+)$""")
     private val NOT_EQUALS_PATTERN = Regex("""^(\w+)\s*!=\s*(.+)$""")
     private val GREATER_THAN_OR_EQUALS_PATTERN = Regex("""^(\w+)\s*>=\s*(.+)$""")
@@ -177,6 +182,28 @@ object WhereParser {
     }
 
     /**
+     * Collect raw conditions from a nested `where` section, for example:
+     *
+     * ```
+     * where any:
+     *     name = "Alice"
+     *     age > 25
+     * ```
+     *
+     * The header selects the matching mode. A header containing `any` matches any condition,
+     * otherwise every condition must match. A header containing `no` or `not` negates the clause.
+     *
+     * @param section the nested `where` section, whose children are the conditions
+     * @return the raw clause, or null when the section declares no conditions
+     */
+    fun collectFromSection(section: SectionNode): RawWhereClause? {
+        val header = section.key.orEmpty().lowercase()
+        val any = " any" in header
+        val neg = " no " in " $header " || " not " in " $header "
+        return collect(section, any, neg)
+    }
+
+    /**
      * Parse a condition statement into a ParsedCondition, binding it to the given table.
      */
     fun parseCondition(table: Table, statement: String): ParsedCondition {
@@ -185,7 +212,7 @@ object WhereParser {
         NOT_EQUALS_PATTERN.matchEntire(trimmed)?.let {
             val columnName = it.groupValues[1]
             val valueStr = it.groupValues[2]
-            return ParsedCondition.NotEquals(table, columnName, parseExpression(table, columnName, valueStr))
+            return ParsedCondition.NotEquals(table, columnName, parseNullableExpression(table, columnName, valueStr))
         }
 
         GREATER_THAN_OR_EQUALS_PATTERN.matchEntire(trimmed)?.let {
@@ -234,7 +261,7 @@ object WhereParser {
             return ParsedCondition.Equals(
                 table,
                 columnName,
-                parseExpression(table, columnName, valueStr)
+                parseNullableExpression(table, columnName, valueStr)
             )
         }
 

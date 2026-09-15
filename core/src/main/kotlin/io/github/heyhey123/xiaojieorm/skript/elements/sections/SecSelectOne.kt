@@ -15,13 +15,14 @@ import org.bukkit.event.Event
         " within the main thread.")
 @Example(
     """
-connect to database "MySQL":
+create a connection to database "MySQL" with properties:
     url: "jdbc:mysql://localhost:3306/mydb"
     username: "root"
     password: "123456"
-select one from table "users" and store the result in {_user::*} where any:
-    name = "Alice"
-    age > 25
+select one from table "users" and store the result in {_user::*} and wait:
+    where any:
+        name = "Alice"
+        age > 25
 disconnect from database
 """
 )
@@ -32,7 +33,7 @@ class SecSelectOne : SecSelectBase() {
         init {
             Skript.registerSection(
                 SecSelectOne::class.java,
-                "select one [entity] from [table] %string% [and] store [the] [result] in %objects% [wait:and wait] [where:where (any:[neg:no] any|all:[neg:not] all)]"
+                "select one [entity] from [table] %string% [and] store [the] [result] in %objects% [and wait]"
             )
         }
     }

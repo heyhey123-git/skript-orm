@@ -2,7 +2,7 @@ package io.github.heyhey123.xiaojieorm.condition
 
 /**
  * Represents a WHERE clause in a database query.
- *
+ * A WHERE clause composes of a list of conditions and can be either negated or not.
  */
 sealed class WhereClause {
     /**
@@ -16,6 +16,10 @@ sealed class WhereClause {
      */
     abstract val conditions: List<Condition>
 
+    /**
+     * It means "any of the conditions must be true" (logical OR).
+     *
+     */
     class Any(
         override val negated: Boolean,
         conditions: List<Condition>
@@ -27,6 +31,9 @@ sealed class WhereClause {
         }
     }
 
+    /**
+     * It means "all the conditions must be true" (logical AND).
+     */
     class All(
         override val negated: Boolean,
         conditions: List<Condition>
