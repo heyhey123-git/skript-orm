@@ -1,4 +1,4 @@
-﻿package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
+package io.github.heyhey123.xiaojieorm.impl.rocksdb.queries
 
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabase
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksAutoIncrementManager
@@ -38,7 +38,7 @@ class RocksInsertMany(
             addHighWaterMark(batch, table, plan.highWaterMark)
             WriteOptions().use { options -> db.write(options, batch) }
         }
-        return WriteResult(plan.rows.size)
+        return WriteResult(plan.rows.size.toLong())
     }
 
     /** Resolves and validates every row before anything is written. */

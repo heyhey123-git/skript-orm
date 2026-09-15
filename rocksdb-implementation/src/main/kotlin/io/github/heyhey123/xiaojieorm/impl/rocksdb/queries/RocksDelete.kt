@@ -55,6 +55,6 @@ class RocksDelete(
                 keys.forEach { batch.delete(columnFamily, it) }
                 WriteOptions().use { options -> db.write(options, batch) }
             }
-            WriteResult(keys.size)
+            WriteResult(keys.size.toLong())
         }
 }

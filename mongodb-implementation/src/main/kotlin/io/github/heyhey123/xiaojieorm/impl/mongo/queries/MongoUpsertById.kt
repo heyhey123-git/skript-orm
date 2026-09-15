@@ -23,6 +23,6 @@ class MongoUpsertById(
         )
         val options = UpdateOptions().upsert(true)
         val result = collection.updateOne(filter, updateDoc, options)
-        return WriteResult(result.upsertedId?.let { 1 } ?: 0)
+        return WriteResult(if (result.upsertedId != null) 1L else result.modifiedCount)
     }
 }

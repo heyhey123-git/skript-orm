@@ -21,6 +21,6 @@ class MongoDelete(
         } else {
             collection.deleteMany(filter)
         }
-        return WriteResult(result.deletedCount.toInt())
+        return WriteResult(result.deletedCount)
     }
 }

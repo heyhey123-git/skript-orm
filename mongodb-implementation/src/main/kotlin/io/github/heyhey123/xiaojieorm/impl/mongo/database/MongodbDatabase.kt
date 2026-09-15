@@ -9,10 +9,6 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.impl.mongo.queries.MongoQueries
 import io.github.heyhey123.xiaojieorm.impl.mongo.type.MongoDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.launch
 import org.bson.Document
 
 /**
@@ -47,8 +43,11 @@ class MongodbDatabase: Database() {
         client = null
     }
 
-    override fun doRegisterTable(table: Table): Job = CoroutineScope(Dispatchers.IO).launch {
-        val collection = database!!.getCollection<Document>(table.name)
+    override suspend fun doRegisterTable(table: Table) {
+        val mongoDatabase = checkNotNull(database) {
+            "Database is not connected. Please connect before registering tables."
+        }
+        val collection = mongoDatabase.getCollection<Document>(table.name)
         table.primaryKey?.let {
             val key = Indexes.ascending(it.name)
             val options = IndexOptions().unique(true)

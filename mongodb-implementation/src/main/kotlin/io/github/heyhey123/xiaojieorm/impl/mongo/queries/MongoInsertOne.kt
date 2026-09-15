@@ -14,6 +14,6 @@ class MongoInsertOne(
         val collection = database.getCollection<Document>(table.name)
         val document = Document(values)
         val result = collection.insertOne(document)
-        return WriteResult(result.insertedId?.let { 1 } ?: 0)
+        return WriteResult(if (result.insertedId != null) 1L else 0L)
     }
 }

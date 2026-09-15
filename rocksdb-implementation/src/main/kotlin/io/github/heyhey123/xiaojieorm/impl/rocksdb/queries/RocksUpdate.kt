@@ -65,7 +65,7 @@ class RocksUpdate(
             updates.forEach { (key, value) -> batch.put(columnFamily, key, value) }
             WriteOptions().use { options -> db.write(options, batch) }
         }
-        return WriteResult(updates.size)
+        return WriteResult(updates.size.toLong())
     }
 
     private fun requirePrimaryKeyUnchanged(table: Table) {

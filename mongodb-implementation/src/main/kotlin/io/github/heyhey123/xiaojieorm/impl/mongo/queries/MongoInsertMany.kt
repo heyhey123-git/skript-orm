@@ -13,6 +13,6 @@ class MongoInsertMany(
     override suspend fun execute(table: Table): WriteResult {
         val collection = database.getCollection<Map<String, Any?>>(table.name)
         val result = collection.insertMany(valuesList.map { Document(it) } )
-        return WriteResult(result.insertedIds.count())
+        return WriteResult(result.insertedIds.size.toLong())
     }
 }

@@ -5,7 +5,6 @@ import io.github.heyhey123.xiaojieorm.impl.rocksdb.queries.RocksQueries
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.storage.RocksRowValueCodec
 import io.github.heyhey123.xiaojieorm.impl.rocksdb.type.RocksDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
-import kotlinx.coroutines.Job
 import org.rocksdb.ColumnFamilyDescriptor
 import org.rocksdb.ColumnFamilyHandle
 import org.rocksdb.DBOptions
@@ -159,11 +158,10 @@ class RocksdbDatabase : Database() {
         options = null
     }
 
-    override fun doRegisterTable(table: Table): Job {
+    override suspend fun doRegisterTable(table: Table) {
         synchronized(lifecycleLock) {
             registerColumnFamily(table.name)
         }
-        return Job().apply { complete() }
     }
 
     private fun registerColumnFamily(tableName: String) {

@@ -22,6 +22,6 @@ class MongoUpdateById(
             values.map { (key, value) -> Updates.set(key, value) }
         )
         val updateResult = collection.updateOne(filter, updateDocument)
-        return WriteResult(updateResult.modifiedCount.toInt())
+        return WriteResult(updateResult.modifiedCount)
     }
 }

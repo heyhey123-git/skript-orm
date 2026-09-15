@@ -27,12 +27,12 @@ class MongoUpdate(
 
         if (limit == 1) {
             val result = collection.updateOne(filter, updateDocument)
-            return WriteResult(result.modifiedCount.toInt())
+            return WriteResult(result.modifiedCount)
         }
 
         if (limit == null) {
             val result = collection.updateMany(filter, updateDocument)
-            return WriteResult(result.modifiedCount.toInt())
+            return WriteResult(result.modifiedCount)
         }
 
         val idsToUpdate = collection
@@ -42,11 +42,11 @@ class MongoUpdate(
             .toList()
 
         if (idsToUpdate.isEmpty()) {
-            return WriteResult(0)
+            return WriteResult(0L)
         }
 
         val idFilter = Filters.`in`("_id", idsToUpdate)
         val result = collection.updateMany(idFilter, updateDocument)
-        return WriteResult(result.modifiedCount.toInt())
+        return WriteResult(result.modifiedCount)
     }
 }

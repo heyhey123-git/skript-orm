@@ -17,6 +17,6 @@ class MongoDeleteById(
             ?: throw IllegalStateException("Table ${table.name} does not have a primary key.")
         val filter = Filters.eq(primaryKeyColumn.name, id)
         val deleteResult = collection.deleteOne(filter)
-        return WriteResult(deleteResult.deletedCount.toInt())
+        return WriteResult(deleteResult.deletedCount)
     }
 }

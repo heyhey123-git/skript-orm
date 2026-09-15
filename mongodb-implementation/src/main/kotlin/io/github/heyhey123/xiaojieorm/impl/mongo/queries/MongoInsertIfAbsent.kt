@@ -18,9 +18,9 @@ class MongoInsertIfAbsent(
 
         return if (existing == null) {
             val result = collection.insertOne(document)
-            WriteResult(result.insertedId?.let { 1 } ?: 0)
+            WriteResult(if (result.insertedId != null) 1L else 0L)
         } else {
-            WriteResult(0)
+            WriteResult(0L)
         }
     }
 }
