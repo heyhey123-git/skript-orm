@@ -7,6 +7,7 @@ version = "1.0-SNAPSHOT"
 
 val testcontainersVersion = "1.21.3"
 val mysqlConnectorVersion = "9.5.0"
+val mockBukkitVersion = "4.116.1"
 
 // Kept in step with the compileOnly versions declared for every subproject in the root build script.
 val paperVersion = "26.2.build.+"
@@ -41,6 +42,10 @@ dependencies {
     // are repeated here: the integration test JVM is the plugin runtime without a server.
     "integrationTestImplementation"("org.testcontainers:mysql")
     "integrationTestImplementation"("org.testcontainers:junit-jupiter")
+    // Supplies a Bukkit server, which the Bukkit-backed value types need before they can be built.
+    // It cannot host Skript: MockBukkit loads a plugin as a generated subclass of its main class,
+    // and Skript's main class is final.
+    "integrationTestImplementation"("org.mockbukkit.mockbukkit:mockbukkit-v26.2:$mockBukkitVersion")
     "integrationTestImplementation"("com.mysql:mysql-connector-j:$mysqlConnectorVersion")
     "integrationTestImplementation"("org.slf4j:slf4j-simple:2.0.17")
     "integrationTestImplementation"("io.papermc.paper:paper-api:$paperVersion")

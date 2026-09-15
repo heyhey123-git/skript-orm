@@ -200,8 +200,8 @@ classpath 上的部分：
 必须可区分”这一契约。可达范围止于表达式求值，因为解析真实值表达式需要 Skript 的语法注册表，而它只存在于
 运行中的 Skript 里。
 
-**MySQL 测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL。它属于可选任务，因为需要容器
-运行时且耗时更长：
+**JDBC 测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL，并让每个受支持类型走一遍自己的转换器
+往返。转换器那一半不需要数据库，任何环境都能跑；数据库那一半属于可选任务，因为需要容器运行时且耗时更长：
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest
@@ -221,7 +221,8 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
 
 集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper、Skript 和 NBT API，因为
 `JdbcDataTypes` 在初始化时会解析这些类。一旦这一点不再成立，`JdbcRuntimeClasspathIntegrationTest`
-会立刻报错。
+会立刻报错。转换器与 MySQL 测试会启动 MockBukkit，但只把它当作需要它的那些值所需的 Bukkit 服务端；
+`NBT_COMPOUND` 没有往返测试，因为没有真实服务端时 NBT-API 无法构造 compound。
 
 集成测试方法请写成 `= runBlocking<Unit> { ... }`。JUnit 只会发现返回 `void` 的 `@Test` 方法，而
 `assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会

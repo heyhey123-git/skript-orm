@@ -228,8 +228,10 @@ mixing rows with single values, and the literal-`null` contract that keeps SQL N
 from an omitted column. The reachable surface stops at expression evaluation, because parsing a real
 value expression needs Skript's syntax registry, which only exists inside a running Skript.
 
-**MySQL tests** (`generic-jdbc-implementation`) run the real implementation against a real MySQL
-server. They are opt-in, because they need a container runtime and take longer:
+**JDBC tests** (`generic-jdbc-implementation`) run the real implementation against a real MySQL
+server, and round-trip every supported type through its own converter. The converter half needs no
+database and runs anywhere; the database half is opt-in, because it needs a container runtime and
+takes longer:
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest
@@ -251,7 +253,9 @@ passing silently.
 
 The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper,
 Skript, and the NBT API, because `JdbcDataTypes` resolves those classes when it initializes.
-`JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true.
+`JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true. MockBukkit is
+started for the converter and MySQL tests, but only as a Bukkit server for the values that need one;
+`NBT_COMPOUND` has no round-trip test, because NBT-API cannot build a compound without a real server.
 
 Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only discovers `@Test` methods
 that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an
