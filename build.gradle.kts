@@ -361,6 +361,9 @@ abstract class VerifySkriptServerTest : DefaultTask() {
         if (!log.isFile) {
             throw GradleException("The server wrote no log at ${log.absolutePath}.")
         }
+        // A failing run leaves its problems beside the log, and a later passing one would otherwise leave
+        // that file sitting there saying the opposite of what happened.
+        log.parentFile.resolve("test-problems.txt").delete()
 
         val lines = log.readLines()
         val problems = mutableListOf<String>()
