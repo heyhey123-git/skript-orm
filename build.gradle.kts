@@ -196,6 +196,19 @@ dependencies {
     "serverTestPlugins"(libs.nbt.api)
 }
 
+// A database for the server test, read from the same keys the JDBC integration tests read, so one
+// `-P` set configures both layers. Without a url the run has no database, which is the default and
+// how it runs locally; with one, the element scripts run against it and a round trip joins them.
+val serverTestDatabaseUrl = providers.gradleProperty("xiaojie.test.mysql.url")
+    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_URL"))
+val serverTestDatabaseUsername = providers.gradleProperty("xiaojie.test.mysql.username")
+    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_USERNAME"))
+    .orElse("root")
+val serverTestDatabasePassword = providers.gradleProperty("xiaojie.test.mysql.password")
+    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_PASSWORD"))
+    .orElse("")
+val serverTestUsesDatabase = serverTestDatabaseUrl.isPresent
+
 val prepareServerTest by tasks.registering {
     description = "Writes the run directory the Skript server test starts from."
     group = "verification"
@@ -214,6 +227,18 @@ val prepareServerTest by tasks.registering {
         scripts.mkdirs()
         // Copied as a tree, because the elements live one file each under `elements/`.
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
+        // The database mode adds a setup script and a round trip on top of the same element scripts.
+        // The setup is generated because its credentials come from the properties, not the repository.
+        if (serverTestUsesDatabase) {
+            sourceDirectory.dir("database").asFile.copyRecursively(scripts, overwrite = true)
+            val setup = scripts.resolve("00-setup.sk")
+            setup.writeText(
+                setup.readText()
+                    .replace("__URL__", serverTestDatabaseUrl.get())
+                    .replace("__USERNAME__", serverTestDatabaseUsername.get())
+                    .replace("__PASSWORD__", serverTestDatabasePassword.get())
+            )
+        }
         // The finisher is written rather than copied, because its count is the number of scripts that
         // report a detail line. Deriving it means adding an element cannot leave a stale number behind.
         val finisher = scripts.resolve("99-finish.sk")
@@ -246,29 +271,45 @@ tasks.named<RunServer>("runServer") {
     }
 }
 
-// One entry per element the self-test drives: the name it reports, and the message it reports with
-// it. Every section stops at the database lookup, because no database is connected, and says so
-// through `last database error`. Keeping the list here rather than in the script means a section
+// One entry per script the self-test drives: the name it reports, and the message it reports with.
+// Without a database every section stops at the database lookup and says so through
+// `last database error`; with one they succeed, and how far each got depends on the order Skript
+// fires them in, so an empty expectation means "it reported, whatever it said" and the round trip
+// carries the assertions that matter. Keeping the list here rather than in the scripts means a script
 // added to one without the other fails the test instead of passing unnoticed.
-val serverTestChecks = mapOf(
-    "register table" to "No database connected.",
-    "create connection" to "Database 'NoSuchDatabase' is not supported.",
-    "insert one" to "No database connected.",
-    "insert many" to "No database connected.",
-    "insert one from variable" to "No database connected.",
-    "insert if absent" to "No database connected.",
-    "select one" to "No database connected.",
-    "select many" to "No database connected.",
-    "select page" to "No database connected.",
-    "select by id" to "No database connected.",
-    "delete entities" to "No database connected.",
-    "delete by id" to "No database connected.",
-    "update entities" to "No database connected.",
-    "update by id" to "No database connected.",
-    "upsert by id" to "No database connected.",
+val serverTestExpectedMessage = if (serverTestUsesDatabase) "" else "No database connected."
+val serverTestChecks = buildMap {
+    put("register table", serverTestExpectedMessage)
+    // This one names an implementation that is not installed, so it reports the same in both modes.
+    put("create connection", "Database 'NoSuchDatabase' is not supported.")
+    put("insert one", serverTestExpectedMessage)
+    put("insert many", serverTestExpectedMessage)
+    put("insert one from variable", serverTestExpectedMessage)
+    put("insert if absent", serverTestExpectedMessage)
+    put("select one", serverTestExpectedMessage)
+    put("select many", serverTestExpectedMessage)
+    put("select page", serverTestExpectedMessage)
+    put("select by id", serverTestExpectedMessage)
+    put("delete entities", serverTestExpectedMessage)
+    put("delete by id", serverTestExpectedMessage)
+    put("update entities", serverTestExpectedMessage)
+    put("update by id", serverTestExpectedMessage)
+    put("upsert by id", serverTestExpectedMessage)
     // Disconnecting has no error channel: it proves it ran by the trigger reaching the end.
-    "disconnect" to "ran"
-)
+    put("disconnect", "ran")
+    if (serverTestUsesDatabase) {
+        put("setup", "")
+        // What the setup's own read reported: empty means the table it registered is known to the
+        // connection, and "Table ... not found." would mean registration did not take effect.
+        put("setup select", "")
+        put("roundtrip", "")
+        // The round trip prints what each read returned, so a failure says whether the row exists as
+        // the steps ran, whether it appears after a plain wait, and whether a `where` finds it.
+        put("roundtrip now", "")
+        put("roundtrip later", "")
+        put("roundtrip by id", "")
+    }
+}
 
 val serverTest by tasks.registering(VerifySkriptServerTest::class) {
     description = "Boots a Paper server with Skript and checks what this plugin did there."
@@ -343,10 +384,12 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
         expectedChecks.get().forEach { (element, message) ->
             val actual = reported[element]
-            if (actual == null) {
-                problems += "The self-test did not reach '$element'."
-            } else if (actual != message) {
-                problems += "'$element' reported '$actual' instead of '$message'."
+            when {
+                actual == null -> problems += "The self-test did not reach '$element'."
+                // An empty expectation means the line only has to be there. The database mode cannot
+                // predict how far each element got before the round trip states the real assertions.
+                message.isEmpty() -> Unit
+                actual != message -> problems += "'$element' reported '$actual' instead of '$message'."
             }
         }
 
@@ -362,6 +405,10 @@ abstract class VerifySkriptServerTest : DefaultTask() {
         }
 
         if (problems.isNotEmpty()) {
+            // A failing step's log needs admin rights to read, while annotations are public, so the
+            // problems are also written next to the log for CI to annotate. Without this, a failure
+            // here is only visible to whoever can open the job.
+            serverLog.get().asFile.parentFile.resolve("test-problems.txt").writeText(problems.joinToString("\n"))
             throw GradleException(
                 buildString {
                     appendLine("The Skript server test failed:")

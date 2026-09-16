@@ -1,0 +1,41 @@
+# Connects the run to the database it was pointed at, and gives it a table of its own.
+#
+# `prepareServerTest` writes this file with the credentials substituted, because they come from the
+# `xiaojie.test.mysql.*` properties and do not belong in the repository. It fires before the element
+# scripts so they run against a live connection.
+#
+# The table here is deliberately not the one the element scripts register: two `register table`
+# statements for the same name would make the second one fail, and the element scripts have to stay
+# exactly the same in both modes.
+#
+# The start guard and the marker are two different things. `create a connection` waits for the
+# connection, so a second firing would otherwise begin while the first is still connecting and
+# register the table twice; the start guard stops that, and the marker at the end is what
+# `99-finish.sk` waits for.
+every 1 second:
+    if {xiaojie::selftest::started::setup} is set:
+        stop trigger
+    set {xiaojie::selftest::started::setup} to true
+
+    create a connection to database "MySQL" with properties:
+        url: "__URL__"
+        username: "__USERNAME__"
+        password: "__PASSWORD__"
+    if last database error is set:
+        log "XIAOJIE_SELFTEST=FAIL setup connection: %last database error%"
+
+    register a database table "orm_roundtrip":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
+    if last database error is set:
+        log "XIAOJIE_SELFTEST=FAIL setup table: %last database error%"
+
+    # Registering waits for the table to exist, so a read from this script says whether it took effect:
+    # "Table 'orm_roundtrip' not found." here would mean every later statement is working against a
+    # table the connection does not know about.
+    select one entity from table "orm_roundtrip" and store the result in {orm_selftest::setup::*}:
+    log "XIAOJIE_SELFTEST detail: setup select -> %last database error%"
+
+    log "XIAOJIE_SELFTEST detail: setup -> ran"
+    set {xiaojie::selftest::done::setup} to true

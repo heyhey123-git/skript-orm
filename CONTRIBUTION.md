@@ -333,6 +333,20 @@ Two properties of a Minecraft server shape the scripts:
 and `eula.txt`. Writing that last file accepts the Minecraft EULA for this disposable server, which
 is why the task and not a developer is what does it.
 
+The same element scripts also run against a database. Passing the MySQL properties the JDBC tests use
+(`-Pxiaojie.test.mysql.url`, `username`, `password`) adds `server-test/database/`: a setup script that
+`prepareServerTest` writes with the credentials substituted, which connects and registers a table of
+its own, and a round trip that writes a row, reads it back and compares it. The element scripts then
+run against the live connection, which is the only way to cover the value conversions inside `values`
+and `where`: those happen after the database lookup, so a run without a database never reaches them.
+
+Two consequences shape those scripts. Every element reports whatever its step produced once a
+connection exists, so in this mode their expected messages are empty and only their presence is
+checked; the round trip is what carries the assertions. And the setup and round trip scripts keep a
+start guard *as well as* the marker, because the two are not the same thing: their steps wait on the
+database, so without the guard a second firing would begin while the first is still working and
+register the same table twice.
+
 ### Continuous integration
 
 `.github/workflows/ci.yml` runs four jobs:

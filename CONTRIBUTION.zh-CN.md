@@ -281,13 +281,24 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 
 - 实际工作放在周期触发器里，因为服务端尚在启动时 Skript 的 `on script load` 不会触发
   （SkriptLang/Skript#5754），所以任何依赖脚本加载的写法都用不上。
-- 每个元素跑完就把自己记进 `{xiaojie::selftest::elements::*}`，全部到齐后 `99-finish.sk` 停服。它的第二个
+- 每个元素跑完就把自己记进 `{xiaojie::selftest::done::*}`，全部到齐后 `99-finish.sk` 停服。它的第二个
   触发器负责在「始终没到齐」时停服，这正是把「卡住的运行」变成「失败的运行」的机制；它不使用本插件的语法，
   因此当出问题的正是插件本身时它照样能跑。也正因如此，`prepareServerTest` 会删掉 Skript 的数据目录：元素的
   运行守卫存在那里，留下一个会让下一次运行跳过某个元素。
 
 `prepareServerTest` 负责写入运行目录 `build/server-test`：`server.properties`、测试脚本，以及 `eula.txt`。
 写入最后这个文件意味着为这个一次性测试服务端接受 Minecraft EULA——这也是由任务而非开发者去做的原因。
+
+同一批元素脚本也可以对着数据库跑。传入 JDBC 测试使用的那组 MySQL 属性（`-Pxiaojie.test.mysql.url`、
+`username`、`password`）后，会额外铺上 `server-test/database/`：一个由 `prepareServerTest` 写入凭据的 setup
+脚本（连接并注册它自己的表），以及一个 roundtrip 脚本（写入一行、读回、比对）。此时元素脚本面对的是真实连接
+——这也是唯一能覆盖 `values` / `where` 里「脚本值 → 列」转换的方式：转换发生在数据库查找之后，没有数据库的
+运行永远走不到那里。
+
+这带来两个写法上的后果。有连接之后，每个元素报告的内容取决于它走到了哪一步，所以该模式下它们的期望消息为空、
+只检查「是否出现」，真正的断言由 roundtrip 承担。另外 setup 与 roundtrip 脚本同时保留「启动守卫」和「完成
+标记」——两者不是一回事：它们的步骤会在数据库上等待，没有守卫的话，第二次触发会在第一次还没做完时开始，把同一
+张表注册两次。
 
 ### 持续集成
 

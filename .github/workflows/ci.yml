@@ -131,12 +131,50 @@ jobs:
         if: failure()
         uses: ./.github/actions/annotate-test-failures
 
+      # The same server and the same database, now with the Skript layer pointed at it: the element
+      # scripts run against a live connection and a round trip checks that a row a script wrote comes
+      # back. This is the only place the value conversions in `values` and `where` are exercised,
+      # because they happen after the database lookup.
+      - name: Run the Skript server test against the same server
+        run: |
+          ./gradlew serverTest --stacktrace \
+            -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:3306/xiaojie_orm_test" \
+            -Pxiaojie.test.mysql.username=root \
+            -Pxiaojie.test.mysql.password=root
+
+      # The same as the other job's step: the harness writes its problems beside the log, and this
+      # turns them, plus anything the server itself complained about, into annotations.
+      - name: Annotate the server test
+        if: failure()
+        run: |
+          problems=build/server-test/logs/test-problems.txt
+          if [ -f "$problems" ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < "$problems"
+          fi
+          log=build/server-test/logs/latest.log
+          if [ -f "$log" ]; then
+            grep -E 'XIAOJIE_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: mysql-installed-test-reports
           path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mysql-installed-server-log
+          # The whole directory, so the harness's problem list travels with the log.
+          path: build/server-test/logs/
           if-no-files-found: ignore
 
   # The same tests through the path a developer uses locally: no external server configured, so the
@@ -222,25 +260,30 @@ jobs:
       - name: Run the Skript server test
         run: ./gradlew serverTest --stacktrace
 
-      # The server log is where this test explains itself, and reading a job log through the API
-      # needs admin rights while annotations are public.
-      - name: Annotate the failure
+      # A failing step's log needs admin rights to read, while annotations are public. The harness
+      # writes its own problems to a file for exactly this reason; the server log is added for the
+      # cases where the server, rather than an assertion, is what went wrong.
+      - name: Annotate the server test
         if: failure()
         run: |
-          log=build/server-test/logs/latest.log
-          if [ ! -f "$log" ]; then
-            echo "::error::The server wrote no log at $log."
-            exit 0
+          problems=build/server-test/logs/test-problems.txt
+          if [ -f "$problems" ]; then
+            while IFS= read -r line; do
+              echo "::error::$line"
+            done < "$problems"
           fi
-          tail -n 200 "$log"
-          grep -E 'XIAOJIE_SELFTEST|understand|\[Skript\] Line' "$log" | tail -n 40 | while IFS= read -r line; do
-            echo "::error::$line"
-          done
+          log=build/server-test/logs/latest.log
+          if [ -f "$log" ]; then
+            grep -E 'XIAOJIE_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          fi
 
       - name: Upload the server log
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: skript-server-log
-          path: build/server-test/logs/latest.log
+          # The whole directory, so the harness's problem list travels with the log.
+          path: build/server-test/logs/
           if-no-files-found: ignore

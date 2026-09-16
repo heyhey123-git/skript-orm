@@ -1,0 +1,60 @@
+# A round trip, which is the part only a real database can cover.
+#
+# The element scripts prove that every pattern is registered and that a script reaches the database
+# lookup. This proves the rest: that a value written from a script comes back unchanged, and that
+# `last database error` stays quiet when nothing fails. It runs only when the run was pointed at a
+# database, so it is the database mode's own check rather than a duplicate of the offline one.
+#
+# The reads go into global variables on purpose. A global is not touched by the local-variable
+# handling the sections do around their asynchronous work, so an empty global means the row really is
+# missing rather than lost on the way back. `id` is the key to look at for the same reason: it is
+# never null, and a NULL column is invisible in a list variable because Skript deletes a key that is
+# set to null.
+#
+# The row is read twice, with a plain Skript `wait` in between. The first read says what the steps
+# left behind when they ran as written; the second is a control. If the row appears after the wait,
+# then the steps are not ordered the way they are written and the write itself is fine. If it never
+# appears, the write put nothing in the table.
+#
+# Every step reports a failure marker rather than a detail line, because a failure here is a real
+# defect and not something the harness should have to infer from a message.
+every 5 seconds:
+    # A start guard, because every step in this script waits on the database: without it a second
+    # firing would begin while the first is still working through the row.
+    if {xiaojie::selftest::started::roundtrip} is set:
+        stop trigger
+    set {xiaojie::selftest::started::roundtrip} to true
+
+    # Nothing is deleted here on purpose: a delete that ran late would remove the very row these
+    # checks are about, which is one of the things this script is trying to tell apart.
+    insert one entity into table "orm_roundtrip" and wait:
+        values:
+            name: "Alice"
+            age: 30
+    if last database error is set:
+        log "XIAOJIE_SELFTEST=FAIL roundtrip insert: %last database error%"
+
+    select one entity from table "orm_roundtrip" and store the result in {orm_selftest::now::*}:
+    log "XIAOJIE_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}%"
+
+    wait 5 seconds
+
+    select one entity from table "orm_roundtrip" and store the result in {orm_selftest::later::*}:
+    log "XIAOJIE_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}%"
+    if {orm_selftest::later::id} is not set:
+        log "XIAOJIE_SELFTEST=FAIL roundtrip found no row even after waiting"
+    if {orm_selftest::later::name} is not "Alice":
+        log "XIAOJIE_SELFTEST=FAIL roundtrip read back name '%{orm_selftest::later::name}%' instead of 'Alice'"
+    if {orm_selftest::later::age} is not 30:
+        log "XIAOJIE_SELFTEST=FAIL roundtrip read back age '%{orm_selftest::later::age}%' instead of 30"
+
+    # A `where` on the primary key, which does not depend on any stored value being right.
+    select one entity from table "orm_roundtrip" and store the result in {_id::*}:
+        where all:
+            id >= 1
+    log "XIAOJIE_SELFTEST detail: roundtrip by id -> %{_id::*}%"
+    if {_id::id} is not set:
+        log "XIAOJIE_SELFTEST=FAIL roundtrip found no row through a where on the primary key"
+
+    log "XIAOJIE_SELFTEST detail: roundtrip -> ran"
+    set {xiaojie::selftest::done::roundtrip} to true
