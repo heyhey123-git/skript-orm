@@ -2,7 +2,7 @@
 
 **简体中文** | [English](reading.md)
 
-读取行有四个 section：`select one`、`select many`、`select page`、`select entity ... by id`。它们都会等结果，
+读取行有四条语句：`select one`、`select many`、`select page`、`select entity ... by id`。它们都会等结果，
 所以紧跟其后的语句已经拿到数据了。
 
 ## 查一行
@@ -44,10 +44,10 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 ## 按 id 查
 
 ```sk
-select entity from table "users" by id {_id} and store the result in {_user::*}:
+select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-它不接受 `where` 块：直接按已注册的主键查找。没有这个值的行时什么都不存。
+它不接受 `where` 块：直接按已注册的主键查找。没有这个值的行时什么都不存。它同样没有正文，所以也不写冒号，理由见 [写入行](writing.zh-CN.md)；不带 `where` 块的 `select one`、`select many` 与 `select page` 也一样。
 
 ## where 块
 

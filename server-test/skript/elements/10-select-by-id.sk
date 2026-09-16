@@ -8,6 +8,8 @@ every 5 seconds:
     if {xiaojie::selftest::done::select-by-id} is set:
         stop trigger
 
+    # This one keeps its colon on purpose: it is now the only place a read is written as a section
+    # with no body, so the colon spelling stays covered by the suite.
     select one entity from table "orm_selftest" by id 1 and store the result in {_by_id::*}:
     log "XIAOJIE_SELFTEST detail: select by id -> %last database error%"
     set {xiaojie::selftest::done::select-by-id} to true

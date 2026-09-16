@@ -22,7 +22,7 @@ command /example-conditions <text> <integer>:
             where all:
                 age = null
 
-        select entity from table "users" by id {_id} and store the result in {_one::*}:
+        select entity from table "users" by id {_id} and store the result in {_one::*}
 
         select page 2 with size 20 from table "users" and store the results in {_page::*}:
             where all:

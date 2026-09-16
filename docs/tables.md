@@ -39,10 +39,10 @@ Columns are direct lines. A nested block is refused, and so are duplicate column
 `primary key` marks the column the `by id` operations use, and pagination needs one:
 
 ```sk
-select entity from table "users" by id {_id} and store the result in {_user::*}:
-update one entity in table "users" by id {_id} and wait:
-delete one entity from table "users" by id {_id} and wait:
-select page 2 with size 20 from table "users" and store the results in {_page::*}:
+select entity from table "users" by id {_id} and store the result in {_user::*}
+update one entity in table "users" by id {_id} and wait
+delete one entity from table "users" by id {_id} and wait
+select page 2 with size 20 from table "users" and store the results in {_page::*}
 ```
 
 `auto increment` lets the database assign the value. The plugin does not hand the generated id back to

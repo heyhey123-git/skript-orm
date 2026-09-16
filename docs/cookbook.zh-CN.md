@@ -83,7 +83,7 @@ select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
 
-insert many {_rows::*} into table "archived_users" and wait:
+insert many {_rows::*} into table "archived_users" and wait
 if last database error is set:
     send "归档失败: %last database error%" to console
     stop
@@ -104,7 +104,7 @@ set {_rows::1::age} to 25
 set {_rows::2::name} to "Bob"
 set {_rows::2::age} to 30
 
-insert many {_rows::*} into table "users" and wait:
+insert many {_rows::*} into table "users" and wait
 ```
 
 行号从 1 开始，和读取产生的键完全一致。

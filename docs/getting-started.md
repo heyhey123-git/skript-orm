@@ -96,11 +96,12 @@ update one entity in table "users" by id {_user::id} and wait:
     values:
         age: 26
 
-delete one entity from table "users" by id {_user::id} and wait:
+delete one entity from table "users" by id {_user::id} and wait
 ```
 
 Both are in [Updating and deleting](updating-and-deleting.md), including the versions that work on
-whatever a `where` block matches.
+whatever a `where` block matches. The delete has no body, so it goes without a colon, while the update
+above has `values` to indent; see [Writing rows](writing.md).
 
 ## The whole thing
 

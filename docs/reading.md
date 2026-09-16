@@ -2,8 +2,8 @@
 
 [简体中文](reading.zh-CN.md) | **English**
 
-Four sections read rows: `select one`, `select many`, `select page` and `select entity ... by id`. All of
-them wait for their result, so the lines after one already have the data.
+Four statements read rows: `select one`, `select many`, `select page` and `select entity ... by id`. All
+of them wait for their result, so the lines after one already have the data.
 
 ## Select one
 
@@ -48,11 +48,13 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 ## Select by id
 
 ```sk
-select entity from table "users" by id {_id} and store the result in {_user::*}:
+select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
 This one takes no `where` block: it looks the row up by the registered primary key. Nothing is stored
-when no row has that value.
+when no row has that value. It has no body either, so it is written without a colon, the way
+[writing rows](writing.md) explains; the same goes for a `select one`, `select many` or `select page`
+with no `where` block.
 
 ## Where blocks
 

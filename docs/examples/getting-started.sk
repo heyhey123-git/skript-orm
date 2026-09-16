@@ -63,4 +63,4 @@ command /example-delete <text>:
         select one entity from table "users" and store the result in {_row::*}:
             where all:
                 name = arg-1
-        delete one entity from table "users" by id {_row::id} and wait:
+        delete one entity from table "users" by id {_row::id} and wait

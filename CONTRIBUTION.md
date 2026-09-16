@@ -328,6 +328,10 @@ logs a `XIAOJIE_SELFTEST` line, and the `serverTest` task checks those lines aga
 `build.gradle.kts`. A statement Skript cannot parse is reported and then skipped, so a pattern that
 stops registering shows up as a missing line instead of passing quietly.
 
+`docs/examples/` is copied into the same server, so the Skript on the documentation pages is parsed
+as well: a page showing a statement the addon refuses fails a build instead of reaching a reader. Those
+files are written as commands rather than as triggers, so nothing in them acts on the test server.
+
 Two properties of a Minecraft server shape the scripts:
 
 - A periodic trigger does the work, because Skript's `on script load` does not fire while the server

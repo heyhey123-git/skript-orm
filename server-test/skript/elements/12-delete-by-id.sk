@@ -8,6 +8,7 @@ every 5 seconds:
     if {xiaojie::selftest::done::delete-by-id} is set:
         stop trigger
 
-    delete one entity from table "orm_selftest" by id 1 and wait:
+    # No colon: deleting by id has no body to give.
+    delete one entity from table "orm_selftest" by id 1 and wait
     log "XIAOJIE_SELFTEST detail: delete by id -> %last database error%"
     set {xiaojie::selftest::done::delete-by-id} to true

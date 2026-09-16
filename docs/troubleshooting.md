@@ -130,16 +130,17 @@ belongs to. Its parser is what prints the line, and the flag behind it is intern
 config file and no script can turn it off.
 
 The forms that take their rows from a variable have no body to give, and neither do the ones that work
-by id, so those lines always earn the warning:
+by id, so they are written without a colon. A line without one is an effect, not a section, and there is
+nothing left for Skript to warn about:
 
 ```sk
-insert one {_user::*} into table "archived_users":
-delete one entity from table "users" by id {_id} and wait:
+insert one {_user::*} into table "archived_users"
+delete one entity from table "users" by id {_id} and wait
+select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-It is not a mistake, and the statement runs: the values came from the variable, or the id named the row.
-Any form that *can* take a body can be written with one to keep the log quiet, and a filter that matches
-every row does the job for a read:
+The colon is for the statements that have something to indent. A filter that matches every row does the
+job for a read that wants to keep one:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -147,7 +148,9 @@ select one entity from table "users" and store the result in {_user::*}:
         id >= 1
 ```
 
-A section with a `where` block, a `values` block, or any other body is left alone.
+A section with a `where` block, a `values` block, or any other body is left alone. A script written
+before these one-line forms existed still runs, and still earns the warning; dropping the colon is all
+it takes to quiet it.
 
 ## The table name works on one server and not another
 

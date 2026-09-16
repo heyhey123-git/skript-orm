@@ -33,10 +33,10 @@ name: type[(size)][, primary key][, auto increment][, not null]
 `primary key` 标出 `by id` 系列操作使用的那一列，分页也需要它：
 
 ```sk
-select entity from table "users" by id {_id} and store the result in {_user::*}:
-update one entity in table "users" by id {_id} and wait:
-delete one entity from table "users" by id {_id} and wait:
-select page 2 with size 20 from table "users" and store the results in {_page::*}:
+select entity from table "users" by id {_id} and store the result in {_user::*}
+update one entity in table "users" by id {_id} and wait
+delete one entity from table "users" by id {_id} and wait
+select page 2 with size 20 from table "users" and store the results in {_page::*}
 ```
 
 `auto increment` 让数据库分配这个值。插件**不会**把生成的 id 交回脚本，所以需要知道它的脚本应该自己写一个值并用

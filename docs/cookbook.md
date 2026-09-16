@@ -85,7 +85,7 @@ select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
 
-insert many {_rows::*} into table "archived_users" and wait:
+insert many {_rows::*} into table "archived_users" and wait
 if last database error is set:
     send "Archive failed: %last database error%" to console
     stop
@@ -106,7 +106,7 @@ set {_rows::1::age} to 25
 set {_rows::2::name} to "Bob"
 set {_rows::2::age} to 30
 
-insert many {_rows::*} into table "users" and wait:
+insert many {_rows::*} into table "users" and wait
 ```
 
 The row index is one-based, exactly like the keys a read produces.

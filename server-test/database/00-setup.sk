@@ -38,7 +38,7 @@ every 1 second:
     # Registering waits for the table to exist, so a read from this script says whether it took effect:
     # "Table 'orm_roundtrip' not found." here would mean every later statement is working against a
     # table the connection does not know about.
-    select one entity from table "orm_roundtrip" and store the result in {orm_selftest::setup::*}:
+    select one entity from table "orm_roundtrip" and store the result in {orm_selftest::setup::*}
     log "XIAOJIE_SELFTEST detail: setup select -> %last database error%"
 
     log "XIAOJIE_SELFTEST detail: setup -> ran"

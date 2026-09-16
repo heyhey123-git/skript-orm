@@ -2,7 +2,7 @@
 
 **简体中文** | [English](writing.md)
 
-写入行的 section 有五个：`insert one`、`insert many`、`insert entity if absent`、`upsert one entity`，以及用于
+写入行有五条语句：`insert one`、`insert many`、`insert entity if absent`、`upsert one entity`，以及用于
 已有行的 `update`。它们描述行的方式是一样的。
 
 ## values 块
@@ -39,10 +39,12 @@ if last database error is set:
 select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = "Alice"
-insert one {_user::*} into table "archived_users":
+insert one {_user::*} into table "archived_users"
 ```
 
 这样的变量必须正好是一行；装着多行的变量在这里会被拒绝，它属于 `insert many`。
+
+最后那一行下面没有内容可缩进，所以不写冒号；Skript 会把不带冒号的一行当作 effect 读。Skript 警告的是空 section，两种写法效果相同：有正文要缩进就带冒号，没有正文就不带。[读取行](reading.zh-CN.md) 与 [更新与删除](updating-and-deleting.zh-CN.md) 两页也是这个规则。
 
 ## 插入多行
 
@@ -62,7 +64,7 @@ insert many entities into table "users" and wait:
 行也可以来自变量：
 
 ```sk
-insert many {_rows::*} into table "archived_users" and wait:
+insert many {_rows::*} into table "archived_users" and wait
 ```
 
 各行可以写不同的列。省略某列时，只要数据库允许，这条语句就不提它。而当一条语句必须为所有行绑定同一组列时，该列按 NULL 写入。

@@ -47,10 +47,14 @@ A delete has no values block; it only takes an optional `where`, an optional lim
 ## Delete by id
 
 ```sk
-delete one entity from table "users" by id {_id} and wait:
+delete one entity from table "users" by id {_id} and wait
 if last database error is set:
     send "Delete failed: %last database error%" to console
 ```
+
+The colon marks a statement that has a body. This one has none, and neither has an `update`, an `upsert`
+or an `insert` whose values come from a variable; those are written without it, as
+[writing rows](writing.md) explains.
 
 ## Leaving the where out
 
@@ -59,7 +63,7 @@ allows them to.** Both sections accept that, so a forgotten `where` is not an er
 
 ```sk
 # Every row in the table.
-delete entities from table "users" and wait:
+delete entities from table "users" and wait
 ```
 
 A `where` block whose condition list is empty is almost always a mistake; the sections that take a
@@ -92,7 +96,7 @@ select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = arg-1
 set {_user::age} to {_user::age} + 1
-update one entity {_user::*} in table "users" by id {_user::id} and wait:
+update one entity {_user::*} in table "users" by id {_user::id} and wait
 ```
 
 With `update`, only the columns in the variable are touched; with `upsert` the row is created when the

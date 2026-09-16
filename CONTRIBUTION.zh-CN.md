@@ -283,6 +283,9 @@ Minecraft 服务端。它运行的版本取自版本目录里的 `paper`，因�
 `XIAOJIE_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript 无法解析的语句会被
 报错并跳过，所以「某个 pattern 不再注册」会表现为缺少一行，而不是悄悄通过。
 
+`docs/examples/` 也会被复制进同一个服务端，因此文档页面上的 Skript 片段同样要过解析这一关：插件不认的语句
+会让构建失败，而不会一路送到读者眼前。这些示例都写成命令而不是触发器，所以在测试服务端上不会真的执行。
+
 Minecraft 服务端的两个特性决定了脚本的写法：
 
 - 实际工作放在周期触发器里，因为服务端尚在启动时 Skript 的 `on script load` 不会触发

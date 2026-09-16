@@ -99,15 +99,16 @@ else if {_user::age} is not set:
 只要 section 的冒号下面没有缩进内容，Skript 就会警告一次，跟这个 section 属于哪个插件无关。这句话是 Skript
 自己的解析器打的，而它背后的开关是 Skript 内部的，配置文件与脚本都够不着，关不掉。
 
-用变量给值的写法没有主体可写，按 id 工作的写法也一样，所以这些行必然会带上这条提示：
+用变量给值的写法没有正文可写，按 id 工作的写法也一样，所以这些写法都不带冒号。不带冒号的一行是 effect，不是
+section，Skript 也就没什么可警告的了：
 
 ```sk
-insert one {_user::*} into table "archived_users":
-delete one entity from table "users" by id {_id} and wait:
+insert one {_user::*} into table "archived_users"
+delete one entity from table "users" by id {_id} and wait
+select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-这不是错误，语句照跑：值来自变量，或者 id 已经指明了那一行。凡是能写主体的写法，都可以写上主体来让日志安静；
-读取只要加一个"匹配所有行"的条件即可：
+冒号是留给有东西可缩进的语句的。读取只想取一行时，一个匹配所有行的条件就能办到：
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -115,7 +116,7 @@ select one entity from table "users" and store the result in {_user::*}:
         id >= 1
 ```
 
-带 `where` 块、`values` 块或任何其它主体的 section，都不会被提示。
+带 `where` 块、`values` 块或任何其它正文的 section，都保持原样。在这些一行写法出现之前写好的脚本依然能跑，也依然会挨这条警告；去掉冒号，就安静了。
 
 ## 表名在一台服务器能用，另一台不行
 

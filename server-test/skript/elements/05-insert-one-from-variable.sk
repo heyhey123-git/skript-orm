@@ -10,8 +10,9 @@ every 5 seconds:
 
     set {_row::name} to "Alice"
     set {_row::age} to 1 + 1
-    # A section, so it needs its colon even though the values come from the variable and the body
-    # stays empty.
-    insert one {_row::*} into table "orm_selftest" and wait:
+    # No colon: the values come from the variable, so there is no body to give, and this is the
+    # spelling the documentation shows. `21-insert-one-nocolon.sk` is the same statement written the
+    # other way round.
+    insert one {_row::*} into table "orm_selftest" and wait
     log "XIAOJIE_SELFTEST detail: insert one from variable -> %last database error%"
     set {xiaojie::selftest::done::insert-one-from-variable} to true

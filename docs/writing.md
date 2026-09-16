@@ -2,7 +2,7 @@
 
 [简体中文](writing.zh-CN.md) | **English**
 
-Five sections write rows: `insert one`, `insert many`, `insert entity if absent`, `upsert one entity`
+Five statements write rows: `insert one`, `insert many`, `insert entity if absent`, `upsert one entity`
 and, for existing rows, `update`. They share one way of describing the row.
 
 ## The values block
@@ -42,11 +42,17 @@ The same section also takes the row from a variable shaped like a select result:
 select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = "Alice"
-insert one {_user::*} into table "archived_users":
+insert one {_user::*} into table "archived_users"
 ```
 
 Such a variable must hold exactly one row; a variable holding several rows is refused here and belongs
 in `insert many`.
+
+There is nothing to indent under that last line, so it is written without a colon, and Skript reads a
+line without one as an effect. An empty section is what Skript warns about, and the two spellings do the
+same thing: keep the colon when the statement has a body to give, leave it out when it has none. The
+same rule holds on the [reading](reading.md) and [updating and deleting](updating-and-deleting.md)
+pages.
 
 ## Insert many
 
@@ -66,7 +72,7 @@ insert many entities into table "users" and wait:
 or the rows come from a variable:
 
 ```sk
-insert many {_rows::*} into table "archived_users" and wait:
+insert many {_rows::*} into table "archived_users" and wait
 ```
 
 Rows may name different columns. A row that omits a column is written with that column left out of the

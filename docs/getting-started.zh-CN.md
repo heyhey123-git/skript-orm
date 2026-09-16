@@ -82,10 +82,10 @@ update one entity in table "users" by id {_user::id} and wait:
     values:
         age: 26
 
-delete one entity from table "users" by id {_user::id} and wait:
+delete one entity from table "users" by id {_user::id} and wait
 ```
 
-按 `where` 批量修改或删除的写法，在 [更新与删除](updating-and-deleting.zh-CN.md)。
+按 `where` 批量修改或删除的写法，在 [更新与删除](updating-and-deleting.zh-CN.md)。删除没有正文，所以不写冒号；上面的更新有 `values` 要缩进，仍带冒号。见 [写入行](writing.zh-CN.md)。
 
 ## 完整脚本
 

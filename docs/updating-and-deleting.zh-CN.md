@@ -45,10 +45,12 @@ delete entities from table "users" with limit 10 and wait:
 ## 按 id 删除
 
 ```sk
-delete one entity from table "users" by id {_id} and wait:
+delete one entity from table "users" by id {_id} and wait
 if last database error is set:
     send "删除失败: %last database error%" to console
 ```
+
+冒号标出的是有正文的语句。这条没有正文；从变量取值的 `update`、`upsert` 与 `insert` 也没有，它们都不写冒号，见 [写入行](writing.zh-CN.md)。
 
 ## 不写 where 会怎样
 
@@ -57,7 +59,7 @@ if last database error is set:
 
 ```sk
 # 表里的每一行
-delete entities from table "users" and wait:
+delete entities from table "users" and wait
 ```
 
 而 `where` 块里条件列表为空，几乎总是笔误。带 values 块的 section，例如 `update`，会直接拒绝它；单纯的删除却无从判断，只能照做。真要对所有行动手，就把它写明，并且别忘了 `with limit`。
@@ -84,7 +86,7 @@ select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = arg-1
 set {_user::age} to {_user::age} + 1
-update one entity {_user::*} in table "users" by id {_user::id} and wait:
+update one entity {_user::*} in table "users" by id {_user::id} and wait
 ```
 
 用 `update` 时只有变量里出现的列会被碰；用 `upsert` 时主键还不存在的话会新建那一行。见 [菜谱](cookbook.zh-CN.md)。
