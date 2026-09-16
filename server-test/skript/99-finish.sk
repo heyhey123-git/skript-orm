@@ -1,19 +1,19 @@
 # Finishes the run, or fails it.
 #
-# Each element script records itself in {xiaojie::selftest::done::*} once its detail line is in the
-# log, so this stops the server as soon as they have all reported. Its second trigger is what turns a
-# hung run into a failing one, and it uses no addon syntax, so it also runs when the addon is the
-# thing that broke.
+# Each script records itself in {xiaojie::selftest::done::*} once its detail line is in the log, so
+# this stops the server as soon as they have all reported. Its second trigger is what turns a hung run
+# into a failing one, and it uses no addon syntax, so it also runs when the addon is the thing that
+# broke.
 #
-# The count has to match the number of files under `elements/`, which `serverTest` also lists. A
-# mismatch is reported instead of hidden: fewer means an element never reported, more means the
-# count here needs updating.
+# `prepareServerTest` writes this file with `__ELEMENT_COUNT__` replaced by the number of scripts it
+# copied that report a detail line, so the count cannot drift from the scripts that exist. A mismatch
+# is still reported rather than hidden: the failure line says how many arrived.
 
 every 5 seconds:
-    if size of {xiaojie::selftest::done::*} is 16:
+    if size of {xiaojie::selftest::done::*} is __ELEMENT_COUNT__:
         log "XIAOJIE_SELFTEST=PASS"
         stop the server
 
 every 30 seconds:
-    log "XIAOJIE_SELFTEST=FAIL the self-test did not finish: %size of {xiaojie::selftest::done::*}% of 16 elements reported"
+    log "XIAOJIE_SELFTEST=FAIL the self-test did not finish: %size of {xiaojie::selftest::done::*}% of __ELEMENT_COUNT__ elements reported"
     stop the server

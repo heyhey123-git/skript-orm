@@ -214,6 +214,13 @@ val prepareServerTest by tasks.registering {
         scripts.mkdirs()
         // Copied as a tree, because the elements live one file each under `elements/`.
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
+        // The finisher is written rather than copied, because its count is the number of scripts that
+        // report a detail line. Deriving it means adding an element cannot leave a stale number behind.
+        val finisher = scripts.resolve("99-finish.sk")
+        val reporting = scripts.walkTopDown()
+            .filter { it.extension == "sk" && it != finisher }
+            .count { "XIAOJIE_SELFTEST detail:" in it.readText() }
+        finisher.writeText(finisher.readText().replace("__ELEMENT_COUNT__", reporting.toString()))
         sourceDirectory.file("server.properties").asFile
             .copyTo(run.resolve("server.properties"), overwrite = true)
         // Paper refuses to start without this. Writing it records acceptance of the Minecraft EULA
