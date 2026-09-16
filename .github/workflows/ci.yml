@@ -2,6 +2,10 @@ name: CI
 
 on:
   push:
+    # Branch pushes only. release.yml tags the commit it built and tested, so a tag needs no run of
+    # its own; without this filter every release would repeat the whole workflow on that tag.
+    branches:
+      - '**'
     # A documentation or IDE-only change cannot affect the build, and skipping it saves a container
     # pull and two database runs. This is deliberately an ignore list rather than an allow list:
     # forgetting a new build input in an allow list would silently stop CI from running for a real

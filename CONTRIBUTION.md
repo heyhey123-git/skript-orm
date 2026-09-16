@@ -353,11 +353,32 @@ is why the task and not a developer is what does it.
   in the Gradle user home, which the Gradle state cache already covers, so the job needs no cache of
   its own.
 
+Two more workflows do the packaging. Neither decides whether the code is correct; `ci.yml` does that.
+
+`build.yml` runs on every branch push and uploads the shaded jar as an artifact of that run, which is
+what a tester downloads to try the current state of the code. The artifact belongs to the run: it
+expires with it and promises nothing. The version is read from `gradle.properties` only to name the
+artifact, so that name and the jar's own name cannot disagree.
+
+`release.yml` is manual, takes no input, and publishes a GitHub release. It reads the version from
+`gradle.properties` and refuses anything that is not a plain `x.y.z`, because a release records what
+was committed and a snapshot must not be published as one. It then runs the same test layers `ci.yml`
+runs — including the real server test — on the commit it is about to tag, checks that the built jar
+carries the version being released, writes a `sha256` beside it, and creates the tag and the release
+at that exact commit. It is limited to the default branch; releasing from a branch is removing that
+one condition.
+
+A release is therefore three repository changes first: the version in `gradle.properties`, the push,
+then the dispatch. That is the point — `1.0-SNAPSHOT` in the repository means "not a release", and the
+workflow reads it that way.
+
 #### When CI runs
 
 `push` and `pull_request` ignore changes that cannot affect the build: Markdown, `.gitignore`, and
 `.idea/`. Everything else triggers CI, including `.editorconfig`, which looks inert but is what ktlint
-reads. `workflow_dispatch` bypasses the filters, so a run can always be forced.
+reads. `workflow_dispatch` bypasses the filters, so a run can always be forced. `build.yml` uses the
+same two filters, so a change that cannot affect the build neither tests nor packages. Both ignore
+tags: `release.yml` tags a commit it has already built and tested.
 
 The list is an ignore list on purpose. An allow list of build inputs would silently stop CI from
 running the first time a new input type is added, and a check that did not run looks exactly like a
