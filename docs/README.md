@@ -32,5 +32,7 @@ back, and everything after that is reference for the parts you did not need yet.
 
 ## For the wiki on GitHub
 
-If these pages are mirrored to the repository wiki, keep the file names: the links between them, and
-the links from the README, are relative and would otherwise break.
+The Chinese pages are mirrored to the repository wiki as a read-only copy. `.github/workflows/wiki.yml`
+renders them with `scripts/publish-wiki.ps1` after a change under `docs/`, so the repository is the one
+to edit: whatever is on the wiki is replaced by the next run. Page names, and every link between pages,
+come from the table at the top of that script.

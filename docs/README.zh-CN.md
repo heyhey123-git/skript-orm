@@ -28,6 +28,8 @@
 | [菜谱](cookbook.zh-CN.md) | 整段可抄的写法：upsert、分页、批量插入、存物品 NBT、读改写。 |
 | [兼容性](compatibility.zh-CN.md) | 版本、jar 里打包了什么、不支持什么。 |
 
-## 关于 GitHub wiki
+## GitHub wiki
 
-若要把这些页面镜像到仓库 wiki，请保留文件名。页与页之间、以及 README 指向它们的链接都是相对路径，改名即断。
+中文页会镜像到仓库的 wiki，作为只读的阅读副本。`.github/workflows/wiki.yml` 在 `docs/` 变动后调用
+`scripts/publish-wiki.ps1` 生成页面，所以要以仓库为准，不要在 wiki 上直接改。页面名以及页与页之间的每条链接
+都写在那份脚本开头的映射表里。

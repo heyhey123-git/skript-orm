@@ -27,6 +27,16 @@ Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 ./gradlew build -PbundleModules=generic-jdbc-implementation,postgresql-implementation
 ```
 
+### wiki 镜像
+
+`docs/` 是源，仓库 wiki 只承载其中的中文部分，作为阅读副本。改动页面的 push 会触发
+`.github/workflows/wiki.yml`，它用 `scripts/publish-wiki.ps1` 渲染页面，再提交到 wiki 仓库。页面名以及页与页
+之间的每条链接都来自那份脚本开头的映射表，所以新增一页就是在表里加一行、再到侧栏加一行。wiki 不手工编辑，
+下一次同步会覆盖掉改动。
+
+这个 workflow 需要一个已经存在的 wiki。在新的克隆上，先打开一次 wiki 并手工建一页，否则
+`<repository>.wiki` 没有东西可以检出。
+
 ### 边界规则
 
 `core` 不得依赖任何驱动、连接池或查询语言。它描述数据库**能做什么**；实现负责**怎么做**——自己的驱动、

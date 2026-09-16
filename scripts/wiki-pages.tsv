@@ -1,0 +1,18 @@
+# The Chinese documentation as wiki pages: the file in the repository, a tab, and the page it becomes.
+#
+# The page name is what a reader sees in the address bar and what a link between pages has to name, so
+# this is the one place to look when a page is added, removed or renamed. A page name may not contain a
+# space. Order here is the order the sidebar lists the pages in; the sidebar itself is wiki-sidebar.md,
+# and both files have to agree, which the publishing script checks before it writes anything.
+README.zh-CN.md	Home
+docs/getting-started.zh-CN.md	Getting-Started
+docs/connections.zh-CN.md	Connections
+docs/tables.zh-CN.md	Tables
+docs/writing.zh-CN.md	Writing-Rows
+docs/reading.zh-CN.md	Reading-Rows
+docs/updating-and-deleting.zh-CN.md	Updating-And-Deleting
+docs/errors-and-waiting.zh-CN.md	Errors-And-Waiting
+docs/types.zh-CN.md	Types
+docs/troubleshooting.zh-CN.md	Troubleshooting
+docs/cookbook.zh-CN.md	Cookbook
+docs/compatibility.zh-CN.md	Compatibility

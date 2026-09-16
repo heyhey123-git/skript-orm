@@ -28,6 +28,17 @@ are bundled; it defaults to `generic-jdbc-implementation`.
 ./gradlew build -PbundleModules=generic-jdbc-implementation,postgresql-implementation
 ```
 
+### The wiki mirror
+
+`docs/` is the source, and the repository wiki carries the Chinese half of it as a reading copy. A push
+that changes a page runs `.github/workflows/wiki.yml`, which renders the pages with
+`scripts/publish-wiki.ps1` and commits them to the wiki repository. Page names, and every link between
+pages, come from the table at the top of that script, so a new page is one entry there and one line in
+the sidebar. The wiki is not edited by hand: the next run replaces whatever is there.
+
+That workflow needs a wiki that already exists. On a fresh clone, open the wiki once and create a page,
+or a checkout of `<repository>.wiki` has nothing to check out.
+
 ### The boundary rule
 
 `core` must not depend on any driver, connection pool, or query language. It describes *what* a
