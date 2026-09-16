@@ -17,12 +17,14 @@ import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionPropertiesParser
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Create Database Connection")
 @Description("Connects to a registered database implementation and makes it current. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
@@ -40,8 +42,9 @@ if last database error is set:
 class SecCreateConnection : Section() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecCreateConnection::class.java,
                 "create [a] connection to [database] %string% [with properties]"
             )

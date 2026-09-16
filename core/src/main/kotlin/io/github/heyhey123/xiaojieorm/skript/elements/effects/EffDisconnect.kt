@@ -1,14 +1,15 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.effects
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.util.AsyncEffect
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import kotlinx.coroutines.runBlocking
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Disconnect Database")
 @Description("Disconnects the current database asynchronously. The following trigger item runs after disconnection finishes.")
@@ -17,8 +18,9 @@ import org.bukkit.event.Event
 class EffDisconnect : AsyncEffect() {
 
     companion object {
-        init {
-            Skript.registerEffect(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.effect(
+                addon,
                 EffDisconnect::class.java,
                 "disconnect [from] [the] [current] database [connection]"
             )

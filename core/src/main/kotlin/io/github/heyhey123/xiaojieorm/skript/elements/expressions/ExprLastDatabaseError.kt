@@ -1,14 +1,14 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.expressions
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
-import ch.njol.skript.lang.ExpressionType
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.util.SimpleExpression
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Last Database Error")
 @Description("Returns the most recent database error for the current event. Waiting operations expose execution failures after finishing; non-waiting writes only log asynchronous failures.")
@@ -23,11 +23,11 @@ if last database error is set:
 class ExprLastDatabaseError : SimpleExpression<String>() {
 
     companion object {
-        init {
-            Skript.registerExpression(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.expression(
+                addon,
                 ExprLastDatabaseError::class.java,
                 String::class.java,
-                ExpressionType.SIMPLE,
                 "[the] last (database|query) error"
             )
         }

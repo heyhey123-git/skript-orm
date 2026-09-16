@@ -15,6 +15,7 @@ import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Column
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataType
@@ -24,6 +25,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Register Database Table")
 @Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Failures are exposed as the last database error.")
@@ -42,8 +44,9 @@ class SecRegisterTable : Section() {
 
         private val COLUMN_PATTERN = Regex("^\\s*([\\p{L}\\p{Nl}_][\\p{L}\\p{Nl}\\p{M}\\p{Nd}_]*)\\s*:\\s*([a-zA-Z][a-zA-Z0-9]*)(?:\\s*\\(\\s*(\\d+)\\s*\\))?(.*)$")
 
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecRegisterTable::class.java,
                 "register [a] [database] table %string%"
             )

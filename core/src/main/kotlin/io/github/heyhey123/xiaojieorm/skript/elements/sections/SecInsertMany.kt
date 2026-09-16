@@ -1,11 +1,12 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities")
 @Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
@@ -33,8 +34,9 @@ insert many {_rows::*} into table "archived_users" and wait:
 class SecInsertMany : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecInsertMany::class.java,
                 "insert many [entities] into [table] %string% [wait:and wait]",
                 "insert many [entities] %objects% into [table] %string% [wait:and wait]"

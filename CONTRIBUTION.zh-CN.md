@@ -143,6 +143,16 @@ JDBC 的链条是 `DataSource → Connection → PreparedStatement → ResultSet
 元素类以 `Sec*`（section）、`Eff*`（effect）、`Expr*`（expression）命名，位于
 `core/.../skript/elements/` 下。
 
+每个元素保留自己的 pattern，并对外提供一个 `register(addon)` 函数；插件启用时由
+`skript/ElementRegistrations.kt` 统一调用。注册只发生在这份清单里，因为 Skript 是在加载脚本时读取语法
+注册表的。`Skript.registerSection`、`registerEffect`、`registerExpression` 已弃用，取而代之的是把
+`SyntaxInfo` 注册到 addon 自己的 `SyntaxRegistry` 上——`skript/utils/SkriptSyntax` 就是对它的薄封装。
+新增元素时必须同时加进那份清单：服务端测试会逐个驱动它期望的元素，所以「忘记注册」会在那里失败，而不是
+悄悄不存在。
+
+section 只有在该行以冒号结尾时才会被识别，因此 body 可省略的元素要写成行尾带冒号、下面留空。Skript 会在
+日志里记一条 `Empty configuration section!`，然后照常执行该 section。这些提示是预期行为，不是缺陷。
+
 - `SecSelectBase` 与 `SecWriteBase` 承载共享的解析与派发逻辑。`SecCreateConnection` 与
   `SecRegisterTable` 独立实现，因为它们不符合这两种形态。
 - 写入是异步的。`and wait` 标签决定后续内容是否等待：等待式写入会保留事件 continuation，并通过

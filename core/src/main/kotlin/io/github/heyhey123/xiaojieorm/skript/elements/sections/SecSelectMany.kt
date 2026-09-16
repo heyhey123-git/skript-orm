@@ -1,11 +1,12 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Many Entities")
 @Description("Selects matching rows using row-index and column-name keys such as {_users::1::name}. The one-based row index remains even for one result. Selects always wait and expose failures as the last database error.")
@@ -21,8 +22,9 @@ send "%{_users::1::name}%"
 class SecSelectMany : SecSelectBase() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecSelectMany::class.java,
                 "select many [entities] from [table] %string% [and] store [the] [results] in %objects% [and wait]"
             )

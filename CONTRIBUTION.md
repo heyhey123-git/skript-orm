@@ -164,6 +164,18 @@ error. Other negative counts are an invalid driver response and must raise.
 Element classes are named `Sec*` (sections), `Eff*` (effects), and `Expr*` (expressions), and live
 under `core/.../skript/elements/`.
 
+Each element keeps its own patterns and exposes a `register(addon)` function, which
+`skript/ElementRegistrations.kt` calls for all of them while the plugin enables. That list is the only
+place registration happens, because Skript reads its syntax registry while it loads scripts.
+`Skript.registerSection`, `registerEffect` and `registerExpression` are deprecated in favour of
+registering a `SyntaxInfo` with the addon's `SyntaxRegistry`, which is what `skript/utils/SkriptSyntax`
+wraps. Adding an element to that list is part of adding the element: the server test drives every
+element it expects, so one that is never registered fails there instead of quietly not existing.
+
+A section is only recognised when its line ends with a colon, so an element whose body is optional is
+written with a trailing colon and nothing under it. Skript notes that with `Empty configuration
+section!` in the log and runs the section anyway. Those notes are expected, not a defect.
+
 - `SecSelectBase` and `SecWriteBase` hold the shared parsing and dispatch logic.
   `SecCreateConnection` and `SecRegisterTable` are standalone because they do not fit either shape.
 - Writes are asynchronous. The `and wait` tag decides whether the continuation waits: a waiting write

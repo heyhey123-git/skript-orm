@@ -1,12 +1,13 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Upsert Entity By ID")
 @Description("Updates the row with the given primary-key value or inserts it when absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support depends on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
@@ -27,8 +28,9 @@ upsert one entity {_user::*} in table "users" by id {_id}:
 class SecUpsertById : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecUpsertById::class.java,
                 "upsert [one] [entity] in [table] %string% by id %object% [wait:and wait]",
                 "upsert [one] [entity] %objects% in [table] %string% by id %object% [wait:and wait]"

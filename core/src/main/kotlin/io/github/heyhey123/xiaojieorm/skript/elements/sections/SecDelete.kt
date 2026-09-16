@@ -1,12 +1,13 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Delete Entities")
 @Description("Deletes rows, optionally with a positive limit and nested where block. Omitting where deletes all rows allowed by the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
@@ -22,8 +23,8 @@ delete entities from table "users" with limit 10 and wait:
 class SecDelete : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(SecDelete::class.java, "delete [entities] from [table] %string% [with limit %integer%] [wait:and wait]")
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(addon, SecDelete::class.java, "delete [entities] from [table] %string% [with limit %integer%] [wait:and wait]")
         }
     }
 

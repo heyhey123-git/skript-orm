@@ -1,11 +1,12 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Entity If Absent")
 @Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
@@ -26,8 +27,9 @@ insert entity {_user::*} if absent into table "archived_users"
 class SecInsertIfAbsent : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecInsertIfAbsent::class.java,
                 "insert [one] [entity] if absent into [table] %string% [wait:and wait]",
                 "insert [one] [entity] %objects% if absent into [table] %string% [wait:and wait]"

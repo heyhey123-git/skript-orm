@@ -1,12 +1,13 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Update Entity By ID")
 @Description("Updates one row by its registered primary-key value. The new values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
@@ -27,8 +28,9 @@ update one entity {_changes::*} in table "users" by id {_id}:
 class SecUpdateById : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(
+                addon,
                 SecUpdateById::class.java,
                 "update [one] [entity] in [table] %string% by id %object% [wait:and wait]",
                 "update [one] [entity] %objects% in [table] %string% by id %object% [wait:and wait]"

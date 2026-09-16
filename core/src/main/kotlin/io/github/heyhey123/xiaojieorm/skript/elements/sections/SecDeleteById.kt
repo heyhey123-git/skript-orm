@@ -1,12 +1,13 @@
 package io.github.heyhey123.xiaojieorm.skript.elements.sections
 
-import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Table
 import org.bukkit.event.Event
+import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Delete Entity By ID")
 @Description("Deletes one row by its registered primary-key value. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
@@ -21,8 +22,8 @@ if last database error is set:
 class SecDeleteById : SecWriteBase() {
 
     companion object {
-        init {
-            Skript.registerSection(SecDeleteById::class.java, "delete [one] [entity] from [table] %string% by id %object% [wait:and wait]")
+        fun register(addon: SkriptAddon) {
+            SkriptSyntax.section(addon, SecDeleteById::class.java, "delete [one] [entity] from [table] %string% by id %object% [wait:and wait]")
         }
     }
 

@@ -3,12 +3,14 @@ package io.github.heyhey123.xiaojieorm
 import ch.njol.skript.Skript
 import ch.njol.skript.util.Version
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.skript.registerElements
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import org.bukkit.plugin.java.JavaPlugin
+import org.skriptlang.skript.addon.SkriptAddon
 
 class XiaojieOrm : JavaPlugin() {
     companion object {
@@ -42,8 +44,7 @@ class XiaojieOrm : JavaPlugin() {
         }
 
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        Skript.registerAddon(this)
-            .loadClasses("io.github.heyhey123.xiaojieorm.skript", "elements")
+        registerElements(registerSkriptAddon())
 
         val candidates = listOf(
             "io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDatabaseFactory",
@@ -78,6 +79,17 @@ class XiaojieOrm : JavaPlugin() {
         )
         return false
     }
+
+    /**
+     * Returns the addon Skript knows this plugin by.
+     *
+     * Obtaining it still takes this deprecated call. `SkriptAddon`'s constructor is package private in
+     * Skript 2.16.2, so `Skript.getAddon` would only find an addon this plugin never created; the
+     * returned type is the interface that replaces the deprecated class. The syntax itself is
+     * registered through the addon's `SyntaxRegistry`, which is where the deprecation points.
+     */
+    @Suppress("DEPRECATION")
+    private fun registerSkriptAddon(): SkriptAddon = Skript.registerAddon(this)
 
     override fun onDisable() {
         try {
