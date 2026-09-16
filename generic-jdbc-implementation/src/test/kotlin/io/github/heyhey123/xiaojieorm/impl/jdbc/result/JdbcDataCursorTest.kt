@@ -6,6 +6,7 @@ import io.github.heyhey123.xiaojieorm.type.ValueConverter
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.sql.Blob
 import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Statement
@@ -50,6 +51,34 @@ class JdbcDataCursorTest {
     }
 
     @Test
+    fun `blob storage is read with the blob accessor by name and index`() {
+        // Connector/J rejects a typed getObject for Blob, so a Blob-backed column has to be read with
+        // the dedicated accessor. Without this, every row carrying one is unreadable.
+        val resultSet = mockk<ResultSet>()
+        val blob = mockk<Blob>()
+        every { resultSet.getBlob("payload") } returns blob
+        every { resultSet.getBlob(3) } returns blob
+        every { resultSet.wasNull() } returns false
+        val cursor = cursor(resultSet = resultSet)
+        val dataType = blobType()
+
+        assertSame(blob, cursor.get("payload", dataType))
+        assertSame(blob, cursor.get(3, dataType))
+        verify(exactly = 0) { resultSet.getObject(any<String>(), any<Class<*>>()) }
+        verify(exactly = 0) { resultSet.getObject(any<Int>(), any<Class<*>>()) }
+    }
+
+    @Test
+    fun `a null blob column reads as null without reaching the converter`() {
+        val resultSet = mockk<ResultSet>()
+        every { resultSet.getBlob("payload") } returns null
+        every { resultSet.wasNull() } returns true
+        val cursor = cursor(resultSet = resultSet)
+
+        assertNull(cursor.get("payload", blobType()))
+    }
+
+    @Test
     fun `close releases all resources once in ownership order`() {
         val events = mutableListOf<String>()
         val resultSet = mockk<ResultSet>()
@@ -90,6 +119,15 @@ class JdbcDataCursorTest {
         verify { resultSet.close() }
         verify { statement.close() }
         verify { connection.close() }
+    }
+
+    private fun blobType(): DataType<Any> = object : DataType<Any> {
+        override val domainType = Any::class.java
+        override val typeCode = "blob"
+        override val converter = object : ValueConverter<Any, Blob>(Any::class.java, Blob::class.java) {
+            override fun toStorage(value: Any): Blob = error("Reading only.")
+            override fun fromStorage(value: Blob): Any = value
+        }
     }
 
     private fun offsetIntType(): DataType<Int> = object : DataType<Int> {
