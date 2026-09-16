@@ -190,6 +190,10 @@ val serverTestPlugins by configurations.creating {
 
 dependencies {
     "serverTestPlugins"(libs.skript)
+    // The JDBC type registry resolves the NBT API when it initializes, so a server without this
+    // plugin fails to connect with a missing `de.tr7zw.nbtapi.NBTCompound`. The test server installs
+    // it because a real server has to.
+    "serverTestPlugins"(libs.nbt.api)
 }
 
 val prepareServerTest by tasks.registering {
