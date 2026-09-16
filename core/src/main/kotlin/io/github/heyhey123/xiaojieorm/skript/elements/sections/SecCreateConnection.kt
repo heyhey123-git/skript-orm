@@ -13,6 +13,7 @@ import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
+import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionPropertiesParser
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
@@ -22,8 +23,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
-import org.skriptlang.skript.lang.entry.EntryValidator
-import org.skriptlang.skript.lang.entry.util.LiteralEntryData
 
 @Name("Create Database Connection")
 @Description("Connects to a registered database implementation and makes it current. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
@@ -50,7 +49,7 @@ class SecCreateConnection : Section() {
     }
 
     private lateinit var databaseNameExpr: Expression<String>
-    private lateinit var connectionProperties: MutableMap<String, String>
+    private lateinit var connectionProperties: Map<String, String>
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -66,40 +65,13 @@ class SecCreateConnection : Section() {
         return parseNode(sectionNode)
     }
 
-    @Suppress("UNCHECKED_CAST")
     private fun parseNode(sectionNode: SectionNode): Boolean {
-        val properties = mutableMapOf<String, String?>(
-            "url" to null,
-            "username" to null,
-            "password" to null
-        )
-        val builder = EntryValidator.builder()
-            .addEntryData(LiteralEntryData("url", null, false, String::class.java))
-            .addEntryData(LiteralEntryData("username", null, true, String::class.java))
-            .addEntryData(LiteralEntryData("password", null, true, String::class.java))
-
-        for (node in sectionNode) {
-            if (node.name() in listOf("url", "username", "password")) continue
-            builder.addEntryData(LiteralEntryData(node.name(), null, true, String::class.java))
-            properties[node.name()!!] = null
-        }
-
-        val container = builder.build().validate(sectionNode)
-        if (container == null) {
-            Skript.error("Invalid connection properties in create connection section.")
+        connectionProperties = try {
+            ConnectionPropertiesParser.collectFrom(sectionNode)
+        } catch (error: IllegalArgumentException) {
+            Skript.error(error.message ?: "Invalid connection properties in create connection section.")
             return false
         }
-
-        for (key in properties.keys) {
-            val value = container.getOptional(key, true) as String?
-            if (value == null) {
-                Skript.error("The property values can't be null.")
-                return false
-            }
-            properties[key] = value
-        }
-
-        connectionProperties = properties as MutableMap<String, String>
         return true
     }
 
