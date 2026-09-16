@@ -18,6 +18,7 @@ import java.util.UUID
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 /**
  * Round-trips every supported type through its own converter, in a runtime that has a Bukkit server
@@ -112,6 +113,20 @@ class JdbcConverterRoundTripTest {
         val stack = ItemStack(Material.DIAMOND, 7)
 
         assertEquals(stack, restore(type, storageOf(type, stack)))
+    }
+
+    @Test
+    fun `a serialized location fits the column its type declares`() {
+        // The declared default size is what a column gets when the author does not give one, so a
+        // value that does not fit it is a value the type cannot store: MySQL reports "Data too long
+        // for column" and, outside strict mode, would truncate it silently.
+        val type = LocationJdbcDataType()
+        val storage = assertIs<ByteArray>(storageOf(type, Location(null, 1.5, -2.5, 3.5, 90f, -45f)))
+
+        assertTrue(
+            storage.size <= type.defaultSize,
+            "a serialized location is ${storage.size} bytes but the type declares a column of ${type.defaultSize}"
+        )
     }
 
     @Test

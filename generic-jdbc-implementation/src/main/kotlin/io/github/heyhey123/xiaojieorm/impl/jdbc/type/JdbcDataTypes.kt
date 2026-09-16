@@ -121,7 +121,15 @@ open class LocationJdbcDataType : LocationDataType(), JdbcDataType<Location> {
     override val jdbcType: JDBCType = JDBCType.BINARY
     override val storageName: String = "VARBINARY"
     override val converter: ValueConverter<Location, ByteArray> = LocationJdbcConverter
-    override val defaultSize: Int = 255
+
+    /**
+     * A serialized location measured 452 bytes for a location without a world, so the previous 255
+     * was smaller than a single value and MySQL rejected every insert with "Data too long for
+     * column"; `JdbcConverterRoundTripTest` now pins that invariant. The default leaves room for a
+     * world name, and a declared `VARBINARY` length costs nothing while it goes unused, so this errs
+     * large.
+     */
+    override val defaultSize: Int = 2048
     override val supportsSize: Boolean = true
 }
 
