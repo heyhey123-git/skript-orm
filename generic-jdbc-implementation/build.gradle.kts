@@ -25,9 +25,12 @@ dependencies {
     testImplementation(libs.coroutines.core)
 
     // Integration tests run the JDBC implementation against a real MySQL server, so they need the
-    // driver and connection pool at runtime. JdbcDataTypes also resolves the Bukkit, NBT and Skript
-    // classes it declares when the object initializes, which is why those compileOnly dependencies
-    // are repeated here: the integration test JVM is the plugin runtime without a server.
+    // driver and connection pool at runtime. JdbcDataTypes also resolves the Bukkit and Skript classes
+    // it declares when the object initializes, which is why those compileOnly dependencies are
+    // repeated here: the integration test JVM is the plugin runtime without a server.
+    //
+    // SkBee is deliberately absent. It is the only NBT implementation the plugin supports, so NBT
+    // support is unavailable in this JVM, which is what the round-trip tests record.
     "integrationTestImplementation"(platform(libs.testcontainers.bom))
     "integrationTestImplementation"(libs.testcontainers.mysql)
     "integrationTestImplementation"(libs.testcontainers.junit)
@@ -39,7 +42,6 @@ dependencies {
     "integrationTestImplementation"(libs.slf4j.simple)
     "integrationTestImplementation"(libs.paper.api)
     "integrationTestImplementation"(libs.skript)
-    "integrationTestImplementation"(libs.nbt.api)
 }
 
 // Opt-in task: plain `test` stays fast and Docker-free. Run this explicitly, or from CI, when a

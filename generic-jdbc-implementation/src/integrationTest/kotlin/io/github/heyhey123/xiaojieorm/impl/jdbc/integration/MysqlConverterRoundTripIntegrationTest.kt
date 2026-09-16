@@ -41,8 +41,9 @@ import kotlin.test.assertTrue
  * show that what was written is what comes back. The half that needs no database is covered by
  * `JdbcConverterRoundTripTest`.
  *
- * `NBT_COMPOUND` is absent for the same reason as there: NBT-API cannot build a compound without a
- * real server.
+ * `NBT_COMPOUND` is absent for the same reason as there: nothing on this classpath can build a
+ * compound, because SkBee is the only NBT implementation the plugin supports. The Skript server test
+ * is what covers an NBT value, on a server that has SkBee.
  */
 class MysqlConverterRoundTripIntegrationTest : MysqlIntegrationTestBase() {
 

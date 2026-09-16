@@ -288,11 +288,20 @@ The same settings are read from `XIAOJIE_TEST_MYSQL_URL`, `XIAOJIE_TEST_MYSQL_US
 neither Docker nor an external server is available, the MySQL tests abort with a reason instead of
 passing silently.
 
-The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper,
-Skript, and the NBT API, because `JdbcDataTypes` resolves those classes when it initializes.
-`JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true. MockBukkit is
-started for the converter and MySQL tests, but only as a Bukkit server for the values that need one;
-`NBT_COMPOUND` has no round-trip test, because NBT-API cannot build a compound without a real server.
+The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper and
+Skript, because those are the classes the JDBC type registry resolves when it initializes.
+`JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true. NBT is the exception
+that runtime exists to prove: the plugin compiles against no NBT implementation and SkBee is not here,
+so the registry has to initialize without one. `NBT_COMPOUND` has no round-trip test for that reason;
+the Skript server test, which installs SkBee, is what covers an NBT value.
+
+NBT is the one part of the plugin that depends on another plugin at runtime. SkBee is what gives
+scripts a way to write a compound, and it bundles its NBT library under its own package, so the plugin
+neither compiles against an NBT implementation nor names one: `NbtSupport` looks SkBee's classes up by
+name, links them with `MethodHandle`s once, and moves values in and out through SNBT. That is why
+`softdepend` lists SkBee, why registering a table with an `nbtcompound` column is refused with a
+message when SkBee is missing, and why the server test installs SkBee rather than the standalone NBT
+API, which the plugin does not support.
 
 Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only discovers `@Test` methods
 that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an

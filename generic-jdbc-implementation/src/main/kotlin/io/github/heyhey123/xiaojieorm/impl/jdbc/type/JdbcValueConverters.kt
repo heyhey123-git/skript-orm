@@ -1,10 +1,10 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.type
 
-import de.tr7zw.nbtapi.NBTCompound
 import io.github.heyhey123.xiaojieorm.type.SkriptDate
 import io.github.heyhey123.xiaojieorm.type.SkriptTime
 import io.github.heyhey123.xiaojieorm.type.SkriptTimespan
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import io.github.heyhey123.xiaojieorm.utils.SerializationUtils
 import org.bukkit.Location
 import org.bukkit.configuration.serialization.ConfigurationSerializable
@@ -114,21 +114,26 @@ object ConfigurationSerializableJdbcConverter :
     }
 }
 
-object NbtJdbcConverter : ValueConverter<NBTCompound, Blob>(
-    NBTCompound::class.java,
+/**
+ * Stores a compound as NBT bytes in a BLOB.
+ *
+ * The value is one of SkBee's compounds, which this module cannot name because the plugin does not
+ * compile against SkBee: the conversion therefore goes through [NbtSupport]. A server without SkBee
+ * cannot reach this converter, because a table that declares an NBT column is refused when it is
+ * registered.
+ */
+object NbtJdbcConverter : ValueConverter<Any, Blob>(
+    NbtSupport.domainType as Class<Any>,
     Blob::class.java
 ) {
 
-    override fun toStorage(value: NBTCompound): Blob =
-        SerializationUtils.NbtSerialization.serialize(value).use { SerialBlob(it.toByteArray()) }
+    override fun toStorage(value: Any): Blob = SerialBlob(NbtSupport.toBytes(value))
 
-    override fun fromStorage(value: Blob): NBTCompound = value.consumeBytes { bytes ->
-        ByteArrayInputStream(bytes).use { input ->
-            try {
-                SerializationUtils.NbtSerialization.deserialize(input)
-            } catch (error: Throwable) {
-                throw IllegalArgumentException("Failed to deserialize NBT from JDBC BLOB data.", error)
-            }
+    override fun fromStorage(value: Blob): Any = value.consumeBytes { bytes ->
+        try {
+            NbtSupport.fromBytes(bytes)
+        } catch (error: Throwable) {
+            throw IllegalArgumentException("Failed to deserialize NBT from JDBC BLOB data.", error)
         }
     }
 }

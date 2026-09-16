@@ -1,6 +1,6 @@
 package io.github.heyhey123.xiaojieorm.type
 
-import de.tr7zw.nbtapi.NBTCompound
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import org.bukkit.Location
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
@@ -100,9 +100,16 @@ open class ConfigurationSerializableDataType : DataType<ConfigurationSerializabl
     override val typeCode: String = "bukkitserializable"
 }
 
-open class NbtDataType : DataType<NBTCompound> {
+/**
+ * An NBT compound, held as whichever class SkBee provides.
+ *
+ * The domain is resolved rather than declared, because the plugin does not compile against an NBT
+ * implementation: see [NbtSupport]. Without SkBee it is `Any`, which no value can reach, as a table
+ * declaring an NBT column is refused when it is registered.
+ */
+open class NbtDataType : DataType<Any> {
 
-    override val domainType: Class<NBTCompound> = NBTCompound::class.java
+    override val domainType: Class<Any> = NbtSupport.domainType as Class<Any>
     override val typeCode: String = "nbtcompound"
 }
 

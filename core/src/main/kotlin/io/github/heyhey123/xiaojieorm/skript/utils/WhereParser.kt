@@ -9,6 +9,7 @@ import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseExpres
 import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper.parseNullableExpression
 import io.github.heyhey123.xiaojieorm.skript.utils.WhereParser.collectFromSection
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
 
 /**
@@ -26,7 +27,10 @@ sealed class ParsedCondition {
         event: Event?
     ): Any? {
         ExpressionsHelper.requireColumn(table, columnName)
-        return valueExpr?.getSingle(event)
+        // A compound from SkBee belongs to a live object and only means what it meant when the script
+        // named it. Normalising it here, while the event is at hand, is what lets the query layer run
+        // later and elsewhere.
+        return NbtSupport.normalize(valueExpr?.getSingle(event))
     }
 
     data class Equals(

@@ -250,10 +250,16 @@ classpath 上的部分：
 `XIAOJIE_TEST_MYSQL_PASSWORD`、`XIAOJIE_TEST_MYSQL_DRIVER`、`XIAOJIE_TEST_MYSQL_IMAGE`。当既没有
 Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不是静默通过。
 
-集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper、Skript 和 NBT API，因为
-`JdbcDataTypes` 在初始化时会解析这些类。一旦这一点不再成立，`JdbcRuntimeClasspathIntegrationTest`
-会立刻报错。转换器与 MySQL 测试会启动 MockBukkit，但只把它当作需要它的那些值所需的 Bukkit 服务端；
-`NBT_COMPOUND` 没有往返测试，因为没有真实服务端时 NBT-API 无法构造 compound。
+集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper 与 Skript，因为 JDBC 类型注册表在初始化
+时会解析这些类；一旦这一点不再成立，`JdbcRuntimeClasspathIntegrationTest` 会立刻报错。NBT 正是这个运行时用来
+证明的例外：本插件不编译依赖任何 NBT 实现，这里也没有 SkBee，所以注册表必须能在没有它的情况下初始化。因此
+`NBT_COMPOUND` 在这里没有往返测试；覆盖 NBT 值的是安装了 SkBee 的 Skript 服务端测试。
+
+NBT 是本插件唯一在运行期依赖其它插件的部分。能给脚本提供写法来构造 compound 的是 SkBee，而它把自己的 NBT 库
+重定位到自己的包下，所以本插件既不编译依赖任何 NBT 实现、也不在代码里写死某一个实现：`NbtSupport` 按名字查找
+SkBee 的类，用 `MethodHandle` 链接一次，并以 SNBT 作为进出的交换格式。这也是 `softdepend` 里列出 SkBee、缺少
+SkBee 时注册 `nbtcompound` 列会被明确拒绝，以及服务端测试安装 SkBee 而不是独立 NBT API（本插件不支持后者）的
+原因。
 
 集成测试方法请写成 `= runBlocking<Unit> { ... }`。JUnit 只会发现返回 `void` 的 `@Test` 方法，而
 `assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会

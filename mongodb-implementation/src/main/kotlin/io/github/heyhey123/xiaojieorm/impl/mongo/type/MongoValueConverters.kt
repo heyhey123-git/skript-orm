@@ -1,10 +1,10 @@
 package io.github.heyhey123.xiaojieorm.impl.mongo.type
 
-import de.tr7zw.nbtapi.NBTCompound
 import io.github.heyhey123.xiaojieorm.type.SkriptDate
 import io.github.heyhey123.xiaojieorm.type.SkriptTime
 import io.github.heyhey123.xiaojieorm.type.SkriptTimespan
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import io.github.heyhey123.xiaojieorm.utils.SerializationUtils
 import org.bson.types.Binary
 import org.bukkit.Location
@@ -109,23 +109,17 @@ object ConfigurationSerializableMongoConverter : ValueConverter<ConfigurationSer
     }
 }
 
-object NbtMongoConverter : ValueConverter<NBTCompound, Binary>(
-    NBTCompound::class.java,
+object NbtMongoConverter : ValueConverter<Any, Binary>(
+    NbtSupport.domainType as Class<Any>,
     Binary::class.java
 ) {
 
-    override fun toStorage(value: NBTCompound): Binary {
-        val outputStream = SerializationUtils.NbtSerialization.serialize(value)
-        outputStream.use {
-            return Binary(outputStream.toByteArray())
-        }
-    }
+    override fun toStorage(value: Any): Binary = Binary(NbtSupport.toBytes(value))
 
-    override fun fromStorage(value: Binary): NBTCompound {
-        val inputStream = ByteArrayInputStream(value.data)
-        inputStream.use {
-            return SerializationUtils.NbtSerialization.deserialize(it)
-        }
+    override fun fromStorage(value: Binary): Any = try {
+        NbtSupport.fromBytes(value.data)
+    } catch (error: Throwable) {
+        throw IllegalArgumentException("Failed to deserialize NBT from MongoDB binary data.", error)
     }
 }
 

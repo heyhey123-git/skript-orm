@@ -3,6 +3,7 @@ package io.github.heyhey123.xiaojieorm.skript.utils
 import ch.njol.skript.lang.Variable
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableValuesReader.fillMissingColumns
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
 import org.skriptlang.skript.lang.converter.Converters
 
@@ -146,6 +147,13 @@ object VariableValuesReader {
         value: Any?
     ): Any? {
         if (value == null) return null
+
+        // A compound from SkBee belongs to a live object and only means what it meant when the script
+        // named it; normalising replaces it with a detached compound holding the same data. Skript's
+        // converters cannot be asked to do this, because it would mean converting between two classes
+        // that belong to different plugins.
+        val compound = NbtSupport.normalize(value)
+        if (NbtSupport.isNbt(compound)) return compound
 
         return Converters.convert(value, domainType as Class<Any>)
             ?: throw IllegalArgumentException(

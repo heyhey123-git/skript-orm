@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.mongo.type
 
-import de.tr7zw.nbtapi.NBTCompound
 import io.github.heyhey123.xiaojieorm.type.BigIntDataType
 import io.github.heyhey123.xiaojieorm.type.BooleanDataType
 import io.github.heyhey123.xiaojieorm.type.ConfigurationSerializableDataType
@@ -82,7 +81,7 @@ object ConfigurationSerializableMongoDataType : ConfigurationSerializableDataTyp
 
 object NbtMongoDataType : NbtDataType() {
 
-    override val converter: ValueConverter<NBTCompound, Binary> = NbtMongoConverter
+    override val converter: ValueConverter<Any, Binary> = NbtMongoConverter
 }
 
 object SkriptDateMongoDataType : SkriptDateDataType() {

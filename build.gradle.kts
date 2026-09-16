@@ -63,7 +63,6 @@ allprojects {
 // `subprojects { }` block below. Reading them once here keeps that block free of catalog API noise.
 val paperApi = libs.paper.api
 val skriptLibrary = libs.skript
-val nbtApiLibrary = libs.nbt.api
 val coroutinesCore = libs.coroutines.core
 
 subprojects {
@@ -87,7 +86,6 @@ subprojects {
         compileOnly(kotlin("stdlib"))
         compileOnly(coroutinesCore)
         compileOnly(skriptLibrary)
-        compileOnly(nbtApiLibrary)
     }
     kotlin {
         jvmToolchain(25)
@@ -189,11 +187,11 @@ val serverTestPlugins by configurations.creating {
 }
 
 dependencies {
+    // Skript is a declared dependency of this plugin, so the test server installs the version it is
+    // built against. SkBee is not, and is not listed here: `runServer` downloads it from Modrinth
+    // below, because the NBT interop only exists on a server that has SkBee, and installing the
+    // standalone NBT API instead would hide that, as it did before.
     "serverTestPlugins"(libs.skript)
-    // The JDBC type registry resolves the NBT API when it initializes, so a server without this
-    // plugin fails to connect with a missing `de.tr7zw.nbtapi.NBTCompound`. The test server installs
-    // it because a real server has to.
-    "serverTestPlugins"(libs.nbt.api)
 }
 
 // A database for the server test, read from the same keys the JDBC integration tests read, so one

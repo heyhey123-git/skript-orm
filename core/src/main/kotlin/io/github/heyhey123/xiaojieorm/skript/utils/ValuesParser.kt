@@ -5,6 +5,7 @@ import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.xiaojieorm.skript.utils.ValuesParser.requireValuesHeader
 import io.github.heyhey123.xiaojieorm.table.Table
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
 
 data class RawValue(
@@ -52,7 +53,10 @@ data class ParsedValues(
         val resolvedMap = mutableMapOf<String, Any?>()
         for ((columnName, expression) in values) {
             ExpressionsHelper.requireColumn(table, columnName)
-            resolvedMap[columnName] = expression?.getSingle(event)
+            // Normalised for the same reason as a where clause: a compound SkBee hands over belongs to
+            // a live object and only means what it meant when the script named it, and the query layer
+            // is asynchronous.
+            resolvedMap[columnName] = NbtSupport.normalize(expression?.getSingle(event))
         }
         return resolvedMap
     }

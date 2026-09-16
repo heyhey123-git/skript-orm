@@ -28,6 +28,10 @@ every 1 second:
         id: bigint, primary key, auto increment, not null
         name: string(64), not null
         age: int, nullable
+        # NBT is the one type that depends on another plugin. The test server installs SkBee and not
+        # the standalone NBT API, so this column is also what proves the plugin works on a server
+        # whose only NBT implementation is SkBee's.
+        data: nbtcompound, nullable
     if last database error is set:
         log "XIAOJIE_SELFTEST=FAIL setup table: %last database error%"
 

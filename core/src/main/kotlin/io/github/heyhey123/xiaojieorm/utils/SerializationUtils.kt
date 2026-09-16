@@ -2,9 +2,6 @@
 
 package io.github.heyhey123.xiaojieorm.utils
 
-import de.tr7zw.nbtapi.NBTCompound
-import de.tr7zw.nbtapi.NBTContainer
-import de.tr7zw.nbtapi.NBTReflectionUtil
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.util.io.BukkitObjectInputStream
 import org.bukkit.util.io.BukkitObjectOutputStream
@@ -33,20 +30,5 @@ object SerializationUtils {
                 return it.readObject()
             }
         }
-    }
-
-    /**
-     * Serialization utils for [NBTCompound].
-     *
-     */
-    object NbtSerialization {
-
-        fun serialize(serializable: NBTCompound): ByteArrayOutputStream {
-            val outputStream = ByteArrayOutputStream()
-            serializable.writeCompound(outputStream)
-            return outputStream
-        }
-
-        fun deserialize(data: InputStream): NBTCompound = NBTContainer(NBTReflectionUtil.readNBT(data))
     }
 }

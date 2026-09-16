@@ -19,6 +19,8 @@ import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.table.Column
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataType
+import io.github.heyhey123.xiaojieorm.type.NbtDataType
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -160,6 +162,12 @@ class SecRegisterTable : Section() {
                 columns.map { raw ->
                     val type = requireNotNull(database.dataTypes[raw.typeCode]) {
                         "Data type '${raw.typeCode}' is not supported by the connected database."
+                    }
+                    // NBT is the one type that needs another plugin, so a missing SkBee is refused
+                    // here, while the table is being declared, rather than left to fail on the first
+                    // row that is read or written.
+                    require(!(type is NbtDataType && !NbtSupport.isAvailable)) {
+                        "Data type 'nbtcompound' needs SkBee, which is not installed."
                     }
                     createColumn(raw, type)
                 }

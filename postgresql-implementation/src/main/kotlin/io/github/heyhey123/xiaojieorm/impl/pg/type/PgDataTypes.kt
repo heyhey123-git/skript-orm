@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.pg.type
 
-import de.tr7zw.nbtapi.NBTCompound
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.BigIntJdbcDataType
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.BooleanJdbcDataType
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.DoubleJdbcDataType
@@ -21,6 +20,7 @@ import io.github.heyhey123.xiaojieorm.type.ItemStackDataType
 import io.github.heyhey123.xiaojieorm.type.NbtDataType
 import io.github.heyhey123.xiaojieorm.type.TypeId
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import io.github.heyhey123.xiaojieorm.utils.SerializationUtils
 import org.bukkit.configuration.serialization.ConfigurationSerializable
 import org.bukkit.inventory.ItemStack
@@ -93,11 +93,11 @@ private class PgConfigurationSerializableJdbcDataType :
     override val converter: ValueConverter<ConfigurationSerializable, ByteArray> = PgConfigurationSerializableConverter
 }
 
-private class PgNbtJdbcDataType : NbtDataType(), JdbcDataType<NBTCompound> {
+private class PgNbtJdbcDataType : NbtDataType(), JdbcDataType<Any> {
 
     override val jdbcType: JDBCType = JDBCType.VARBINARY
     override val storageName: String = "BYTEA"
-    override val converter: ValueConverter<NBTCompound, ByteArray> = PgNbtConverter
+    override val converter: ValueConverter<Any, ByteArray> = PgNbtConverter
 }
 
 private object PgItemStackConverter : ValueConverter<ItemStack, ByteArray>(
@@ -132,19 +132,16 @@ private object PgConfigurationSerializableConverter : ValueConverter<Configurati
         }
 }
 
-private object PgNbtConverter : ValueConverter<NBTCompound, ByteArray>(
-    NBTCompound::class.java,
+private object PgNbtConverter : ValueConverter<Any, ByteArray>(
+    NbtSupport.domainType as Class<Any>,
     ByteArray::class.java
 ) {
 
-    override fun toStorage(value: NBTCompound): ByteArray =
-        SerializationUtils.NbtSerialization.serialize(value).use { it.toByteArray() }
+    override fun toStorage(value: Any): ByteArray = NbtSupport.toBytes(value)
 
-    override fun fromStorage(value: ByteArray): NBTCompound = ByteArrayInputStream(value).use { input ->
-        try {
-            SerializationUtils.NbtSerialization.deserialize(input)
-        } catch (error: Throwable) {
-            throw IllegalArgumentException("Failed to deserialize NBT from PostgreSQL BYTEA data.", error)
-        }
+    override fun fromStorage(value: ByteArray): Any = try {
+        NbtSupport.fromBytes(value)
+    } catch (error: Throwable) {
+        throw IllegalArgumentException("Failed to deserialize NBT from PostgreSQL BYTEA data.", error)
     }
 }

@@ -18,15 +18,13 @@ dependencies {
 
     // The Skript parsers read Skript's own config node types, which the unit tests deliberately do
     // not have on their classpath. Skript needs Bukkit at class-loading time, so the API the plugin
-    // compiles against is a real dependency here, and so is the NBT API that the type registry
-    // resolves when it initializes.
+    // compiles against is a real dependency here.
     //
     // MockBukkit supplies a Bukkit server, because Skript logs through Bukkit.getConsoleSender() and
     // NPEs without one. It is *not* used to load Skript or this addon: MockBukkit loads a plugin as
     // a generated subclass of its main class, and Skript's main class is final.
     "integrationTestImplementation"(libs.paper.api)
     "integrationTestImplementation"(libs.skript)
-    "integrationTestImplementation"(libs.nbt.api)
     "integrationTestImplementation"(libs.mockbukkit)
 }
 

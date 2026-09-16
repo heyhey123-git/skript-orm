@@ -16,6 +16,10 @@
 # in database mode and waits for `{xiaojie::selftest::done::roundtrip}`. Without that, the reads below
 # report "No database connected." and look exactly like a write that stored nothing.
 #
+# The NBT column is the other thing only this script can cover. The test server installs SkBee and no
+# other NBT implementation, so a compound that goes in through SkBee's syntax and comes back readable
+# by SkBee's syntax is what says the plugin works on the servers its users run.
+#
 # The row is read twice, with a plain Skript `wait` in between. The first read says what the steps
 # left behind when they ran as written; the second is a control. If the row appears after the wait,
 # then the steps are not ordered the way they are written and the write itself is fine. If it never
@@ -32,10 +36,14 @@ every 5 seconds:
 
     # Nothing is deleted here on purpose: a delete that ran late would remove the very row these
     # checks are about, which is one of the things this script is trying to tell apart.
+    #
+    # The compound is built with SkBee's own syntax, so what goes in is one of SkBee's objects rather
+    # than anything this plugin made: that crossing is what the NBT support exists for.
     insert one entity into table "orm_roundtrip" and wait:
         values:
             name: "Alice"
             age: 30
+            data: nbt compound from "{xiaojie:1}"
     if last database error is set:
         log "XIAOJIE_SELFTEST=FAIL roundtrip insert: %last database error%"
 
@@ -52,6 +60,10 @@ every 5 seconds:
         log "XIAOJIE_SELFTEST=FAIL roundtrip read back name '%{orm_selftest::later::name}%' instead of 'Alice'"
     if {orm_selftest::later::age} is not 30:
         log "XIAOJIE_SELFTEST=FAIL roundtrip read back age '%{orm_selftest::later::age}%' instead of 30"
+    # SkBee renders a compound as SNBT, so its text says whether the tag survived the database and the
+    # crossing back into SkBee's type. A column that came back unset renders as '<none>'.
+    if "%{orm_selftest::later::data}%" does not contain "xiaojie":
+        log "XIAOJIE_SELFTEST=FAIL roundtrip read back nbt '%{orm_selftest::later::data}%' instead of a compound holding xiaojie"
 
     # A `where` on the primary key, which does not depend on any stored value being right.
     select one entity from table "orm_roundtrip" and store the result in {_id::*}:

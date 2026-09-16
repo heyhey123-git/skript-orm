@@ -26,11 +26,6 @@ paper = "26.2.build.124-stable"
 
 skript = "2.16.2"
 
-# The NBT-API plugin, whose classes the JDBC type registry resolves when it initializes. 2.15.5
-# refuses to claim support for Minecraft 26.2 and warns that "some functions may not work"; 2.16.0 is
-# the release that adds it.
-nbt-api = "2.16.0"
-
 # The artifact name itself carries the Paper line (`-v26.2`), so this version and `paper` above move
 # together: a newer Paper line needs the matching MockBukkit artifact, not just a newer version.
 mockbukkit = "4.116.1"
@@ -53,7 +48,6 @@ run-paper = "3.0.0"
 [libraries]
 paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
 skript = { module = "com.github.SkriptLang:Skript", version.ref = "skript" }
-nbt-api = { module = "de.tr7zw:item-nbt-api-plugin", version.ref = "nbt-api" }
 mockbukkit = { module = "org.mockbukkit.mockbukkit:mockbukkit-v26.2", version.ref = "mockbukkit" }
 mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
 coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

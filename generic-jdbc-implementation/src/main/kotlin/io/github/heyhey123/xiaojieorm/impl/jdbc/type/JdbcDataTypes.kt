@@ -1,6 +1,5 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.type
 
-import de.tr7zw.nbtapi.NBTCompound
 import io.github.heyhey123.xiaojieorm.type.BigIntDataType
 import io.github.heyhey123.xiaojieorm.type.BooleanDataType
 import io.github.heyhey123.xiaojieorm.type.ConfigurationSerializableDataType
@@ -141,11 +140,11 @@ open class ConfigurationSerializableJdbcDataType :
     override val converter: ValueConverter<ConfigurationSerializable, Blob> = ConfigurationSerializableJdbcConverter
 }
 
-open class NbtJdbcDataType : NbtDataType(), JdbcDataType<NBTCompound> {
+open class NbtJdbcDataType : NbtDataType(), JdbcDataType<Any> {
 
     override val jdbcType: JDBCType = JDBCType.BLOB
     override val storageName: String = "BLOB"
-    override val converter: ValueConverter<NBTCompound, Blob> = NbtJdbcConverter
+    override val converter: ValueConverter<Any, Blob> = NbtJdbcConverter
 }
 
 open class SkriptDateJdbcDataType : SkriptDateDataType(), JdbcDataType<SkriptDate> {

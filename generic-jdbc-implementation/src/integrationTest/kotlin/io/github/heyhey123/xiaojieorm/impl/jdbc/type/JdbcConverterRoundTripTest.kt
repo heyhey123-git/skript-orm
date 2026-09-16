@@ -29,8 +29,8 @@ import kotlin.test.assertTrue
  * anything, and the Bukkit-backed types only get that far once a server can serialize them. The
  * database leg is covered by `MysqlConverterRoundTripIntegrationTest`.
  *
- * `NBT_COMPOUND` has no sample. NBT-API cannot create a compound without a real server, and
- * MockBukkit provides a mocked Bukkit, not the server internals the API needs.
+ * `NBT_COMPOUND` has no sample. SkBee is the only NBT implementation the plugin supports, and it is
+ * not on this classpath, so nothing here can build a compound to round-trip.
  */
 class JdbcConverterRoundTripTest {
 
