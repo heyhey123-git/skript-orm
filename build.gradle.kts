@@ -231,6 +231,12 @@ tasks.named<RunServer>("runServer") {
     // The shaded jar is the plugin under test. run-paper would find it on its own; naming it here
     // keeps the choice of artifact visible.
     pluginJars(tasks.shadowJar, serverTestPlugins)
+    // SkBee is not a dependency of this plugin. The server test installs it so the NBT interop, which
+    // only exists on a server that has SkBee, is exercised against the real thing. Pinned by
+    // Modrinth's version id, which is not the plugin version: `bTBlzhGZ` is SkBee 3.25.4.
+    downloadPlugins {
+        modrinth("skbee", "bTBlzhGZ")
+    }
 }
 
 // One entry per element the self-test drives: the name it reports, and the message it reports with
