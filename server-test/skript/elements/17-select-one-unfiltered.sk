@@ -1,0 +1,15 @@
+# select one, without a filter and without a colon
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end is both
+# the run-once guard and what `99-finish.sk` waits for.
+#
+# The line below has no colon on purpose. `select one` with a `where` block is a section and needs one,
+# but this form has nothing to put in a body, and Skript warns about every section that has none. Written
+# as a statement it is an effect instead, and Skript has nothing to warn about.
+every 5 seconds:
+    if {xiaojie::selftest::done::select-one-unfiltered} is set:
+        stop trigger
+
+    select one entity from table "orm_selftest" and store the result in {_unfiltered::*}
+    log "XIAOJIE_SELFTEST detail: select one unfiltered -> %last database error%"
+    set {xiaojie::selftest::done::select-one-unfiltered} to true
