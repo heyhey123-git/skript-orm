@@ -105,7 +105,6 @@ class EffSelectPageUnfiltered : Effect() {
 
         return DatabaseWork.run(
             event = actualEvent,
-            trigger = trigger,
             continuation = next,
             wait = true,
             query = {

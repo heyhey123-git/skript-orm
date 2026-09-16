@@ -79,7 +79,6 @@ class EffInsertIfAbsentFromVariable : Effect() {
 
         return DatabaseWork.run(
             event = actualEvent,
-            trigger = trigger,
             continuation = next,
             wait = waitFlag,
             query = {

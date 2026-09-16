@@ -77,7 +77,6 @@ internal object DatabaseWork {
      */
     fun <T : Any> run(
         event: Event,
-        trigger: Trigger,
         continuation: TriggerItem?,
         wait: Boolean,
         query: suspend () -> T,
