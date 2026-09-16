@@ -1,10 +1,16 @@
 package io.github.heyhey123.xiaojieorm.skript
 
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDeleteById
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDisconnect
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertIfAbsentFromVariable
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertManyFromVariable
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertOneFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectById
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectManyUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectOneUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectPageUnfiltered
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffUpdateByIdFromVariable
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffUpsertByIdFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.expressions.ExprLastDatabaseError
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecCreateConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecDelete
@@ -32,11 +38,17 @@ import org.skriptlang.skript.addon.SkriptAddon
  * quietly not existing.
  */
 internal fun registerElements(addon: SkriptAddon) {
+    EffDeleteById.register(addon)
     EffDisconnect.register(addon)
+    EffInsertIfAbsentFromVariable.register(addon)
+    EffInsertManyFromVariable.register(addon)
+    EffInsertOneFromVariable.register(addon)
     EffSelectById.register(addon)
     EffSelectManyUnfiltered.register(addon)
     EffSelectOneUnfiltered.register(addon)
     EffSelectPageUnfiltered.register(addon)
+    EffUpdateByIdFromVariable.register(addon)
+    EffUpsertByIdFromVariable.register(addon)
     ExprLastDatabaseError.register(addon)
 
     SecCreateConnection.register(addon)

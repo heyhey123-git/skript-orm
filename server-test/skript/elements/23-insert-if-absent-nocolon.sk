@@ -1,0 +1,12 @@
+# insert if absent from a variable, without a colon
+#
+# No colon on purpose: this write takes its row from the variable, so there is nothing to indent, and
+# Skript warns about every section that has none.
+every 5 seconds:
+    if {xiaojie::selftest::done::insert-if-absent-nocolon} is set:
+        stop trigger
+
+    set {_row::name} to "Alice"
+    insert one {_row::*} if absent into table "orm_selftest" and wait
+    log "XIAOJIE_SELFTEST detail: insert if absent without colon -> %last database error%"
+    set {xiaojie::selftest::done::insert-if-absent-nocolon} to true

@@ -1,0 +1,13 @@
+# insert many from a variable, without a colon
+#
+# No colon on purpose: this write takes its rows from the variable, so there is nothing to indent, and
+# Skript warns about every section that has none.
+every 5 seconds:
+    if {xiaojie::selftest::done::insert-many-nocolon} is set:
+        stop trigger
+
+    set {_rows::1::name} to "Alice"
+    set {_rows::2::name} to "Bob"
+    insert many {_rows::*} into table "orm_selftest" and wait
+    log "XIAOJIE_SELFTEST detail: insert many from variable without colon -> %last database error%"
+    set {xiaojie::selftest::done::insert-many-nocolon} to true
