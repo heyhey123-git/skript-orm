@@ -62,7 +62,7 @@ change a table, run the `ALTER TABLE` yourself, or drop the table in a developme
 plugin create it again.
 
 **Registering is remembered per connection.** A second `register a database table "users"` on the same
-connection is refused with `Table 'users' is already registered.` — which is what a script that reloads
+connection is refused with `Table 'users' is already registered.`, which is what a script that reloads
 and registers again will see. The usual arrangement avoids it by connecting first:
 
 ```sk

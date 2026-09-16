@@ -26,8 +26,7 @@ select many entities from table "users" and store the results in {_users::*}:
 send "第一个: %{_users::1::name}%"
 ```
 
-行以从 1 开始的行号加列名为键，例如 `{_users::1::name}`。即使只匹配到一行，行号也在，所以 `select many` 的结果
-读法永远一致。行数用 `size of {_users::*}`。
+行以从 1 开始的行号加列名为键，例如 `{_users::1::name}`。哪怕只匹配到一行，行号也还在，所以 `select many` 的结果读法始终如一。要行数就用 `size of {_users::*}`。
 
 ## 分页
 
@@ -52,7 +51,7 @@ select entity from table "users" by id {_id} and store the result in {_user::*}:
 
 ## where 块
 
-`where` 块里一行一个条件，放在 `where all:` 或 `where any:` 之下 —— 分别是“全部成立”和“至少一个成立”。
+`where` 块里一行一个条件，放在 `where all:` 或 `where any:` 之下。前者要求条条成立，后者只要有一条成立。
 
 ```sk
 select many entities from table "users" and store the results in {_users::*}:

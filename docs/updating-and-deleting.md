@@ -42,7 +42,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 ```
 
-A delete has no values block — it only takes an optional `where`, an optional limit and `and wait`.
+A delete has no values block; it only takes an optional `where`, an optional limit and `and wait`.
 
 ## Delete by id
 

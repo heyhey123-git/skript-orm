@@ -47,10 +47,8 @@ register a database table "users":
 
 SQL NULL 是能表达的，而且有两条彼此独立的规则：
 
-- **写入**：`values` 块里字面量 `null` 会存成 SQL NULL。把列从块里省略掉不是同一件事：语句没有提到的列会保留
-  数据库默认值 —— 没写 `not null` 的列默认是 NULL，自增主键则是下一个 id。
-- **读取**：NULL 列不会在结果变量里写下它的键。Skript 的列表变量会把值为 null 的键删除，所以对脚本来说
-  “该列是 NULL”和“没有这一列”长得一样。也就是说 `{_user::age} is not set` 表示“NULL 或不存在”，而不是 0。
+- **写入**：`values` 块里字面量 `null` 会存成 SQL NULL。把列从块里省略掉不是同一件事，语句没有提到的列会保留数据库默认值：没写 `not null` 的列默认是 NULL，自增主键则是下一个 id。
+- **读取**：NULL 列不会在结果变量里写下自己的键。Skript 的列表变量会把值为 null 的键删掉，所以对脚本来说，“该列是 NULL”和“没有这一列”长得一模一样。也就是说 `{_user::age} is not set` 表示“NULL 或不存在”，而不是 0。
 
 ## NBT compound
 

@@ -35,7 +35,7 @@ send "Stored." to console
 - Each operation **clears it before it runs**, so what you read is about the operation you just ran, not
   an older one.
 - An unset error is printed as `<none>`, so compare with `is set` rather than against text.
-- It is set by a failure and left unset by a success — but see the next section, where "unset" is weaker
+- It is set by a failure and left unset by a success. See the next section, though: "unset" is weaker
   than it sounds.
 
 ## What an unwaited write does not tell you

@@ -46,12 +46,9 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 注册执行 `CREATE TABLE IF NOT EXISTS`，然后等到表存在为止。它不会删除、修改或检查任何东西。
 
-**已经存在的表会被原样保留。** 在脚本里加一列再 reload，数据库不会有任何变化：插件记住了新列，数据库没有多出来，
-于是提到这一列的操作会在运行时报错，而没提到的照常工作。这里**不会**有警告 —— 从插件的角度看，注册是成功的。
-要改表就自己执行 `ALTER TABLE`，或者在开发库里把表删掉让插件重建。
+**已经存在的表会被原样保留。** 在脚本里加一列再 reload，数据库不会有任何变化：插件记住了新列，数据库没有多出来，于是提到这一列的操作会在运行时报错，没提到的照常工作。这里**不会**有警告，因为从插件的角度看，注册确实成功了。要改表就自己执行 `ALTER TABLE`，开发库里也可以把表删掉让插件重建，亡羊补牢为时未晚。
 
-**“已注册”是按连接记的。** 在同一个连接上再执行一次 `register a database table "users"`，会得到
-`Table 'users' is already registered.` —— 一个 reload 之后又注册一遍的脚本就会撞上它。通常的写法可以避开：先连接。
+**“已注册”是按连接记的。** 在同一个连接上再执行一次 `register a database table "users"`，会得到 `Table 'users' is already registered.`。reload 之后又注册一遍的脚本，撞上的正是这一条。写法上避开它并不难，先连接便是：
 
 ```sk
 on load:

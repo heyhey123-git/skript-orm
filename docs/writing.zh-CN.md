@@ -17,10 +17,9 @@ insert one entity into table "users" and wait:
         joined: now
 ```
 
-- 右边可以是任何 Skript 表达式，变量、参数、函数都可以。
-- 每行必须在同一行里写成 `column: expression`；只有需要多行的操作（见 `insert many`）才允许嵌套块。
-- **没写的列不会出现在语句里**，于是数据库默认值生效 —— 自增主键就是这样保持自动的。写 `null` 才是存 SQL NULL；
-  见 [类型](types.zh-CN.md)。
+- 右边可以是任何 Skript 表达式，变量、参数、函数都行。
+- 每行必须在同一行里写成 `column: expression`。只有需要多行的操作（见 `insert many`）才允许嵌套块。
+- **没写的列不会出现在语句里**，于是数据库默认值照常生效，自增主键就是这样保持自动的。想存 SQL NULL，就写 `null`；见 [类型](types.zh-CN.md)。
 - 列名不存在时，在发出任何语句之前就会失败。
 
 ## 插入一行
@@ -66,8 +65,7 @@ insert many entities into table "users" and wait:
 insert many {_rows::*} into table "archived_users" and wait:
 ```
 
-各行可以写不同的列。省略某列时，数据库允许的情况下这条语句就不提它；而当一条语句必须为所有行绑定同一组列时，
-该列会按 NULL 写入。
+各行可以写不同的列。省略某列时，只要数据库允许，这条语句就不提它。而当一条语句必须为所有行绑定同一组列时，该列按 NULL 写入。
 
 ## 有则更新、无则插入
 
@@ -87,8 +85,7 @@ insert entity if absent into table "users" and wait:
         name: "Alice"
 ```
 
-`if absent` 只在数据库认为该行不存在时插入，存在时什么都不做。在 MySQL 上这是 `INSERT IGNORE`，所以主键冲突会被
-静默跳过、而不是变成更新：已存在的行保留原值。选哪个取决于“已经存在”该是什么意思：
+`if absent` 只在数据库认为该行不存在时插入，已经存在就按兵不动。在 MySQL 上这是 `INSERT IGNORE`，主键冲突会被静默跳过，不会变成更新，已有的行原封不动。该用哪个，看你心里“已经存在”是什么意思：
 
 | 想要 | 用 |
 | --- | --- |
@@ -96,15 +93,13 @@ insert entity if absent into table "users" and wait:
 | 只在缺失时建，已有行别动 | `insert entity if absent` |
 | 想知道到底建没建 | 先用 `upsert` 或 `if absent`，再把行读回来比较 |
 
-两者都取决于实现的冲突规则（它们的描述里就是这么写的）；上面说的是 MySQL 的行为。
+两者都取决于实现自己的冲突规则，它们的描述里也是这么写的。上文说的是 MySQL 的行为。
 
 ## 等待
 
 `insert`、`update`、`upsert`、`if absent` 都接受 `and wait`：
 
-- **带上它**：trigger 的后续语句在这条写入结束之后才执行，失败可以在 `last database error` 里读到。
-- **不带它**：写入交给后台，下一行立刻执行。同步检查仍然会通过 `last database error` 报告（没有连接、表不存在、
-  值放不下），但来自数据库本身的失败只会写日志。
+- **带上它**：trigger 的后续语句等这条写入结束之后才执行，失败能在 `last database error` 里读到。
+- **不带它**：写入交给后台，下一行立刻执行。同步检查仍会通过 `last database error` 报告，比如没有连接、表不存在、值放不下；至于数据库本身拒绝的失败，只会写进日志。
 
-读取一定会等，所以“先写后读”的脚本应该给写入加 `and wait`；否则读取可能看到写入之前的行。见
-[错误与等待](errors-and-waiting.zh-CN.md)。
+读取必定等待，所以“先写后读”的脚本应该给写入加 `and wait`，否则读取可能看到写入之前的行。见 [错误与等待](errors-and-waiting.zh-CN.md)。

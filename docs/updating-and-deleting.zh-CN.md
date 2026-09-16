@@ -40,7 +40,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 ```
 
-删除没有 values 块 —— 只有可选的 `where`、可选的 limit 和 `and wait`。
+删除没有 values 块，能写的只有可选的 `where`、可选的 limit，以及 `and wait`。
 
 ## 按 id 删除
 
@@ -60,8 +60,7 @@ if last database error is set:
 delete entities from table "users" and wait:
 ```
 
-而 `where` 块里条件列表为空，几乎总是笔误；带 values 块的 section（例如 `update`）会拒绝它，但单纯的删除没有别的
-依据可查。意图确实是“所有行”时，就把它写明，并且心里有数加上 `with limit`。
+而 `where` 块里条件列表为空，几乎总是笔误。带 values 块的 section，例如 `update`，会直接拒绝它；单纯的删除却无从判断，只能照做。真要对所有行动手，就把它写明，并且别忘了 `with limit`。
 
 ## limit
 
