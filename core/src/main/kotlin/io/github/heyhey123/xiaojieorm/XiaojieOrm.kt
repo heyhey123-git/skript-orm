@@ -108,13 +108,18 @@ class XiaojieOrm : JavaPlugin() {
     /**
      * Returns the addon Skript knows this plugin by.
      *
-     * Obtaining it still takes this deprecated call. `SkriptAddon`'s constructor is package private in
-     * Skript 2.16.2, so `Skript.getAddon` would only find an addon this plugin never created; the
-     * returned type is the interface that replaces the deprecated class. The syntax itself is
-     * registered through the addon's `SyntaxRegistry`, which is where the deprecation points.
+     * `Skript.registerAddon(JavaPlugin)` is deprecated for removal. Its replacement registers an addon
+     * with a Skript instance, and that instance has to be the server's own: `Skript.instance()`, on the
+     * class this plugin already reads the version from, is that one, while a Skript built with
+     * `Skript.of(...)` keeps a syntax registry of its own, whose elements no script would ever see. An
+     * addon registered here gets a view of the server's registry carrying its own origin, and that view
+     * is where the syntax below ends up.
+     *
+     * The name comes from `plugin.yml`, so renaming the plugin renames the addon with it. It may not
+     * collide with the name of the Skript instance itself, which is the only name ruled out.
      */
-    @Suppress("DEPRECATION")
-    private fun registerSkriptAddon(): SkriptAddon = Skript.registerAddon(this)
+    private fun registerSkriptAddon(): SkriptAddon =
+        Skript.instance().registerAddon(XiaojieOrm::class.java, pluginMeta.name)
 
     override fun onDisable() {
         try {
