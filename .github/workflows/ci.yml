@@ -2,7 +2,23 @@ name: CI
 
 on:
   push:
+    # A documentation or IDE-only change cannot affect the build, and skipping it saves a container
+    # pull and two database runs. This is deliberately an ignore list rather than an allow list:
+    # forgetting a new build input in an allow list would silently stop CI from running for a real
+    # change, while forgetting an inert file here only costs a run that was not needed.
+    #
+    # `.editorconfig` is absent on purpose. It looks inert but ktlint reads it, so a change there
+    # changes what the formatting check accepts.
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.idea/**'
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.idea/**'
+  # Manual runs ignore the filters, so CI can always be forced.
   workflow_dispatch:
 
 permissions:
@@ -31,12 +47,12 @@ jobs:
 
       # Restores the Gradle User Home: the wrapper distribution, every resolved dependency, and the
       # API jars Gradle generates on first use. This is what stops a run from repeating the
-      # installation. See the continuous integration section of CONTRIBUTION.md for the cache
-      # provider choice and for what deliberately is not cached.
+      # installation. See the continuous integration section of CONTRIBUTION.md for what is
+      # deliberately not cached.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          cache-provider: basic
+          cache-provider: enhanced
 
       # The wrapper is committed from Windows, where the executable bit is not tracked, so it may
       # arrive without it.
@@ -45,6 +61,12 @@ jobs:
 
       - name: Run unit and Skript tests
         run: ./gradlew :core:test :core:integrationTest :generic-jdbc-implementation:test --stacktrace
+
+      # Reading a job log through the API needs admin rights, while annotations are public, so every
+      # failing test is reported as an annotation as well.
+      - name: Annotate failing tests
+        if: failure()
+        uses: ./.github/actions/annotate-test-failures
 
       - name: Check formatting
         run: ./gradlew ktlintCheck --stacktrace
@@ -66,12 +88,10 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # This job writes the cache entry the Testcontainers job reads, because it resolves the whole
-      # integration test dependency set.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          cache-provider: basic
+          cache-provider: enhanced
 
       - name: Make the wrapper executable
         run: chmod +x ./gradlew
@@ -103,9 +123,13 @@ jobs:
             -Pxiaojie.test.mysql.username=root \
             -Pxiaojie.test.mysql.password=root
 
+      - name: Annotate failing tests
+        if: failure()
+        uses: ./.github/actions/annotate-test-failures
+
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mysql-installed-test-reports
           path: '**/build/reports/tests/**'
@@ -134,12 +158,12 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # Read-only: this job resolves the same dependencies as the job above, so writing would only
-      # duplicate a large entry and risk evicting the shared ones.
+      # Read-only: this job resolves the same dependencies as the job above, so restoring is enough
+      # and there is no reason to spend cache budget writing a second entry.
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
         with:
-          cache-provider: basic
+          cache-provider: enhanced
           cache-read-only: true
 
       - name: Make the wrapper executable
@@ -148,9 +172,13 @@ jobs:
       - name: Run the JDBC integration tests
         run: ./gradlew :generic-jdbc-implementation:integrationTest --stacktrace
 
+      - name: Annotate failing tests
+        if: failure()
+        uses: ./.github/actions/annotate-test-failures
+
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: mysql-testcontainers-test-reports
           path: '**/build/reports/tests/**'

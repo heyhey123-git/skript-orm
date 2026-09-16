@@ -277,6 +277,22 @@ expression-bodied test would otherwise be compiled, never run, and never reporte
   runs only on the default branch and on demand, because a container image is the one thing the cache
   cannot help with.
 
+#### When CI runs
+
+`push` and `pull_request` ignore changes that cannot affect the build: Markdown, `.gitignore`, and
+`.idea/`. Everything else triggers CI, including `.editorconfig`, which looks inert but is what ktlint
+reads. `workflow_dispatch` bypasses the filters, so a run can always be forced.
+
+The list is an ignore list on purpose. An allow list of build inputs would silently stop CI from
+running the first time a new input type is added, and a check that did not run looks exactly like a
+check that passed.
+
+One consequence to keep in mind: when a pull request touches only ignored files, the workflow does
+not run at all, so no status is reported. If these checks are ever made *required* in branch
+protection, such a pull request would wait for a check that never arrives. The fix at that point is
+to run the workflow unconditionally and gate the expensive jobs from inside it, rather than filtering
+the trigger.
+
 A database-backed test that only runs when someone remembers to start a container is a test nobody
 trusts. Any type, query, or converter that can only be checked against a server belongs in a job that
 has one.
@@ -292,6 +308,12 @@ is how the suite can be checked for execution-order problems without a database:
 Any failure that is not a connection error is a real defect. This is how a latent order dependency in
 the lifecycle tests was found.
 
+Failing tests are also written out as check annotations by `.github/actions/annotate-test-failures`.
+A job log needs admin rights to read through the API while annotations are public, and the HTML report
+is an artifact that requires authentication to download, so the annotation is what makes a failure
+diagnosable without either. Each annotation carries the test name and the assertion message, which is
+enough to identify the column or value that disagreed.
+
 #### What CI caches
 
 `gradle/actions/setup-gradle` restores the Gradle User Home between runs: the Gradle wrapper
@@ -300,11 +322,17 @@ stops a run from repeating the installation. Do not add `cache: gradle` to `setu
 `actions/cache` entry for the Gradle User Home — the action's documentation warns that both interfere
 with it.
 
-The cache provider is `basic`, the MIT implementation on top of `actions/cache`. The default
-`enhanced` provider is a proprietary component, free for public repositories and in preview for
-private ones; switching is one line if smaller, deduplicated entries are worth it. Caches are written
-only from the default branch, and every run restores from it. Each job's summary reports what was
-restored and saved.
+The cache provider is `enhanced`, the action's default. It builds a cache key per job, so the three
+jobs do not compete for one entry. The first CI run used `basic`, the MIT provider, and showed why
+that matters: `basic` keys the cache only on the build files, so all three jobs computed the same key
+and every job but the first failed to save it, reporting "Unable to reserve cache ... another job may
+be creating this cache". The one entry that did get saved held only the dependencies of whichever job
+finished first, so the other jobs re-downloaded theirs on every run. `enhanced` is a proprietary
+component, free for public repositories and in preview for private ones; `cache-provider: basic` is
+the one-line fallback if that trade-off ever becomes unacceptable.
+
+Caches are written only from the default branch, and every run restores from it. Each job's summary
+reports what was restored and saved.
 
 Two things are deliberately not cached:
 
