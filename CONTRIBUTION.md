@@ -19,7 +19,6 @@ surface that is pleasant to use**. When a change and a principle disagree, the p
 | `generic-jdbc-implementation` | Shared JDBC behaviour, including the MySQL dialect       |
 | `postgresql-implementation`   | PostgreSQL-specific JDBC behaviour                       |
 | `mongodb-implementation`      | MongoDB behaviour                                        |
-| `rocksdb-implementation`      | RocksDB behaviour                                        |
 
 The root project builds the shaded plugin jar. `-PbundleModules=a,b` selects which implementations
 are bundled; it defaults to `generic-jdbc-implementation`.
@@ -35,7 +34,7 @@ are bundled; it defaults to `generic-jdbc-implementation`.
 database can do. An implementation owns *how* it does it: its driver, its client, its connection
 lifecycle, and its resource cleanup.
 
-If you need JDBC, MongoDB, or RocksDB types in `core`, the abstraction is wrong. Widen the
+If you need JDBC or MongoDB types in `core`, the abstraction is wrong. Widen the
 abstraction instead of leaking the dependency.
 
 ---

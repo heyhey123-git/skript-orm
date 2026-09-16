@@ -18,7 +18,6 @@ Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 | `generic-jdbc-implementation` | 通用 JDBC 行为，含 MySQL 方言    |
 | `postgresql-implementation`   | PostgreSQL 专属 JDBC 行为    |
 | `mongodb-implementation`      | MongoDB 行为               |
-| `rocksdb-implementation`      | RocksDB 行为               |
 
 根项目负责产出 shadow 插件 jar。`-PbundleModules=a,b` 选择打包哪些实现，默认只打包
 `generic-jdbc-implementation`。
@@ -33,7 +32,7 @@ Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 `core` 不得依赖任何驱动、连接池或查询语言。它描述数据库**能做什么**；实现负责**怎么做**——自己的驱动、
 客户端、连接生命周期和资源释放。
 
-如果你发现需要在 `core` 里引用 JDBC、MongoDB 或 RocksDB 的类型，那说明抽象层次不对。应当扩宽抽象，
+如果你发现需要在 `core` 里引用 JDBC 或 MongoDB 的类型，那说明抽象层次不对。应当扩宽抽象，
 而不是把依赖泄露进去。
 
 ---

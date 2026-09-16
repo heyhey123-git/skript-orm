@@ -30,8 +30,7 @@ class XiaojieOrm : JavaPlugin() {
             "io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDatabaseFactory",
             "io.github.heyhey123.xiaojieorm.impl.jdbc.database.MysqlDatabaseFactory",
             "io.github.heyhey123.xiaojieorm.impl.pg.database.PgDatabaseFactory",
-            "io.github.heyhey123.xiaojieorm.impl.mongo.database.MongodbDatabaseFactory",
-            "io.github.heyhey123.xiaojieorm.impl.rocksdb.database.RocksdbDatabaseFactory"
+            "io.github.heyhey123.xiaojieorm.impl.mongo.database.MongodbDatabaseFactory"
         )
 
         for (candidate in candidates) {
