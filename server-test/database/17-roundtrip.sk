@@ -47,12 +47,19 @@ every 5 seconds:
     if last database error is set:
         log "XIAOJIE_SELFTEST=FAIL roundtrip insert: %last database error%"
 
+    # The filter is here to give the section a body. Skript warns about any section with nothing indented
+    # under its colon, and that warning is Skript's, not this plugin's, with no switch to turn it off. The
+    # setup script's own read is the one that covers the form with no `where` at all.
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::now::*}:
+        where all:
+            id >= 1
     log "XIAOJIE_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}% (error: %last database error%)"
 
     wait 5 seconds
 
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::later::*}:
+        where all:
+            id >= 1
     log "XIAOJIE_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}% (error: %last database error%)"
     if {orm_selftest::later::id} is not set:
         log "XIAOJIE_SELFTEST=FAIL roundtrip found no row even after waiting"

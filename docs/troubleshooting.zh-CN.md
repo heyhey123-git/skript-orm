@@ -96,14 +96,26 @@ else if {_user::age} is not set:
 
 ## Skript 提示 “Empty configuration section!”
 
-用变量给值的写入 section 没有主体，而 section 又必须带那个冒号：
+只要 section 的冒号下面没有缩进内容，Skript 就会警告一次，跟这个 section 属于哪个插件无关。这句话是 Skript
+自己的解析器打的，而它背后的开关是 Skript 内部的，配置文件与脚本都够不着，关不掉。
+
+用变量给值的写法没有主体可写，按 id 工作的写法也一样，所以这些行必然会带上这条提示：
 
 ```sk
 insert one {_user::*} into table "archived_users":
+delete one entity from table "users" by id {_id} and wait:
 ```
 
-Skript 把冒号当成 section 的开头，往下却找不到缩进的内容，于是在 INFO 级记了一笔。这不是错误，语句照跑：
-值来自变量。这条提示可以无视，也可以在 Skript 自己的配置里关掉；本插件不改变它。
+这不是错误，语句照跑：值来自变量，或者 id 已经指明了那一行。凡是能写主体的写法，都可以写上主体来让日志安静；
+读取只要加一个"匹配所有行"的条件即可：
+
+```sk
+select one entity from table "users" and store the result in {_user::*}:
+    where all:
+        id >= 1
+```
+
+带 `where` 块、`values` 块或任何其它主体的 section，都不会被提示。
 
 ## 表名在一台服务器能用，另一台不行
 
