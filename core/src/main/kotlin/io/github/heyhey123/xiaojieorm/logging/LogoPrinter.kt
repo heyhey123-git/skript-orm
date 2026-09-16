@@ -1,22 +1,30 @@
 package io.github.heyhey123.xiaojieorm.logging
 
-import net.kyori.adventure.text.Component
-import net.kyori.adventure.text.format.NamedTextColor
-import net.kyori.adventure.text.format.TextColor
-import org.bukkit.Bukkit
+import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import kotlin.math.roundToInt
 
 /**
  * Prints the banner the plugin greets a server with, and the line it says goodbye with.
  *
- * Adventure goes straight to the console sender: Paper colours it when the terminal can show colour,
- * and writes plain text into `logs/latest.log`. Serialising ANSI here by hand, as some plugins do,
- * would put escape sequences into that file and bury the one thing a banner is for.
+ * The colours are written into the text rather than offered to Paper. Paper decides for itself whether a
+ * console can show colour and records that decision in the `net.kyori.ansi.colorLevel` system property,
+ * so on a platform it reads wrong the banner arrives grey while the terminal could have shown it in full
+ * colour. The banner is the one thing here that exists to be looked at, so it carries its own colours and
+ * asks nobody. Paper's file appender drops them again on the way into `logs/latest.log`, which stays
+ * readable as plain text.
  */
 internal object LogoPrinter {
 
     /** Where the gradient runs, from the left of the wordmark to its right. */
     private val gradient = intArrayOf(0x2E9BE6, 0x7C4DFF, 0xC242F5)
+
+    private const val ESCAPE = "\u001B["
+
+    private const val RESET = "\u001B[0m"
+
+    private const val DARK_GRAY = 0x555555
+
+    private const val GRAY = 0xAAAAAA
 
     /**
      * The wordmark, in the figlet face this author's plugins share.
@@ -26,68 +34,86 @@ internal object LogoPrinter {
      * nothing else is lost, and the art keeps the spacing it was drawn with.
      */
     private val wordmark: List<String> = """
-         __   ___             _ _   
-         \ \ / (_)           (_|_)  
-          \ V / _  __ _  ___  _ _   
-           > < | |/ _` |/ _ \| | |/ 
-          / . \| | (_| | (_) | | |  
-         /_/ \_\_|\__,_|\___/| |_|\ 
-                            _/ |    
-                           |__/     
+        ____  ______             _____________     _______                   
+        __  |/ /__(_)_____ ____________(_)__(_)______  __ \_____________ ___ 
+        __    /__  /_  __ `/  __ \____  /__  /_  _ \  / / /_  ___/_  __ `__ \
+        _    | _  / / /_/ // /_/ /___  / _  / /  __/ /_/ /_  /   _  / / / / /
+        /_/|_| /_/  \__,_/ \____/___  /  /_/  \___/\____/ /_/    /_/ /_/ /_/ 
+                                 /___/                                       
     """.trimIndent().lines().filter(String::isNotEmpty)
 
     /** Prints the banner, with [version] centred on the line under the wordmark. */
     fun print(version: String) {
-        val console = Bukkit.getConsoleSender()
         // Padding here rather than in the art keeps one gradient running across the whole wordmark
         // instead of restarting on every line, and the border is drawn to match what comes out.
         val width = wordmark.maxOf(String::length)
         val borderWidth = width + 4
-        val border = Component.text("-".repeat(borderWidth), NamedTextColor.DARK_GRAY)
+        val border = "-".repeat(borderWidth)
         val credit = "xiaojie-orm $version"
         val margin = " ".repeat(((borderWidth - credit.length) / 2).coerceAtLeast(0))
 
-        console.sendMessage(border)
-        wordmark.forEach { line -> console.sendMessage(paint(line.padEnd(width))) }
-        console.sendMessage(Component.text(margin + "xiaojie-orm ", NamedTextColor.GRAY).append(paint(version)))
-        console.sendMessage(border)
+        send(listOf(Span(border, DARK_GRAY)))
+        wordmark.forEach { line -> send(gradientSpans(line.padEnd(width))) }
+        send(listOf(Span(margin + "xiaojie-orm ", GRAY)) + gradientSpans(version))
+        send(listOf(Span(border, DARK_GRAY)))
     }
 
     /** Prints the line a server sees when the plugin is disabled. */
     fun printFarewell(version: String) {
-        Bukkit.getConsoleSender().sendMessage(
-            Component.text("xiaojie-orm $version ", NamedTextColor.GRAY)
-                .append(Component.text("disabled.", NamedTextColor.DARK_GRAY))
-        )
+        send(listOf(Span("xiaojie-orm $version ", GRAY), Span("disabled.", DARK_GRAY)))
+    }
+
+    /** A run of text in one colour, so a line can be written as escape sequences without losing it. */
+    private data class Span(val text: String, val colour: Int)
+
+    /**
+     * Sends one line to the console, colours and all.
+     *
+     * The logger is what gets the escape sequences past Paper's own rendering, and past its file
+     * appender, which drops them again for the log.
+     */
+    private fun send(spans: List<Span>) {
+        XiaojieOrm.instance.logger.info(ansi(spans))
     }
 
     /**
-     * Paints [text] across the gradient, one character at a time.
+     * The spans as true-colour escape sequences.
      *
-     * The art is full of angle brackets and backslashes, so it is coloured here rather than handed to
-     * MiniMessage, where those characters would be read as tags.
+     * `38;2;r;g;b` picks a foreground colour, and the reset at the end keeps it out of everything that
+     * follows the line. Doing this by hand is what makes the colours survive a console Paper has decided
+     * cannot show them.
      */
-    private fun paint(text: String): Component {
-        val builder = Component.text()
-        val last = (text.length - 1).coerceAtLeast(1)
-        text.forEachIndexed { index, character ->
-            builder.append(Component.text(character).color(colourAt(index.toDouble() / last)))
+    private fun ansi(spans: List<Span>): String = buildString {
+        spans.forEach { span ->
+            append(ESCAPE)
+                .append("38;2;")
+                .append(span.colour shr 16 and 0xFF).append(';')
+                .append(span.colour shr 8 and 0xFF).append(';')
+                .append(span.colour and 0xFF).append('m')
+                .append(span.text)
         }
-        return builder.build()
+        append(RESET)
+    }
+
+    /** [text] painted one character at a time, so that the gradient is not lost on any of it. */
+    private fun gradientSpans(text: String): List<Span> {
+        val last = (text.length - 1).coerceAtLeast(1)
+        return text.mapIndexed { index, character ->
+            Span(character.toString(), colourAt(index.toDouble() / last))
+        }
     }
 
     /** The colour [progress] of the way along the gradient, interpolated the way Adventure does. */
-    private fun colourAt(progress: Double): TextColor {
+    private fun colourAt(progress: Double): Int {
         val scaled = progress.coerceIn(0.0, 1.0) * (gradient.size - 1)
         val stop = scaled.toInt().coerceAtMost(gradient.size - 2)
         val part = scaled - stop
         val from = gradient[stop]
         val to = gradient[stop + 1]
-        return TextColor.color(
-            blend(from shr 16 and 0xFF, to shr 16 and 0xFF, part),
-            blend(from shr 8 and 0xFF, to shr 8 and 0xFF, part),
-            blend(from and 0xFF, to and 0xFF, part)
-        )
+        val red = blend(from shr 16 and 0xFF, to shr 16 and 0xFF, part)
+        val green = blend(from shr 8 and 0xFF, to shr 8 and 0xFF, part)
+        val blue = blend(from and 0xFF, to and 0xFF, part)
+        return red shl 16 or (green shl 8) or blue
     }
 
     private fun blend(from: Int, to: Int, part: Double): Int = (from + (to - from) * part).roundToInt()
