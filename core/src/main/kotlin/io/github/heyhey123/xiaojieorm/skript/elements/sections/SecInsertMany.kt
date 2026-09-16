@@ -26,7 +26,7 @@ insert many entities into table "users" and wait:
 select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
-insert many {_rows::*} into table "archived_users" and wait
+insert many {_rows::*} into table "archived_users" and wait:
 """
 )
 @Since("1.0")

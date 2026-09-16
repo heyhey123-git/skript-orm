@@ -20,7 +20,7 @@ update one entity in table "users" by id {_id} and wait:
 )
 @Example(
     """
-update one entity {_changes::*} in table "users" by id {_id}
+update one entity {_changes::*} in table "users" by id {_id}:
 """
 )
 @Since("1.0")

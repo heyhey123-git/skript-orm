@@ -24,7 +24,7 @@ if last database error is set:
 select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = "Alice"
-insert one {_user::*} into table "archived_users"
+insert one {_user::*} into table "archived_users":
 """
 )
 @Since("1.0")

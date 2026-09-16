@@ -20,7 +20,7 @@ upsert one entity in table "users" by id {_id} and wait:
 )
 @Example(
     """
-upsert one entity {_user::*} in table "users" by id {_id}
+upsert one entity {_user::*} in table "users" by id {_id}:
 """
 )
 @Since("1.0")

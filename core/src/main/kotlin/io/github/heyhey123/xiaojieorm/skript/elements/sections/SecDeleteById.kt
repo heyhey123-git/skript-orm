@@ -12,7 +12,7 @@ import org.bukkit.event.Event
 @Description("Deletes one row by its registered primary-key value. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
     """
-delete one entity from table "users" by id {_id} and wait
+delete one entity from table "users" by id {_id} and wait:
 if last database error is set:
     send "Delete failed: %last database error%"
 """
