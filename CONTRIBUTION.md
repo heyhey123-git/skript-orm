@@ -37,6 +37,28 @@ lifecycle, and its resource cleanup.
 If you need JDBC or MongoDB types in `core`, the abstraction is wrong. Widen the
 abstraction instead of leaking the dependency.
 
+### Versions
+
+Every version lives in `gradle/libs.versions.toml`. No module repeats a version literal, so upgrading
+Paper or Skript is a one-line change in one file, and the artifact the tests run against cannot drift
+from the one the plugin compiles against.
+
+Two entries are not free to move on their own:
+
+- `api-version` in `core/src/main/resources/plugin.yml` must name the same release line as `paper`.
+  Paper refuses to load a plugin whose `api-version` is newer than the server, so the file must never
+  claim more than the compiled API; claiming *less* is worse, because Paper then loads the plugin on
+  a server that lacks the methods it calls and the failure surfaces much later as a
+  `NoSuchMethodError`. Bump both together.
+- The `mockbukkit` artifact name carries the Paper line (`mockbukkit-v26.2`), so it moves with `paper`
+  too.
+
+Only stable Paper builds belong in the catalog. A newer line that is still published as ALPHA is not
+an upgrade.
+
+Skript's own floor is checked at runtime in `XiaojieOrm.onEnable`, not declared in `plugin.yml`: see
+the KDoc on `MINIMUM_SKRIPT_VERSION` for why a version-qualified `depend` entry cannot work.
+
 ---
 
 ## 2. Domain values and storage values
@@ -226,6 +248,10 @@ They cover `values` and `where` blocks: header recognition, mode and negation, m
 mixing rows with single values, and the literal-`null` contract that keeps SQL NULL distinguishable
 from an omitted column. The reachable surface stops at expression evaluation, because parsing a real
 value expression needs Skript's syntax registry, which only exists inside a running Skript.
+
+`MinimumSkriptVersionTest` covers no code of ours on purpose. It pins Skript's own
+`ch.njol.skript.util.Version` ordering, which the version floor in `XiaojieOrm.onEnable` depends on:
+that floor is a single comparison, and both ways it can be wrong are invisible from this repository.
 
 **JDBC tests** (`generic-jdbc-implementation`) run the real implementation against a real MySQL
 server, and round-trip every supported type through its own converter. The converter half needs no

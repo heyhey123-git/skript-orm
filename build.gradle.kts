@@ -2,14 +2,14 @@ import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
 plugins {
     java
-    kotlin("jvm") version "2.3.21"
-    id("com.gradleup.shadow") version "9.2.2"
-    id("org.jlleitschuh.gradle.ktlint") version "14.2.0" apply false
+    alias(libs.plugins.kotlin.jvm)
+    alias(libs.plugins.shadow)
+    alias(libs.plugins.ktlint) apply false
 }
 
-val kotlinVersion = "2.3.21"
-val kotlinCoroutinesVersion = "1.10.2"
-val paperVersion = "26.2.build.+"
+// Read from the catalog because the shaded jar's relocation prefixes embed both versions.
+val kotlinVersion = libs.versions.kotlin.get()
+val kotlinCoroutinesVersion = libs.versions.coroutines.get()
 val shadePrefix = "io.github.heyhey123.xiaojieorm.libs"
 
 // -PbundleModules=mod1,mod2
@@ -33,8 +33,11 @@ val bundledModules: List<String> = run {
 bundledModules.forEach { evaluationDependsOn(":$it") }
 
 allprojects {
-    group = "io.github.heyhey123"
-    version = "1.0-SNAPSHOT"
+    // Read from gradle.properties rather than repeated per module, so the module jars, the shaded
+    // jar and the `version` in plugin.yml cannot disagree. `.get()` fails the build loudly if the
+    // property is ever deleted, instead of silently versioning everything `unspecified`.
+    group = providers.gradleProperty("group").get()
+    version = providers.gradleProperty("version").get()
 
     repositories {
         maven("https://maven.aliyun.com/repository/central")
@@ -45,6 +48,13 @@ allprojects {
         maven("https://repo.codemc.io/repository/maven-public/")
     }
 }
+
+// Type-safe catalog accessors belong to the script's own project, so they cannot be used inside the
+// `subprojects { }` block below. Reading them once here keeps that block free of catalog API noise.
+val paperApi = libs.paper.api
+val skriptLibrary = libs.skript
+val nbtApiLibrary = libs.nbt.api
+val coroutinesCore = libs.coroutines.core
 
 subprojects {
     apply(plugin = "java")
@@ -63,11 +73,11 @@ subprojects {
     apply(plugin = "org.jlleitschuh.gradle.ktlint")
 
     dependencies {
-        compileOnly("io.papermc.paper:paper-api:$paperVersion")
+        compileOnly(paperApi)
         compileOnly(kotlin("stdlib"))
-        compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutinesVersion")
-        compileOnly("com.github.SkriptLang:Skript:2.13.2")
-        compileOnly("de.tr7zw:item-nbt-api-plugin:2.15.5")
+        compileOnly(coroutinesCore)
+        compileOnly(skriptLibrary)
+        compileOnly(nbtApiLibrary)
     }
     kotlin {
         jvmToolchain(25)
@@ -75,9 +85,9 @@ subprojects {
 }
 
 dependencies {
-    compileOnly("io.papermc.paper:paper-api:$paperVersion")
+    compileOnly(libs.paper.api)
     implementation(kotlin("stdlib"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:$kotlinCoroutinesVersion")
+    implementation(libs.coroutines.core)
     implementation(project(":core"))
     bundledModules.forEach { implementation(project(":$it")) }
 }

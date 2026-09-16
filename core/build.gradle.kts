@@ -2,15 +2,6 @@ plugins {
     kotlin("jvm")
 }
 
-group = "io.github.heyhey123"
-version = "1.0-SNAPSHOT"
-
-// Kept in step with the compileOnly versions declared for every subproject in the root build script.
-val paperVersion = "26.2.build.+"
-val skriptVersion = "2.13.2"
-val nbtApiVersion = "2.15.5"
-val mockBukkitVersion = "4.116.1"
-
 // Declared before the dependency blocks: creating the source set also creates the
 // integrationTestImplementation and integrationTestRuntimeOnly configurations they rely on.
 val integrationTestSourceSet = sourceSets.create("integrationTest") {
@@ -23,7 +14,7 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRunt
 
 dependencies {
     testImplementation(kotlin("test"))
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    testImplementation(libs.coroutines.core)
 
     // The Skript parsers read Skript's own config node types, which the unit tests deliberately do
     // not have on their classpath. Skript needs Bukkit at class-loading time, so the API the plugin
@@ -33,10 +24,10 @@ dependencies {
     // MockBukkit supplies a Bukkit server, because Skript logs through Bukkit.getConsoleSender() and
     // NPEs without one. It is *not* used to load Skript or this addon: MockBukkit loads a plugin as
     // a generated subclass of its main class, and Skript's main class is final.
-    "integrationTestImplementation"("io.papermc.paper:paper-api:$paperVersion")
-    "integrationTestImplementation"("com.github.SkriptLang:Skript:$skriptVersion")
-    "integrationTestImplementation"("de.tr7zw:item-nbt-api-plugin:$nbtApiVersion")
-    "integrationTestImplementation"("org.mockbukkit.mockbukkit:mockbukkit-v26.2:$mockBukkitVersion")
+    "integrationTestImplementation"(libs.paper.api)
+    "integrationTestImplementation"(libs.skript)
+    "integrationTestImplementation"(libs.nbt.api)
+    "integrationTestImplementation"(libs.mockbukkit)
 }
 
 // Opt-in task: plain `test` stays fast and free of the Skript and Bukkit classpath.
@@ -52,6 +43,16 @@ val integrationTest by tasks.registering(Test::class) {
 tasks.test {
     useJUnitPlatform()
 }
+
+// plugin.yml is the only resource this module ships, and Bukkit reports its `version` in the
+// "Enabling xiaojie-orm v..." line and to `/version`. Expanding it from the project version keeps it
+// honest when the version is bumped in gradle.properties.
+tasks.processResources {
+    filesMatching("plugin.yml") {
+        expand(mapOf("version" to version))
+    }
+}
+
 kotlin {
     jvmToolchain(25)
 }

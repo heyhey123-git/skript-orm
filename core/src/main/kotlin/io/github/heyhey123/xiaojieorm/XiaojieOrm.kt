@@ -1,6 +1,7 @@
 package io.github.heyhey123.xiaojieorm
 
 import ch.njol.skript.Skript
+import ch.njol.skript.util.Version
 import io.github.heyhey123.xiaojieorm.database.Database
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,6 +13,18 @@ import org.bukkit.plugin.java.JavaPlugin
 class XiaojieOrm : JavaPlugin() {
     companion object {
 
+        /**
+         * The oldest Skript this plugin can run on.
+         *
+         * Every element in [io.github.heyhey123.xiaojieorm.skript] is registered through the addon
+         * API, and the plugin links against this version at compile time. `plugin.yml` cannot state
+         * the requirement: Bukkit runs every `depend` entry through
+         * `PluginDescriptionFile.makePluginNameList`, which replaces spaces with underscores, so
+         * `Skript 2.16+` would be looked up as a plugin named `Skript_2.16+` and the plugin would not
+         * load on *any* server. The floor therefore has to be checked in code, in [onEnable].
+         */
+        val MINIMUM_SKRIPT_VERSION = Version("2.16.2")
+
         lateinit var instance: XiaojieOrm
             private set
 
@@ -22,6 +35,12 @@ class XiaojieOrm : JavaPlugin() {
     override fun onEnable() {
         instance = this
         Database.beginLifecycle()
+
+        if (!skriptIsSupported()) {
+            server.pluginManager.disablePlugin(this)
+            return
+        }
+
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         Skript.registerAddon(this)
             .loadClasses("io.github.heyhey123.xiaojieorm.skript", "elements")
@@ -39,6 +58,25 @@ class XiaojieOrm : JavaPlugin() {
             } catch (_: ClassNotFoundException) {
             }
         }
+    }
+
+    /**
+     * Reports whether the Skript that is currently running is new enough to be linked against.
+     *
+     * On failure the plugin disables itself instead of throwing: a plugin that fails to enable is
+     * still "installed" as far as the server is concerned, and every database statement in the
+     * user's scripts would then fail with a confusing "no such expression" error rather than the
+     * single line below.
+     */
+    private fun skriptIsSupported(): Boolean {
+        val running = Skript.getVersion()
+        if (!running.isSmallerThan(MINIMUM_SKRIPT_VERSION)) return true
+
+        logger.severe(
+            "xiaojie-orm requires Skript $MINIMUM_SKRIPT_VERSION or newer, but this server runs " +
+                "Skript $running. Disabling xiaojie-orm: upgrade Skript and restart the server."
+        )
+        return false
     }
 
     override fun onDisable() {

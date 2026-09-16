@@ -35,6 +35,24 @@ Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 如果你发现需要在 `core` 里引用 JDBC 或 MongoDB 的类型，那说明抽象层次不对。应当扩宽抽象，
 而不是把依赖泄露进去。
 
+### 版本管理
+
+所有版本号都集中在 `gradle/libs.versions.toml`。各模块不再重复写版本字面量，因此升级 Paper 或
+Skript 只需改一个文件里的一行，测试所运行的产物也不会与插件编译所依赖的产物脱节。
+
+有两项不能各自单独移动：
+
+- `core/src/main/resources/plugin.yml` 的 `api-version` 必须与 `paper` 属于同一条发布线。Paper 会
+  拒绝加载 `api-version` 高于服务端的插件，所以这里永远不能声明得比编译所用的 API 更新；但声明得
+  *更低* 更糟——Paper 会在缺少所调用方法的服务端上照常加载插件，问题要到很久之后才以
+  `NoSuchMethodError` 的形式暴露。两者必须在同一个提交里一起改。
+- `mockbukkit` 的 artifact 名自带 Paper 发布线（`mockbukkit-v26.2`），因此它也要跟着 `paper` 走。
+
+目录里只应放 Paper 的稳定版构建。更新的发布线如果仍以 ALPHA 发布，就不算升级。
+
+Skript 的最低版本要求由 `XiaojieOrm.onEnable` 在运行时检查，而不是写在 `plugin.yml` 里：原因见
+`MINIMUM_SKRIPT_VERSION` 上的 KDoc——带版本号的 `depend` 条目根本无法生效。
+
 ---
 
 ## 2. 域值与存储值
@@ -198,6 +216,10 @@ classpath 上的部分：
 覆盖 `values` 与 `where` 块：头部识别、模式与取反、格式错误的值、行与单值混用，以及“字面量 `null` 与省略列
 必须可区分”这一契约。可达范围止于表达式求值，因为解析真实值表达式需要 Skript 的语法注册表，而它只存在于
 运行中的 Skript 里。
+
+`MinimumSkriptVersionTest` 刻意不覆盖我们自己的代码，而是固定 Skript 自身
+`ch.njol.skript.util.Version` 的排序行为——`XiaojieOrm.onEnable` 里的版本下限依赖它。这个下限只是一次
+比较，而它两种出错方向都无法从本仓库的代码里看出来。
 
 **JDBC 测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL，并让每个受支持类型走一遍自己的转换器
 往返。转换器那一半不需要数据库，任何环境都能跑；数据库那一半属于可选任务，因为需要容器运行时且耗时更长：

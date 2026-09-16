@@ -1,0 +1,65 @@
+# The single entry point for every version this build depends on.
+#
+# Versions that have to agree across modules live here exactly once. The Paper API the plugin
+# compiles against is also the one the integration tests run on, and the Skript the plugin compiles
+# against is also the jar the server test will load; keeping a copy in each module invites the copies
+# to drift apart.
+#
+# What the build *produces* is not here: its group and version live in `gradle.properties`, because
+# `plugin.yml` is expanded from the same values the jars are named with.
+
+[versions]
+kotlin = "2.3.21"
+coroutines = "1.10.2"
+
+# Pinned to a concrete build. The previous `26.2.build.+` re-resolved on every build, so an upstream
+# Paper build could have broken this project without a single commit here. Bumping it is a one-line
+# change, and Renovate understands this file.
+#
+# This version and `api-version` in core/src/main/resources/plugin.yml are the same fact written
+# twice, and they have to move together. Paper refuses to load a plugin whose `api-version` is newer
+# than the server, so the file must not claim more than the API compiled against; declaring less lets
+# Paper load the plugin on a server that lacks the methods it calls, which fails later as a
+# `NoSuchMethodError` instead of a clean refusal. Only stable builds belong here: the 26.3 line is
+# published as ALPHA, and Paper's own download page recommends stable builds for production.
+paper = "26.2.build.124-stable"
+
+skript = "2.16.2"
+nbt-api = "2.15.5"
+
+# The artifact name itself carries the Paper line (`-v26.2`), so this version and `paper` above move
+# together: a newer Paper line needs the matching MockBukkit artifact, not just a newer version.
+mockbukkit = "4.116.1"
+
+mockk = "1.14.9"
+hikari = "7.0.2"
+slf4j = "2.0.17"
+mysql-connector = "9.5.0"
+mongodb-driver = "5.6.1"
+postgresql-driver = "42.7.11"
+testcontainers = "1.21.3"
+shadow = "9.2.2"
+ktlint = "14.2.0"
+
+[libraries]
+paper-api = { module = "io.papermc.paper:paper-api", version.ref = "paper" }
+skript = { module = "com.github.SkriptLang:Skript", version.ref = "skript" }
+nbt-api = { module = "de.tr7zw:item-nbt-api-plugin", version.ref = "nbt-api" }
+mockbukkit = { module = "org.mockbukkit.mockbukkit:mockbukkit-v26.2", version.ref = "mockbukkit" }
+mockk = { module = "io.mockk:mockk", version.ref = "mockk" }
+coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
+hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
+slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
+slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
+mysql-connector = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector" }
+mongodb-driver-bom = { module = "org.mongodb:mongodb-driver-bom", version.ref = "mongodb-driver" }
+mongodb-driver-kotlin-coroutine = { module = "org.mongodb:mongodb-driver-kotlin-coroutine" }
+postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postgresql-driver" }
+testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
+testcontainers-mysql = { module = "org.testcontainers:mysql" }
+testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
+
+[plugins]
+kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+shadow = { id = "com.gradleup.shadow", version.ref = "shadow" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
