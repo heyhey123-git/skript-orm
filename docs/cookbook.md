@@ -117,14 +117,14 @@ There is no count query, so a script walks pages until one comes back empty:
 
 ```sk
 set {_page} to 1
-loop 100 times:
+while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
     if size of {_page-rows::*} is 0:
         exit loop
     loop {_page-rows::*}:
-        # {loop-value} is the row index inside this page
+        # The counter is a `while`, so this is the only loop in play and `loop-value` is unambiguous.
         send "%{_page-rows::%loop-value%::name}%" to console
     add 1 to {_page}
 ```

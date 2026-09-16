@@ -213,6 +213,8 @@ val prepareServerTest by tasks.registering {
 
     val runDirectory = serverTestDirectory
     val sourceDirectory = serverTestSource
+    // Read before the task runs: inside `doLast` the script's own project is out of reach.
+    val examplesDirectory = layout.projectDirectory.dir("docs/examples")
 
     doLast {
         val run = runDirectory.get().asFile
@@ -225,6 +227,13 @@ val prepareServerTest by tasks.registering {
         scripts.mkdirs()
         // Copied as a tree, because the elements live one file each under `elements/`.
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
+        // The examples the documentation shows come along so that Skript parses them: a page that
+        // teaches syntax the plugin does not have then fails this test rather than reaching a reader.
+        // They are never run, and their check is the same "can't understand" one below.
+        examplesDirectory.asFile.copyRecursively(
+            scripts.resolve("examples"),
+            overwrite = true
+        )
         // The database mode adds a setup script and a round trip on top of the same element scripts,
         // and may replace one: it is copied over the tree above, so a file of the same name and path
         // wins. Only `elements/16-disconnect.sk` does, because it is the one element that would close
@@ -403,7 +412,9 @@ abstract class VerifySkriptServerTest : DefaultTask() {
         // carries on looking healthy around it, so this is checked on its own.
         val unparsed = lines.filter { line -> line.contains("can't understand", ignoreCase = true) }
         if (unparsed.isNotEmpty()) {
-            problems += "Skript could not parse part of a test script:\n" + indent(unparsed)
+            problems += "Skript could not parse part of a test script:\n" + indent(unparsed) +
+                "\n      A line from `docs/examples` here means a page shows syntax the plugin does " +
+                "not have."
         }
 
         if (problems.isNotEmpty()) {

@@ -94,6 +94,17 @@ else if {_user::age} is not set:
 
 分页按已注册的主键排序，没有主键的表会被拒；页码从 1 起。页内的键又从 1 起（`{_page::1::name}`），很容易误当成整张表的第一行。见 [读取行](reading.zh-CN.md)。
 
+## Skript 提示 “Empty configuration section!”
+
+用变量给值的写入 section 没有主体，而 section 又必须带那个冒号：
+
+```sk
+insert one {_user::*} into table "archived_users":
+```
+
+Skript 把冒号当成 section 的开头，往下却找不到缩进的内容，于是在 INFO 级记了一笔。这不是错误，语句照跑：
+值来自变量。这条提示可以无视，也可以在 Skript 自己的配置里关掉；本插件不改变它。
+
 ## 表名在一台服务器能用，另一台不行
 
 Linux 上的 MySQL 表名区分大小写，差之毫厘，谬以千里。`register a database table "..."` 里的名字按原样使用，之后每个 `table "..."` 也一样。保持同一种拼写。

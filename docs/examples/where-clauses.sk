@@ -1,0 +1,40 @@
+# Every `where` form docs/reading.md and docs/updating-and-deleting.md show, so the test server parses
+# them. Nothing here runs, which is why the columns and variables it mentions do not have to exist on
+# the servers that read this file: the pages define them, and this file only has to be readable.
+
+command /example-conditions <text> <integer>:
+    trigger:
+        set {_from} to now
+        set {_to} to now
+        set {_id} to 1
+
+        select many entities from table "users" and store the results in {_users::*}:
+            where any:
+                name = arg-1
+                name != "nobody"
+                age > arg-2
+                age >= arg-2
+                age < arg-2
+                age <= arg-2
+                joined between {_from} and {_to}
+
+        select one entity from table "users" and store the result in {_unset::*}:
+            where all:
+                age = null
+
+        select entity from table "users" by id {_id} and store the result in {_one::*}:
+
+        select page 2 with size 20 from table "users" and store the results in {_page::*}:
+            where all:
+                active = true
+
+        update entities in table "users" with limit 10 and wait:
+            values:
+                active: false
+            where all:
+                last_seen < {_from}
+
+        delete entities from table "users" with limit 10 and wait:
+            where any:
+                active = false
+                age < 18

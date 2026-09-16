@@ -123,6 +123,18 @@ Pagination orders by the registered primary key, so a table without one is refus
 one-based. Keys inside a page restart at 1 (`{_page::1::name}`), which is easy to mistake for the first
 row of the table. See [Reading rows](reading.md).
 
+## Skript says "Empty configuration section!"
+
+The variable form of a write section has no body, and a section still needs its colon:
+
+```sk
+insert one {_user::*} into table "archived_users":
+```
+
+Skript reads that colon as the start of a section, finds nothing indented under it, and notes it at INFO
+level. It is not a mistake and the statement runs: the values came from the variable. The note can be
+ignored, or silenced in Skript's own config; nothing in this plugin changes it.
+
 ## The table name works on one server and not another
 
 On Linux, MySQL table names are case-sensitive. The name in `register a database table "..."` is used as

@@ -115,14 +115,14 @@ insert many {_rows::*} into table "users" and wait:
 
 ```sk
 set {_page} to 1
-loop 100 times:
+while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
     if size of {_page-rows::*} is 0:
         exit loop
     loop {_page-rows::*}:
-        # {loop-value} 是这一页里的行号
+        # 外层用 while 计数，于是全局只有这一个 loop，loop-value 不会有歧义
         send "%{_page-rows::%loop-value%::name}%" to console
     add 1 to {_page}
 ```
