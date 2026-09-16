@@ -15,8 +15,12 @@ import kotlin.math.roundToInt
  */
 internal object LogoPrinter {
 
-    /** Where the gradient runs, from the left of the wordmark to its right. */
-    private val gradient = intArrayOf(0x2E9BE6, 0x7C4DFF, 0xC242F5)
+    /**
+     * Where the gradient runs, from the left of the wordmark to its right: deep water, the shallows, and
+     * the sand at the end of it. The middle stop earns its place, because a straight blue-to-yellow
+     * interpolation passes through grey on the way, and that is not a colour a beach has.
+     */
+    private val gradient = intArrayOf(0x2A7FD4, 0x4FD1C5, 0xF7E8A4)
 
     private const val ESCAPE = "\u001B["
 
