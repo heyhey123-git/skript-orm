@@ -196,7 +196,7 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 ## 8. 测试
 
-测试分为三层，由三个独立的 Gradle 任务运行。
+测试分为四层，由四个独立的 Gradle 任务运行。
 
 **单元测试**（`core`、`generic-jdbc-implementation`）随每次构建运行，不需要网络和 Docker，覆盖的是契约
 而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验，以及全局 `Database` 生命周期。
@@ -249,9 +249,36 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
 `assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会
 出现在任何报告里。
 
+**Skript 服务端测试**（根项目）会启动一个真实的 Paper 服务端，加载 Skript 与本插件打出的 shaded jar，然后
+检查插件在其中的行为。这是唯一能覆盖「元素注册」与「真实脚本的解析阶段」的层次，因为两者都需要一个正在运行
+的 Skript：
+
+```bash
+./gradlew serverTest
+```
+
+与 MySQL 那一层一样，它是可选任务：会往 Gradle 用户目录下载 Paper jar（之后的运行会复用），并启动一个
+Minecraft 服务端。它运行的版本取自版本目录里的 `paper`，因此是插件编译所针对的同一条 API 线与同一个构建，
+而不是仅仅「兼容」的版本。
+
+`server-test/skript/*.sk` 负责驱动这些元素。这里刻意不连接任何数据库：每个元素都应当停在数据库查找这一步，
+并通过 `last database error` 报告 `No database connected.`，这样整个脚本无需数据库服务端也能真实跑完。每个
+元素都会输出一行 `XIAOJIE_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript
+无法解析的语句会被报错并跳过，所以「某个 pattern 不再注册」会表现为缺少一行，而不是悄悄通过。
+
+Minecraft 服务端的两个特性决定了脚本的写法：
+
+- 实际工作放在周期触发器里，因为服务端尚在启动时 Skript 的 `on script load` 不会触发
+  （SkriptLang/Skript#5754），所以任何依赖脚本加载的写法都用不上。
+- 自检脚本自行停服；如果它没能做到，`99-watchdog.sk` 会停服，这正是把「卡住的运行」变成「失败的运行」的
+  机制。它不使用本插件的语法，因此当出问题的正是插件本身时它照样能跑。
+
+`prepareServerTest` 负责写入运行目录 `build/server-test`：`server.properties`、测试脚本，以及 `eula.txt`。
+写入最后这个文件意味着为这个一次性测试服务端接受 Minecraft EULA——这也是由任务而非开发者去做的原因。
+
 ### 持续集成
 
-`.github/workflows/ci.yml` 运行三个 job：
+`.github/workflows/ci.yml` 运行四个 job：
 
 - `test`：跑单元测试、Skript 测试与 `ktlintCheck`，不需要任何外部依赖。
 - `mysql-installed`：对着 runner 镜像**已经装好**的 MySQL 跑 JDBC 集成测试，用 `systemctl` 启动它。这样
@@ -260,6 +287,8 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
   守护进程是更早启动的。
 - `mysql-testcontainers`：不配置任何服务器，跑同一套测试。这正是开发者本地的路径，因此 Docker 探测与固定的
   `mysql:8.4` 镜像也会被一并验证。它只在默认分支和手动触发时运行，因为容器镜像是缓存唯一帮不上忙的东西。
+- `skript-server`：启动上面描述的那个 Paper 服务端，检查插件在其中的表现。它既不需要 Docker 也不需要数据库，
+  所以每次改动都会运行；唯一值得缓存的是下载下来的服务端 jar，缓存键跟随版本目录。
 
 #### CI 什么时候运行
 

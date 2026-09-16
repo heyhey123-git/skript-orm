@@ -183,3 +183,68 @@ jobs:
           name: mysql-testcontainers-test-reports
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
+
+  # Boots a real Paper server carrying Skript and the built plugin, and checks what the addon did
+  # there. It is the only layer that can see element registration and the parse phase of a real
+  # script, and it needs nothing from the runner image: no Docker, no database.
+  #
+  # Writing eula.txt is what the run directory the job creates contains; accepting the Minecraft EULA
+  # for a disposable test server is a decision recorded in build.gradle.kts.
+  skript-server:
+    name: Tests on a real Paper server
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: enhanced
+
+      # run-paper keeps the server jars it downloads in the Gradle user home, under a directory
+      # setup-gradle does not cache. The key follows the version catalog, so bumping Paper or Skript
+      # fetches a fresh server instead of restoring one the run would then have to replace.
+      - name: Cache the downloaded server
+        uses: actions/cache@v4
+        with:
+          path: ~/.gradle/caches/run-task-jars
+          key: run-task-jars-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+          restore-keys: |
+            run-task-jars-${{ runner.os }}-
+
+      - name: Make the wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run the Skript server test
+        run: ./gradlew serverTest --stacktrace
+
+      # The server log is where this test explains itself, and reading a job log through the API
+      # needs admin rights while annotations are public.
+      - name: Annotate the failure
+        if: failure()
+        run: |
+          log=build/server-test/logs/latest.log
+          if [ ! -f "$log" ]; then
+            echo "::error::The server wrote no log at $log."
+            exit 0
+          fi
+          tail -n 200 "$log"
+          grep -E 'XIAOJIE_SELFTEST|understand|\[Skript\] Line' "$log" | tail -n 40 | while IFS= read -r line; do
+            echo "::error::$line"
+          done
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: skript-server-log
+          path: build/server-test/logs/latest.log
+          if-no-files-found: ignore

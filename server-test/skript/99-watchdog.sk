@@ -1,0 +1,12 @@
+# Fails the run instead of hanging it.
+#
+# `01-selftest.sk` stops the server itself, so a server that is still up this much later means the
+# self-test never got that far: either Skript rejected the script, or the addon did not load and its
+# elements were unknown. Nothing here uses addon syntax, so this file runs either way.
+#
+# The self-test's own `PASS` marker is what `serverTest` looks for; this marker only explains why it
+# is missing.
+
+every 30 seconds:
+    log "XIAOJIE_SELFTEST=FAIL the self-test did not stop the server within 30 seconds"
+    stop the server

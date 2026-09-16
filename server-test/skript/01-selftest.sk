@@ -1,0 +1,112 @@
+# Drives every element this addon registers, once, on a real Paper server.
+#
+# This is the only layer that can cover two things: that Skript registers all of the addon's
+# patterns, and that a script's `values` and `where` blocks parse when they hold real Skript
+# expressions. Both need a Skript that is running, and MockBukkit cannot host one (CONTRIBUTION §8).
+#
+# No database is connected on purpose. Every section is expected to stop at the database lookup and
+# say so through `last database error`; the `log` line after each one records what it said, and the
+# `serverTest` task checks those lines. That runs the whole file for real without a database server.
+#
+# The trigger is periodic because Skript's `on script load` does not fire while the server is still
+# starting, so nothing driven by script loading can run here (SkriptLang/Skript#5754). It stops the
+# server itself, which is also how `serverTest` knows the file ran to the end; `99-watchdog.sk`
+# covers the case where it does not.
+
+every 5 seconds:
+    set {_name} to "Alice"
+    set {_age} to 1 + 1
+    set {_row::name} to {_name}
+    set {_row::age} to {_age}
+
+    register a database table "orm_selftest":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
+    log "XIAOJIE_SELFTEST detail: register table -> %last database error%"
+
+    # An implementation that is not installed, so this reports without waiting on a connection.
+    create a connection to database "NoSuchDatabase" with properties:
+        url: "jdbc:mysql://127.0.0.1:3306/orm_selftest"
+        username: "root"
+        password: "root"
+    log "XIAOJIE_SELFTEST detail: create connection -> %last database error%"
+
+    insert one entity into table "orm_selftest" and wait:
+        values:
+            name: {_name}
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: insert one -> %last database error%"
+
+    insert many entities into table "orm_selftest" and wait:
+        values:
+            1:
+                name: "Bob"
+                age: {_age}
+            2:
+                name: "Carol"
+                age: {_age}
+    log "XIAOJIE_SELFTEST detail: insert many -> %last database error%"
+
+    # A section, so it needs its colon even though the values come from the variable and the body
+    # stays empty.
+    insert one {_row::*} into table "orm_selftest" and wait:
+    log "XIAOJIE_SELFTEST detail: insert one from variable -> %last database error%"
+
+    insert one entity if absent into table "orm_selftest" and wait:
+        values:
+            name: "Dave"
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: insert if absent -> %last database error%"
+
+    select one entity from table "orm_selftest" and store the result in {_one::*}:
+        where all:
+            name = {_name}
+            age > 1
+    log "XIAOJIE_SELFTEST detail: select one -> %last database error%"
+
+    select many entities from table "orm_selftest" and store the results in {_many::*}:
+        where any:
+            name != "nobody"
+            age <= 99
+    log "XIAOJIE_SELFTEST detail: select many -> %last database error%"
+
+    select page 1 with size 10 from table "orm_selftest" and store the results in {_page::*}:
+        where all:
+            age between 1 and 99
+    log "XIAOJIE_SELFTEST detail: select page -> %last database error%"
+
+    select one entity from table "orm_selftest" by id 1 and store the result in {_by_id::*}:
+    log "XIAOJIE_SELFTEST detail: select by id -> %last database error%"
+
+    delete entities from table "orm_selftest" with limit 10 and wait:
+        where all:
+            name = "nobody"
+    log "XIAOJIE_SELFTEST detail: delete entities -> %last database error%"
+
+    delete one entity from table "orm_selftest" by id 1 and wait:
+    log "XIAOJIE_SELFTEST detail: delete by id -> %last database error%"
+
+    update entities in table "orm_selftest" with limit 10 and wait:
+        values:
+            age: {_age}
+        where all:
+            name = "nobody"
+    log "XIAOJIE_SELFTEST detail: update entities -> %last database error%"
+
+    update one entity in table "orm_selftest" by id 1 and wait:
+        values:
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: update by id -> %last database error%"
+
+    upsert one entity in table "orm_selftest" by id 1 and wait:
+        values:
+            name: {_name}
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: upsert by id -> %last database error%"
+
+    disconnect from the current database
+    log "XIAOJIE_SELFTEST detail: disconnect -> ran"
+
+    log "XIAOJIE_SELFTEST=PASS"
+    stop the server

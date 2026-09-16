@@ -226,7 +226,7 @@ the top reads **Project**.
 
 ## 8. Testing
 
-There are three layers, run by three separate Gradle tasks.
+There are four layers, run by four separate Gradle tasks.
 
 **Unit tests** (`core`, `generic-jdbc-implementation`) run on every build, need no network and no
 Docker, and cover contracts rather than line coverage: SQL rendering, parameter binding, cursor
@@ -286,9 +286,41 @@ Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only disc
 that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an
 expression-bodied test would otherwise be compiled, never run, and never reported.
 
+**Skript server tests** (the root project) boot a real Paper server carrying Skript and the shaded
+plugin, then check what the addon did there. This is the only layer that can cover element
+registration and the parse phase of a real script, because both need a running Skript:
+
+```bash
+./gradlew serverTest
+```
+
+Like the MySQL half it is opt-in: it downloads a Paper jar into the Gradle user home, where later runs
+find it again, and starts a Minecraft server. The server it runs is the `paper` entry of the version
+catalog, so it is the same API line and build the plugin compiles against rather than a merely
+compatible one.
+
+`server-test/skript/*.sk` drive the addon. Nothing is connected to a database on purpose: every
+element is expected to stop at the database lookup and report `No database connected.` through
+`last database error`, which runs the whole file for real without a database server. Each element
+logs a `XIAOJIE_SELFTEST` line, and the `serverTest` task checks those lines against the list in
+`build.gradle.kts`. A statement Skript cannot parse is reported and then skipped, so a pattern that
+stops registering shows up as a missing line instead of passing quietly.
+
+Two properties of a Minecraft server shape the scripts:
+
+- A periodic trigger does the work, because Skript's `on script load` does not fire while the server
+  is still starting (SkriptLang/Skript#5754), so nothing driven by script loading can be used here.
+- The self-test stops the server itself. `99-watchdog.sk` stops it if that did not happen, which is
+  what turns a hung run into a failure; it uses no addon syntax, so it also runs when the addon is
+  the thing that broke.
+
+`prepareServerTest` writes the run directory, `build/server-test`: `server.properties`, the scripts,
+and `eula.txt`. Writing that last file accepts the Minecraft EULA for this disposable server, which
+is why the task and not a developer is what does it.
+
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs three jobs:
+`.github/workflows/ci.yml` runs four jobs:
 
 - `test` runs the unit and Skript tests plus `ktlintCheck`, and needs nothing else.
 - `mysql-installed` runs the JDBC integration tests against the MySQL that the runner image already
@@ -301,6 +333,9 @@ expression-bodied test would otherwise be compiled, never run, and never reporte
   uses locally, so the Docker detection and the pinned `mysql:8.4` image get exercised as well. It
   runs only on the default branch and on demand, because a container image is the one thing the cache
   cannot help with.
+- `skript-server` boots the Paper server described above and checks what the plugin did there. It
+  needs neither Docker nor a database, so it runs on every change; the only thing worth caching is
+  the downloaded server jar, under a key that follows the version catalog.
 
 #### When CI runs
 
