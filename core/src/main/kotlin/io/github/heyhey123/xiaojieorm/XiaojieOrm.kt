@@ -3,6 +3,7 @@ package io.github.heyhey123.xiaojieorm
 import ch.njol.skript.Skript
 import ch.njol.skript.util.Version
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.logging.LogoPrinter
 import io.github.heyhey123.xiaojieorm.skript.registerElements
 import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,7 @@ class XiaojieOrm : JavaPlugin() {
         }
 
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        LogoPrinter.print(pluginMeta.version)
         registerElements(registerSkriptAddon())
         reportNbtSupport()
 
@@ -123,6 +125,7 @@ class XiaojieOrm : JavaPlugin() {
             logger.severe("Failed to disconnect the database during plugin shutdown: ${error.message}")
         } finally {
             ioScope.cancel("Plugin disabled")
+            LogoPrinter.printFarewell(pluginMeta.version)
         }
     }
 }
