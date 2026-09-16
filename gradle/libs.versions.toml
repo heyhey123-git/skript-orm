@@ -25,7 +25,11 @@ coroutines = "1.10.2"
 paper = "26.2.build.124-stable"
 
 skript = "2.16.2"
-nbt-api = "2.15.5"
+
+# The NBT-API plugin, whose classes the JDBC type registry resolves when it initializes. 2.15.5
+# refuses to claim support for Minecraft 26.2 and warns that "some functions may not work"; 2.16.0 is
+# the release that adds it.
+nbt-api = "2.16.0"
 
 # The artifact name itself carries the Paper line (`-v26.2`), so this version and `paper` above move
 # together: a newer Paper line needs the matching MockBukkit artifact, not just a newer version.
