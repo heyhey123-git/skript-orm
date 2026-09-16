@@ -310,6 +310,7 @@ val serverTestChecks = buildMap {
     put("update by id without colon", serverTestExpectedMessage)
     put("upsert by id without colon", serverTestExpectedMessage)
     put("delete by id without colon", serverTestExpectedMessage)
+    put("delete entities without colon", serverTestExpectedMessage)
     put("select many", serverTestExpectedMessage)
     put("select page", serverTestExpectedMessage)
     put("select by id", serverTestExpectedMessage)

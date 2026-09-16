@@ -1,6 +1,7 @@
 package io.github.heyhey123.xiaojieorm.skript
 
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDeleteById
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDeleteUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDisconnect
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertIfAbsentFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertManyFromVariable
@@ -39,6 +40,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  */
 internal fun registerElements(addon: SkriptAddon) {
     EffDeleteById.register(addon)
+    EffDeleteUnfiltered.register(addon)
     EffDisconnect.register(addon)
     EffInsertIfAbsentFromVariable.register(addon)
     EffInsertManyFromVariable.register(addon)

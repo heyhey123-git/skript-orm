@@ -1,0 +1,12 @@
+# delete entities, without a colon
+#
+# A delete that keeps no rows back has no condition to name, so it has no body either. `with limit 1`
+# keeps the suite from clearing a table the elements next to it are still writing to; the statement is
+# the same one the documentation shows for pruning a table.
+every 5 seconds:
+    if {xiaojie::selftest::done::delete-entities-nocolon} is set:
+        stop trigger
+
+    delete entities from table "orm_selftest" with limit 1 and wait
+    log "XIAOJIE_SELFTEST detail: delete entities without colon -> %last database error%"
+    set {xiaojie::selftest::done::delete-entities-nocolon} to true
