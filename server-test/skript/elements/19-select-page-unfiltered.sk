@@ -1,0 +1,14 @@
+# select page, without a filter and without a colon
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end is both
+# the run-once guard and what `99-finish.sk` waits for.
+#
+# No colon on purpose: `select page` with a `where` block is a section and needs one, but this form has
+# nothing for a body, and Skript warns about every section that has none.
+every 5 seconds:
+    if {xiaojie::selftest::done::select-page-unfiltered} is set:
+        stop trigger
+
+    select page 1 with size 5 from table "orm_selftest" and store the results in {_page::*}
+    log "XIAOJIE_SELFTEST detail: select page unfiltered -> %last database error%"
+    set {xiaojie::selftest::done::select-page-unfiltered} to true

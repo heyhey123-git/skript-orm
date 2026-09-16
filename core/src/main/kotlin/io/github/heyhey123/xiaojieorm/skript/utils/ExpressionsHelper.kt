@@ -3,10 +3,25 @@ package io.github.heyhey123.xiaojieorm.skript.utils
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.ParseContext
 import ch.njol.skript.lang.SkriptParser
+import ch.njol.skript.lang.UnparsedLiteral
 import io.github.heyhey123.xiaojieorm.table.Column
 import io.github.heyhey123.xiaojieorm.table.Table
 
 object ExpressionsHelper {
+
+    /**
+     * Gives [expression] a type, so that a bare literal can be read while the script runs.
+     *
+     * Skript leaves a literal such as the `1` in `by id 1` unparsed until something says what type it
+     * should take, and reading one that was never converted throws instead of returning the value. A
+     * `%object%` pattern is exactly where that happens, because it is the syntax that has to decide.
+     * Anything already parsed comes back as it is.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun withAnyType(expression: Expression<*>): Expression<Any> {
+        if (expression !is UnparsedLiteral) return expression as Expression<Any>
+        return (expression.getConvertedExpression(Any::class.java) ?: expression) as Expression<Any>
+    }
 
     /**
      * Resolves [columnName] in [table].

@@ -297,8 +297,13 @@ val serverTestChecks = buildMap {
     put("insert one from variable", serverTestExpectedMessage)
     put("insert if absent", serverTestExpectedMessage)
     put("select one", serverTestExpectedMessage)
-    // The same statement written without a colon, which is what the effect form is for.
+    // The same statements written without a colon, which is what the effect forms are for. The names carry
+    // `unfiltered` because the section forms keep their own elements, and a script records itself under a
+    // name of its own.
     put("select one unfiltered", serverTestExpectedMessage)
+    put("select many unfiltered", serverTestExpectedMessage)
+    put("select page unfiltered", serverTestExpectedMessage)
+    put("select by id unfiltered", serverTestExpectedMessage)
     put("select many", serverTestExpectedMessage)
     put("select page", serverTestExpectedMessage)
     put("select by id", serverTestExpectedMessage)

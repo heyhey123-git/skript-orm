@@ -10,6 +10,7 @@ import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
+import io.github.heyhey123.xiaojieorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
@@ -17,35 +18,35 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 /**
- * `select one` for the case with no filter, written without a colon.
+ * `select ... by id`, written without a colon.
  *
- * A section needs a colon, and Skript warns about every section with nothing indented under it. There is
- * nothing to indent when there is no `where` block, so the statement is offered as an effect for that
- * case; a script that wants a filter writes the section instead. Skript picks between the two by the node
- * it read, so they never compete even though their patterns match the same words.
+ * This form never had a body to give: the row is named by its primary key and a `where` is refused, so the
+ * section spelling was only ever a colon with nothing under it. It is offered as an effect for that
+ * reason, and the section stays for scripts written before this one existed.
  */
-@Name("Select One Entity Without A Filter")
-@Description("Selects at most one row and stores it by column name, such as {_user::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Selects always wait and expose failures as the last database error.")
+@Name("Select Entity By ID Without A Colon")
+@Description("Selects one row by its registered primary-key value and stores it by column name, such as {_user::name}. Written without a colon, because a section with no body is what Skript warns about. It does not accept where. Selects always wait and expose failures as the last database error.")
 @Example(
     """
-select one entity from table "users" and store the result in {_user::*}
-send "name: %{_user::name}%"
+select entity from table "users" by id {_id} and store the result in {_user::*}
+send "%{_user::name}%"
 """
 )
 @Since("1.0")
-class EffSelectOneUnfiltered : Effect() {
+class EffSelectById : Effect() {
 
     companion object {
         fun register(addon: SkriptAddon) {
             SkriptSyntax.effect(
                 addon,
-                EffSelectOneUnfiltered::class.java,
-                "select one [entity] from [table] %string% [and] store [the] [result] in %objects% [and wait]"
+                EffSelectById::class.java,
+                "select [one] [entity] from [table] %string% by id %object% [and] store [the] [result] in %objects% [and wait]"
             )
         }
     }
 
     private lateinit var tableNameExpr: Expression<String>
+    private lateinit var idExpr: Expression<Any>
     private lateinit var resultVar: Variable<*>
 
     @Suppress("UNCHECKED_CAST")
@@ -56,8 +57,9 @@ class EffSelectOneUnfiltered : Effect() {
         parseResult: SkriptParser.ParseResult
     ): Boolean {
         tableNameExpr = expressions[0] as Expression<String>
+        idExpr = ExpressionsHelper.withAnyType(expressions[1]!!)
 
-        val resultExpression = expressions[1] ?: return false
+        val resultExpression = expressions[2] ?: return false
         if (resultExpression !is Variable<*>) {
             Skript.error("The result of a select must be stored in a list variable, such as {_user::*}.")
             return false
@@ -76,6 +78,16 @@ class EffSelectOneUnfiltered : Effect() {
         val trigger = this.trigger ?: return next
         SkriptDatabaseErrors.clear(actualEvent)
 
+        val id = idExpr.getSingle(actualEvent)
+        if (id == null) {
+            DatabaseWork.report(
+                actualEvent,
+                trigger,
+                "Failed to parse query arguments: ID expression in 'select by id' is null."
+            )
+            return next
+        }
+
         val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
 
         return DatabaseWork.run(
@@ -86,7 +98,7 @@ class EffSelectOneUnfiltered : Effect() {
             query = {
                 target.database.withQueries { queries ->
                     val row = linkedMapOf<String, Any?>()
-                    queries.selectOne(null).execute(target.table).cursor.use { cursor ->
+                    queries.selectById(id).execute(target.table).cursor.use { cursor ->
                         if (cursor.next()) {
                             target.table.columns.values.forEach { column ->
                                 row[column.name] = cursor.get(column.name, column.type)
@@ -105,5 +117,5 @@ class EffSelectOneUnfiltered : Effect() {
     }
 
     override fun toString(event: Event?, debug: Boolean): String =
-        "select one from table $tableNameExpr and store the result in $resultVar"
+        "select from table $tableNameExpr by id $idExpr and store the result in $resultVar"
 }

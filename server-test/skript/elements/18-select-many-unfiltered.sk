@@ -1,0 +1,14 @@
+# select many, without a filter and without a colon
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end is both
+# the run-once guard and what `99-finish.sk` waits for.
+#
+# No colon on purpose: `select many` with a `where` block is a section and needs one, but this form has
+# nothing for a body, and Skript warns about every section that has none.
+every 5 seconds:
+    if {xiaojie::selftest::done::select-many-unfiltered} is set:
+        stop trigger
+
+    select many entities from table "orm_selftest" and store the results in {_many::*}
+    log "XIAOJIE_SELFTEST detail: select many unfiltered -> %last database error%"
+    set {xiaojie::selftest::done::select-many-unfiltered} to true

@@ -1,7 +1,10 @@
 package io.github.heyhey123.xiaojieorm.skript
 
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDisconnect
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectById
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectManyUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectOneUnfiltered
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectPageUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.expressions.ExprLastDatabaseError
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecCreateConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecDelete
@@ -30,7 +33,10 @@ import org.skriptlang.skript.addon.SkriptAddon
  */
 internal fun registerElements(addon: SkriptAddon) {
     EffDisconnect.register(addon)
+    EffSelectById.register(addon)
+    EffSelectManyUnfiltered.register(addon)
     EffSelectOneUnfiltered.register(addon)
+    EffSelectPageUnfiltered.register(addon)
     ExprLastDatabaseError.register(addon)
 
     SecCreateConnection.register(addon)
