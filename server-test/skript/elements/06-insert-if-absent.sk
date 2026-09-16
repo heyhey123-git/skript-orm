@@ -1,0 +1,17 @@
+# insert if absent
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::insert-if-absent} is set:
+        stop trigger
+
+    set {_age} to 1 + 1
+    insert one entity if absent into table "orm_selftest" and wait:
+        values:
+            name: "Dave"
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: insert if absent -> %last database error%"
+    set {xiaojie::selftest::done::insert-if-absent} to true

@@ -1,0 +1,18 @@
+# upsert by id
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::upsert-by-id} is set:
+        stop trigger
+
+    set {_name} to "Alice"
+    set {_age} to 1 + 1
+    upsert one entity in table "orm_selftest" by id 1 and wait:
+        values:
+            name: {_name}
+            age: {_age}
+    log "XIAOJIE_SELFTEST detail: upsert by id -> %last database error%"
+    set {xiaojie::selftest::done::upsert-by-id} to true

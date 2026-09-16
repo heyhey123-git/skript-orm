@@ -271,17 +271,20 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
 Minecraft 服务端。它运行的版本取自版本目录里的 `paper`，因此是插件编译所针对的同一条 API 线与同一个构建，
 而不是仅仅「兼容」的版本。
 
-`server-test/skript/*.sk` 负责驱动这些元素。这里刻意不连接任何数据库：每个元素都应当停在数据库查找这一步，
-并通过 `last database error` 报告 `No database connected.`，这样整个脚本无需数据库服务端也能真实跑完。每个
-元素都会输出一行 `XIAOJIE_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript
-无法解析的语句会被报错并跳过，所以「某个 pattern 不再注册」会表现为缺少一行，而不是悄悄通过。
+`server-test/skript/` 负责驱动这些元素：`elements/` 下每个元素一个文件，因此失败时从文件名就能看出是哪个
+元素。这里刻意不连接任何数据库：每个元素都应当停在数据库查找这一步，并通过 `last database error` 报告
+`No database connected.`，这样所有元素无需数据库服务端也能真实跑完。每个元素都会输出一行
+`XIAOJIE_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript 无法解析的语句会被
+报错并跳过，所以「某个 pattern 不再注册」会表现为缺少一行，而不是悄悄通过。
 
 Minecraft 服务端的两个特性决定了脚本的写法：
 
 - 实际工作放在周期触发器里，因为服务端尚在启动时 Skript 的 `on script load` 不会触发
   （SkriptLang/Skript#5754），所以任何依赖脚本加载的写法都用不上。
-- 自检脚本自行停服；如果它没能做到，`99-watchdog.sk` 会停服，这正是把「卡住的运行」变成「失败的运行」的
-  机制。它不使用本插件的语法，因此当出问题的正是插件本身时它照样能跑。
+- 每个元素跑完就把自己记进 `{xiaojie::selftest::elements::*}`，全部到齐后 `99-finish.sk` 停服。它的第二个
+  触发器负责在「始终没到齐」时停服，这正是把「卡住的运行」变成「失败的运行」的机制；它不使用本插件的语法，
+  因此当出问题的正是插件本身时它照样能跑。也正因如此，`prepareServerTest` 会删掉 Skript 的数据目录：元素的
+  运行守卫存在那里，留下一个会让下一次运行跳过某个元素。
 
 `prepareServerTest` 负责写入运行目录 `build/server-test`：`server.properties`、测试脚本，以及 `eula.txt`。
 写入最后这个文件意味着为这个一次性测试服务端接受 Minecraft EULA——这也是由任务而非开发者去做的原因。

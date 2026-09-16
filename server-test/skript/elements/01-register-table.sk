@@ -1,0 +1,16 @@
+# register table
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::register-table} is set:
+        stop trigger
+
+    register a database table "orm_selftest":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
+    log "XIAOJIE_SELFTEST detail: register table -> %last database error%"
+    set {xiaojie::selftest::done::register-table} to true

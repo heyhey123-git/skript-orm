@@ -1,0 +1,17 @@
+# insert one from variable
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::insert-one-from-variable} is set:
+        stop trigger
+
+    set {_row::name} to "Alice"
+    set {_row::age} to 1 + 1
+    # A section, so it needs its colon even though the values come from the variable and the body
+    # stays empty.
+    insert one {_row::*} into table "orm_selftest" and wait:
+    log "XIAOJIE_SELFTEST detail: insert one from variable -> %last database error%"
+    set {xiaojie::selftest::done::insert-one-from-variable} to true

@@ -201,15 +201,15 @@ val prepareServerTest by tasks.registering {
 
     doLast {
         val run = runDirectory.get().asFile
+        // Skript's whole plugin directory goes, not just its scripts: every element script keeps a
+        // guard variable so that it runs once, and Skript stores variables there. A guard left over
+        // from an earlier run would make the next one skip that element and look like a failure.
+        // Skript writes its config back when it next starts.
+        run.resolve("plugins/Skript").deleteRecursively()
         val scripts = run.resolve("plugins/Skript/scripts")
-        // Recreated instead of merged: a script deleted from this repository must not keep running
-        // from what an earlier run left behind.
-        scripts.deleteRecursively()
         scripts.mkdirs()
-        sourceDirectory.dir("skript").asFile
-            .listFiles { file -> file.extension == "sk" }
-            ?.sortedBy { it.name }
-            ?.forEach { script -> script.copyTo(scripts.resolve(script.name), overwrite = true) }
+        // Copied as a tree, because the elements live one file each under `elements/`.
+        sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
         sourceDirectory.file("server.properties").asFile
             .copyTo(run.resolve("server.properties"), overwrite = true)
         // Paper refuses to start without this. Writing it records acceptance of the Minecraft EULA

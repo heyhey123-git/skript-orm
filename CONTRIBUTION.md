@@ -311,9 +311,10 @@ find it again, and starts a Minecraft server. The server it runs is the `paper` 
 catalog, so it is the same API line and build the plugin compiles against rather than a merely
 compatible one.
 
-`server-test/skript/*.sk` drive the addon. Nothing is connected to a database on purpose: every
+`server-test/skript/` drives the addon, one element per file under `elements/`, so a failure names
+the element through the file it happened in. Nothing is connected to a database on purpose: every
 element is expected to stop at the database lookup and report `No database connected.` through
-`last database error`, which runs the whole file for real without a database server. Each element
+`last database error`, which runs all of them for real without a database server. Each element
 logs a `XIAOJIE_SELFTEST` line, and the `serverTest` task checks those lines against the list in
 `build.gradle.kts`. A statement Skript cannot parse is reported and then skipped, so a pattern that
 stops registering shows up as a missing line instead of passing quietly.
@@ -322,9 +323,11 @@ Two properties of a Minecraft server shape the scripts:
 
 - A periodic trigger does the work, because Skript's `on script load` does not fire while the server
   is still starting (SkriptLang/Skript#5754), so nothing driven by script loading can be used here.
-- The self-test stops the server itself. `99-watchdog.sk` stops it if that did not happen, which is
-  what turns a hung run into a failure; it uses no addon syntax, so it also runs when the addon is
-  the thing that broke.
+- Each element records itself as it runs, and `99-finish.sk` stops the server once they have all
+  reported. Its second trigger stops it anyway if that never happens, which is what turns a hung run
+  into a failure; it uses no addon syntax, so it also runs when the addon is the thing that broke.
+  That is also why `prepareServerTest` deletes Skript's data directory: the guards the elements keep
+  live there, and one left behind would make the next run skip an element.
 
 `prepareServerTest` writes the run directory, `build/server-test`: `server.properties`, the scripts,
 and `eula.txt`. Writing that last file accepts the Minecraft EULA for this disposable server, which

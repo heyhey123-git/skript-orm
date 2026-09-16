@@ -1,0 +1,17 @@
+# create connection
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::create-connection} is set:
+        stop trigger
+
+    # An implementation that is not installed, so this reports without waiting on a connection.
+    create a connection to database "NoSuchDatabase" with properties:
+        url: "jdbc:mysql://127.0.0.1:3306/orm_selftest"
+        username: "root"
+        password: "root"
+    log "XIAOJIE_SELFTEST detail: create connection -> %last database error%"
+    set {xiaojie::selftest::done::create-connection} to true

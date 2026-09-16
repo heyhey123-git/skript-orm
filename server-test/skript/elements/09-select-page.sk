@@ -1,0 +1,15 @@
+# select page
+#
+# One element per file, so a failure is named by the file it happened in. The marker at the end
+# is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
+# reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
+# Skript's variable store before every run, so a marker cannot survive from an earlier one.
+every 5 seconds:
+    if {xiaojie::selftest::done::select-page} is set:
+        stop trigger
+
+    select page 1 with size 10 from table "orm_selftest" and store the results in {_page::*}:
+        where all:
+            age between 1 and 99
+    log "XIAOJIE_SELFTEST detail: select page -> %last database error%"
+    set {xiaojie::selftest::done::select-page} to true
