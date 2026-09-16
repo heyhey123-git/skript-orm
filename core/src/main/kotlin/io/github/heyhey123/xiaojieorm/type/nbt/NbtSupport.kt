@@ -46,6 +46,13 @@ object NbtSupport {
      */
     private const val SKBEE_ROOT = "com.shanebeestudios.skbee.api.nbt"
 
+    /**
+     * The package the classes are looked up in. It is a variable only so that a test can stand in for
+     * SkBee and drive the whole chain, handles included, without a server.
+     */
+    @Volatile
+    private var providerRoot: String = SKBEE_ROOT
+
     /** Set while the plugin enables; see [useClassLoaderLookup]. */
     @Volatile
     private var providedLookup: (() -> ClassLoader?)? = null
@@ -76,7 +83,26 @@ object NbtSupport {
         }
         // A lookup that answers means the plugin is there, which is worth saying: "not installed" and
         // "installed but unreachable" are different problems with different fixes.
-        return Flavour.resolve(SKBEE_ROOT, loaders, provided != null).also { resolved = it }
+        return Flavour.resolve(providerRoot, loaders, provided != null).also { resolved = it }
+    }
+
+    /**
+     * Points the lookup at [root] instead of SkBee's package.
+     *
+     * The unit tests use this with stand-in classes that have the same shapes as the library's, so that
+     * the constructor and method handles are linked and invoked here rather than only on a server. That
+     * matters: a handle linked with the wrong parameter types fails at the call, where a test with a
+     * stand-in sees it and a test without one cannot.
+     */
+    internal fun useProviderForTesting(root: String) {
+        providerRoot = root
+        resolved = null
+    }
+
+    /** Puts the lookup back to SkBee's package and forgets what was resolved. */
+    internal fun resetProviderForTesting() {
+        providerRoot = SKBEE_ROOT
+        resolved = null
     }
 
     /** Whether NBT values can be handled at all on this server. */
@@ -154,7 +180,7 @@ object NbtSupport {
             "Expected ${flavour.compoundClass.name}, but found ${value.javaClass.name}."
         }
         val output = ByteArrayOutputStream()
-        invoke("Failed to serialize NBT") { flavour.writeApiNbt.invoke(null, value, output) }
+        invoke("Failed to serialize NBT") { flavour.writeApiNbt.invoke(value, output) }
         return output.toByteArray()
     }
 
