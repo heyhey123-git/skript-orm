@@ -105,21 +105,19 @@ foreach ($match in [regex]::Matches($sidebar, '\]\(([^)]+)\)')) {
     }
 }
 
-# Path.GetRelativePath is .NET Core only, and this script is meant to run under Windows PowerShell too.
-function Get-RepositoryRelativePath {
-    param([string]$Base, [string]$Path)
-
-    $separator = [System.IO.Path]::DirectorySeparatorChar
-    $baseUri = [System.Uri](([System.IO.Path]::GetFullPath($Base).TrimEnd($separator) + $separator))
-    $pathUri = [System.Uri]([System.IO.Path]::GetFullPath($Path))
-    $relative = [System.Uri]::UnescapeDataString($baseUri.MakeRelativeUri($pathUri).ToString())
-    return $relative -replace '/', $separator
-}
-
 function Convert-Page {
     param([string]$Text, [string]$SourcePath)
 
-    $sourceDirectory = Split-Path -Parent (Join-Path $RepositoryRoot $SourcePath)
+    # The directory the page lives in, as a repository-relative path. A link that leaves the wiki is
+    # resolved by walking from there with the link's own segments. That is text rather than a file
+    # system, so it behaves the same on every platform, and it is the only reason this script does not
+    # need a path API: an earlier version asked `System.Uri` for the difference between two paths and
+    # worked on Windows while failing on the runner, where an absolute path is a relative URI.
+    $directory = @()
+    $sourceParts = $SourcePath -split '/'
+    if ($sourceParts.Count -gt 1) {
+        $directory = @($sourceParts[0..($sourceParts.Count - 2)])
+    }
 
     $normalised = $Text -replace "`r`n", "`n"
     $kept = foreach ($line in $normalised -split "`n") {
@@ -159,14 +157,25 @@ function Convert-Page {
             }
 
             # Not a page: the wiki carries no such file, so the link has to leave for the repository.
-            $resolved = Join-Path $sourceDirectory ($path -replace '/', [System.IO.Path]::DirectorySeparatorChar)
-            $relative = Get-RepositoryRelativePath -Base $RepositoryRoot -Path $resolved
-            if ($relative.StartsWith('..')) {
-                throw "$SourcePath links to '$target', which is outside the repository."
+            $segments = @($directory)
+            foreach ($segment in (($path -replace '\\', '/') -split '/')) {
+                if ($segment -eq '' -or $segment -eq '.') {
+                    continue
+                }
+                if ($segment -eq '..') {
+                    if ($segments.Count -eq 0) {
+                        throw "$SourcePath links to '$target', which is outside the repository."
+                    }
+                    $segments = @($segments | Select-Object -SkipLast 1)
+                    continue
+                }
+                $segments += $segment
+            }
+            if ($segments.Count -eq 0) {
+                throw "$SourcePath links to '$target', which names the repository itself."
             }
 
-            $address = ($relative -replace '\\', '/')
-            return "]($RepositoryUrl/blob/$Branch/$address$anchor)"
+            return "]($RepositoryUrl/blob/$Branch/$($segments -join '/')$anchor)"
         })
 }
 
