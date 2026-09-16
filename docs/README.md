@@ -1,0 +1,36 @@
+# xiaojie-orm documentation
+
+[简体中文](README.zh-CN.md) | **English**
+
+Every page here exists in both languages: `name.md` is English and `name.zh-CN.md` is Chinese. The
+[same list is in the README](../README.md) if you came from there.
+
+## If you are new
+
+Read [Getting started](getting-started.md) first. It ends with a script that stores a row and reads it
+back, and everything after that is reference for the parts you did not need yet.
+
+## Reference
+
+| Page | What is in it |
+| --- | --- |
+| [Connections](connections.md) | Connecting, the one-connection rule, disconnecting. |
+| [Tables](tables.md) | Column syntax, every type, keys and modifiers, and what registering does not do. |
+| [Writing rows](writing.md) | Insert one, insert many, insert from a variable, upsert, and `values` blocks. |
+| [Reading rows](reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
+| [Updating and deleting](updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
+| [Errors and waiting](errors-and-waiting.md) | `and wait`, `last database error`, and what runs in the background. |
+| [Types](types.md) | What each column type accepts and how it is stored. |
+
+## When something goes wrong
+
+| Page | What is in it |
+| --- | --- |
+| [Troubleshooting](troubleshooting.md) | Silence that is not success: schema changes that are ignored, NULL columns that vanish, NBT without SkBee. |
+| [Cookbook](cookbook.md) | Whole recipes: upsert, paging, bulk insert, storing an item's NBT, read-modify-write. |
+| [Compatibility](compatibility.md) | Versions, what ships inside the jar, and what is not supported. |
+
+## For the wiki on GitHub
+
+If these pages are mirrored to the repository wiki, keep the file names: the links between them, and
+the links from the README, are relative and would otherwise break.

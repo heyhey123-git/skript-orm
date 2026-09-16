@@ -1,0 +1,97 @@
+# Tables
+
+[简体中文](tables.zh-CN.md) | **English**
+
+A table is described once, in the script that connects, and the description is what the plugin uses to
+build statements and to name the keys of a result.
+
+## Registering
+
+```sk
+register a database table "users":
+    id: bigint, primary key, auto increment, not null
+    name: string(64), not null
+    age: int, nullable
+```
+
+The body is one column per line, in the exact form
+
+```
+name: type[(size)][, primary key][, auto increment][, not null]
+```
+
+- **The name** may contain letters, digits, marks and underscores, and may not start with a digit. It is
+  used as written, so keep one spelling: on a MySQL server running on Linux, table names are
+  case-sensitive.
+- **The type** is one of the names in [Types](types.md). An unknown one is refused when the section is
+  read, with a message saying the connected database does not support it.
+- **The size** in brackets applies to the types that have one (`string`, `uuid`, `location`) and must be
+  greater than zero.
+- **The modifiers** are separated from the type and from each other by commas. They are
+  `primary key`, `auto increment`, `not null` and `nullable`. A column is nullable unless it says
+  `not null`, and saying both is an error.
+
+Columns are direct lines. A nested block is refused, and so are duplicate column names, more than one
+`primary key`, and `auto increment` on a column that is not one.
+
+## What a primary key is for
+
+`primary key` marks the column the `by id` operations use, and pagination needs one:
+
+```sk
+select entity from table "users" by id {_id} and store the result in {_user::*}:
+update one entity in table "users" by id {_id} and wait:
+delete one entity from table "users" by id {_id} and wait:
+select page 2 with size 20 from table "users" and store the results in {_page::*}:
+```
+
+`auto increment` lets the database assign the value. The plugin does not hand the generated id back to
+the script, so a script that needs to know it should write its own value and use `upsert`, or find the
+row again by another column; see [Cookbook](cookbook.md).
+
+## What registering does, and what it does not
+
+Registering runs `CREATE TABLE IF NOT EXISTS`, then waits for the table to exist. It never drops,
+alters or inspects anything.
+
+**A table that already exists is left exactly as it is.** Adding a column to the script and reloading it
+changes nothing in the database: the plugin stores the new column in its own description, the database
+does not grow one, and the operations that mention it fail at runtime while the ones that do not keep
+working. There is no warning, because from the plugin's point of view the registration succeeded. To
+change a table, run the `ALTER TABLE` yourself, or drop the table in a development database and let the
+plugin create it again.
+
+**Registering is remembered per connection.** A second `register a database table "users"` on the same
+connection is refused with `Table 'users' is already registered.` — which is what a script that reloads
+and registers again will see. The usual arrangement avoids it by connecting first:
+
+```sk
+on load:
+    create a connection to database "MySQL" with properties:
+        url: "jdbc:mysql://localhost:3306/mydb"
+        username: "root"
+        password: "123456"
+
+    register a database table "users":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+```
+
+Reconnecting gives a fresh connection with no tables registered, so the pair can run again after a
+reload. See [Connections](connections.md).
+
+## Failures
+
+`register a database table` has no `and wait`: it always waits, and a failure is exposed as
+`last database error` right after it:
+
+```sk
+register a database table "users":
+    id: bigint, primary key, auto increment, not null
+    name: string(64), not null
+if last database error is set:
+    send "Table registration failed: %last database error%" to console
+```
+
+An NBT column is refused here on a server without SkBee, rather than failing later on the first row
+that touches it; see [Types](types.md).
