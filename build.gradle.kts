@@ -227,8 +227,11 @@ val prepareServerTest by tasks.registering {
         scripts.mkdirs()
         // Copied as a tree, because the elements live one file each under `elements/`.
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
-        // The database mode adds a setup script and a round trip on top of the same element scripts.
-        // The setup is generated because its credentials come from the properties, not the repository.
+        // The database mode adds a setup script and a round trip on top of the same element scripts,
+        // and may replace one: it is copied over the tree above, so a file of the same name and path
+        // wins. Only `elements/16-disconnect.sk` does, because it is the one element that would close
+        // the connection the round trip is still using. The setup is generated because its
+        // credentials come from the properties, not the repository.
         if (serverTestUsesDatabase) {
             sourceDirectory.dir("database").asFile.copyRecursively(scripts, overwrite = true)
             val setup = scripts.resolve("00-setup.sk")
@@ -374,7 +377,8 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
         val failures = lines.filter { "XIAOJIE_SELFTEST=FAIL" in it }
         if (failures.isNotEmpty()) {
-            problems += "The self-test reported a failure of its own:\n" + indent(failures)
+            // One line each, because these lines are what CI annotates and annotations are capped.
+            problems += failures.map { "The self-test reported: ${it.substringAfter("XIAOJIE_SELFTEST=").trim()}" }
         }
 
         // "XIAOJIE_SELFTEST detail: <element> -> <message>"
@@ -408,7 +412,19 @@ abstract class VerifySkriptServerTest : DefaultTask() {
             // A failing step's log needs admin rights to read, while annotations are public, so the
             // problems are also written next to the log for CI to annotate. Without this, a failure
             // here is only visible to whoever can open the job.
-            serverLog.get().asFile.parentFile.resolve("test-problems.txt").writeText(problems.joinToString("\n"))
+            //
+            // The database elements report whatever their step produced rather than a fixed message,
+            // so the round trip carries the assertions and those probe lines are the only evidence of
+            // what the write and the reads actually did. CI keeps only the last few annotations, so
+            // the probes are packed into one line to leave room for the failures above them.
+            val probes = listOf("setup", "setup select", "roundtrip", "roundtrip now", "roundtrip later", "roundtrip by id")
+                .mapNotNull { element -> reported[element]?.let { "$element -> $it" } }
+            val evidence = buildList {
+                add("The Skript server test failed:")
+                addAll(problems)
+                if (probes.isNotEmpty()) add("What the database probes printed: " + probes.joinToString(" | "))
+            }
+            serverLog.get().asFile.parentFile.resolve("test-problems.txt").writeText(evidence.joinToString("\n"))
             throw GradleException(
                 buildString {
                     appendLine("The Skript server test failed:")

@@ -1,0 +1,23 @@
+# disconnect, in database mode
+#
+# This file replaces the element of the same name. `prepareServerTest` copies `server-test/database/`
+# over `server-test/skript/`, so it lands where that element would have, and the run keeps the same
+# number of scripts.
+#
+# It exists because of when it would otherwise run. Every script here fires every five seconds, and
+# the round trip holds the one shared connection across a five second wait, so an element that
+# disconnected as soon as it fired would pull the database out from under it: the insert and the reads
+# would report "No database connected." rather than what they are meant to tell apart, which is
+# exactly what a write that stored nothing would look like. Waiting for the round trip to record
+# itself keeps this element's own check, that a live connection can be closed, without racing it.
+#
+# Offline there is no shared connection to protect, so the element runs on its own schedule there.
+every 5 seconds:
+    if {xiaojie::selftest::done::disconnect} is set:
+        stop trigger
+    if {xiaojie::selftest::done::roundtrip} is not set:
+        stop trigger
+
+    disconnect from the current database
+    log "XIAOJIE_SELFTEST detail: disconnect -> ran"
+    set {xiaojie::selftest::done::disconnect} to true

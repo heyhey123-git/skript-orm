@@ -11,6 +11,11 @@
 # never null, and a NULL column is invisible in a list variable because Skript deletes a key that is
 # set to null.
 #
+# This is the only script that holds the shared connection across a wait, so the disconnect element
+# may not fire while it runs: `server-test/database/elements/16-disconnect.sk` replaces that element
+# in database mode and waits for `{xiaojie::selftest::done::roundtrip}`. Without that, the reads below
+# report "No database connected." and look exactly like a write that stored nothing.
+#
 # The row is read twice, with a plain Skript `wait` in between. The first read says what the steps
 # left behind when they ran as written; the second is a control. If the row appears after the wait,
 # then the steps are not ordered the way they are written and the write itself is fine. If it never
@@ -35,12 +40,12 @@ every 5 seconds:
         log "XIAOJIE_SELFTEST=FAIL roundtrip insert: %last database error%"
 
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::now::*}:
-    log "XIAOJIE_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}%"
+    log "XIAOJIE_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}% (error: %last database error%)"
 
     wait 5 seconds
 
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::later::*}:
-    log "XIAOJIE_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}%"
+    log "XIAOJIE_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}% (error: %last database error%)"
     if {orm_selftest::later::id} is not set:
         log "XIAOJIE_SELFTEST=FAIL roundtrip found no row even after waiting"
     if {orm_selftest::later::name} is not "Alice":
@@ -52,7 +57,7 @@ every 5 seconds:
     select one entity from table "orm_roundtrip" and store the result in {_id::*}:
         where all:
             id >= 1
-    log "XIAOJIE_SELFTEST detail: roundtrip by id -> %{_id::*}%"
+    log "XIAOJIE_SELFTEST detail: roundtrip by id -> %{_id::*}% (error: %last database error%)"
     if {_id::id} is not set:
         log "XIAOJIE_SELFTEST=FAIL roundtrip found no row through a where on the primary key"
 
