@@ -33,19 +33,33 @@ class MysqlSchemaIntegrationTest : MysqlIntegrationTestBase() {
         recreateTable()
         val columns = columnMetadata("users").associateBy { it.name }
 
-        assertEquals("VARCHAR", columns.getValue("name").typeName)
-        assertEquals(100, columns.getValue("name").size)
-        assertEquals("INT", columns.getValue("id").typeName)
-        assertEquals("INT", columns.getValue("age").typeName)
-        assertEquals("BIGINT", columns.getValue("big").typeName)
-        assertEquals("TINYINT", columns.getValue("tiny").typeName)
-        assertEquals("DOUBLE", columns.getValue("score").typeName)
-        assertEquals("FLOAT", columns.getValue("ratio").typeName)
-        // MySQL treats BOOLEAN as an alias for TINYINT(1).
-        assertEquals("TINYINT", columns.getValue("active").typeName)
-        assertEquals("BINARY", columns.getValue("uid").typeName)
-        assertEquals(16, columns.getValue("uid").size)
+        assertColumnType("name", "VARCHAR", columns)
+        assertColumnSize("name", 100, columns)
+        assertColumnType("id", "INT", columns)
+        assertColumnType("age", "INT", columns)
+        assertColumnType("big", "BIGINT", columns)
+        assertColumnType("tiny", "TINYINT", columns)
+        assertColumnType("score", "DOUBLE", columns)
+        assertColumnType("ratio", "FLOAT", columns)
+        assertColumnType("uid", "BINARY", columns)
+        assertColumnSize("uid", 16, columns)
+
+        // MySQL has no BOOLEAN type: it is an alias for TINYINT(1), and Connector/J may report that
+        // column as TINYINT or as BIT depending on its tinyInt1isBit setting. Either label is the
+        // same column, so the assertion is that it stayed an integer type and not, say, a string.
+        // The boolean value itself round trips, which MysqlTypeRoundTripIntegrationTest checks.
+        assertTrue(
+            columns.getValue("active").typeName in setOf("TINYINT", "BIT"),
+            "active was reported as ${columns.getValue("active")}"
+        )
     }
+
+    /** Fails with the whole column description, so a remote run identifies the column on its own. */
+    private fun assertColumnType(column: String, expected: String, columns: Map<String, ColumnMeta>) =
+        assertEquals(expected, columns.getValue(column).typeName, "type of $column: ${columns.getValue(column)}")
+
+    private fun assertColumnSize(column: String, expected: Int, columns: Map<String, ColumnMeta>) =
+        assertEquals(expected, columns.getValue(column).size, "size of $column: ${columns.getValue(column)}")
 
     @Test
     fun `nullability follows the column declaration`() = runBlocking<Unit> {
