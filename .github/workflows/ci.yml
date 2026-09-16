@@ -1,0 +1,157 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  # Everything that needs no database. This is the job a pull request should be able to rely on.
+  test:
+    name: Unit and Skript tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # Restores the Gradle User Home: the wrapper distribution, every resolved dependency, and the
+      # API jars Gradle generates on first use. This is what stops a run from repeating the
+      # installation. See the continuous integration section of CONTRIBUTION.md for the cache
+      # provider choice and for what deliberately is not cached.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      # The wrapper is committed from Windows, where the executable bit is not tracked, so it may
+      # arrive without it.
+      - name: Make the wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run unit and Skript tests
+        run: ./gradlew :core:test :core:integrationTest :generic-jdbc-implementation:test --stacktrace
+
+      - name: Check formatting
+        run: ./gradlew ktlintCheck --stacktrace
+
+  # The JDBC integration tests against the MySQL the runner image already installs. Starting that
+  # server costs no image pull at all, and it puts the version the image ships (8.0 today) next to
+  # the 8.4 the Testcontainers job pins, so the suite covers two servers for one pull.
+  mysql-installed:
+    name: JDBC tests against the runner's MySQL
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # This job writes the cache entry the Testcontainers job reads, because it resolves the whole
+      # integration test dependency set.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+
+      - name: Make the wrapper executable
+        run: chmod +x ./gradlew
+
+      # The image installs MySQL and leaves it stopped. The loop waits for the server to accept a
+      # connection; the last command needs working credentials, so the step fails if they do not.
+      # `-h 127.0.0.1` is deliberate: a bare `mysql` would use the unix socket and hide a broken
+      # TCP listener, which is the path the driver takes.
+      - name: Start the installed MySQL
+        run: |
+          sudo systemctl start mysql.service
+          for attempt in $(seq 1 30); do
+            if mysql -h 127.0.0.1 -uroot -proot -e 'SELECT 1' >/dev/null 2>&1; then
+              break
+            fi
+            sleep 2
+          done
+          mysql -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION()'
+
+      - name: Create the test database
+        run: mysql -h 127.0.0.1 -uroot -proot -e 'CREATE DATABASE IF NOT EXISTS xiaojie_orm_test'
+
+      # The properties are passed instead of the environment so the test JVM cannot miss them, and so
+      # Testcontainers is not consulted at all.
+      - name: Run the JDBC integration tests
+        run: |
+          ./gradlew :generic-jdbc-implementation:integrationTest --stacktrace \
+            -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:3306/xiaojie_orm_test" \
+            -Pxiaojie.test.mysql.username=root \
+            -Pxiaojie.test.mysql.password=root
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-installed-test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  # The same tests through the path a developer uses locally: no external server configured, so the
+  # suite starts its own container. This is what proves the Docker detection and image pinning work.
+  #
+  # This is the only job whose cost cannot be cached at all: GitHub cannot cache Docker images, so it
+  # always pulls mysql:8.4. It is therefore restricted to the default branch and to manual runs,
+  # which keeps pull requests to a single image pull instead of two.
+  mysql-testcontainers:
+    name: JDBC tests through Testcontainers
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # Read-only: this job resolves the same dependencies as the job above, so writing would only
+      # duplicate a large entry and risk evicting the shared ones.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
+          cache-read-only: true
+
+      - name: Make the wrapper executable
+        run: chmod +x ./gradlew
+
+      - name: Run the JDBC integration tests
+        run: ./gradlew :generic-jdbc-implementation:integrationTest --stacktrace
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mysql-testcontainers-test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore

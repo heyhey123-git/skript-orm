@@ -228,6 +228,58 @@ Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不�
 `assertFailsWith`、`assertNotNull` 这类辅助函数会返回值；否则表达式体测试会被编译、却永远不执行、也不会
 出现在任何报告里。
 
+### 持续集成
+
+`.github/workflows/ci.yml` 运行三个 job：
+
+- `test`：跑单元测试、Skript 测试与 `ktlintCheck`，不需要任何外部依赖。
+- `mysql-installed`：对着 runner 镜像**已经装好**的 MySQL 跑 JDBC 集成测试，用 `systemctl` 启动它。这样
+  完全不产生镜像拉取，并且把镜像自带的版本（目前是 8.0）与另一个 job 固定的 8.4 并排放进矩阵，一次拉取覆盖
+  两个服务端版本。连接信息通过 `-P` 属性而不是环境变量传入，因为 Gradle 属性每次调用都会重新传递，即使
+  守护进程是更早启动的。
+- `mysql-testcontainers`：不配置任何服务器，跑同一套测试。这正是开发者本地的路径，因此 Docker 探测与固定的
+  `mysql:8.4` 镜像也会被一并验证。它只在默认分支和手动触发时运行，因为容器镜像是缓存唯一帮不上忙的东西。
+
+只在有人记得起容器时才跑的数据库测试，是没人会信任的测试。任何只能对着真实服务端才能验证的类型、查询或
+转换器，都应该放进有服务端的那个 job。
+
+现在所有 MySQL 测试在服务器不可达时都只会以普通连接错误失败，因此可以在没有数据库的情况下检查这套测试是否
+存在执行顺序问题：
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest \
+  -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:1/xiaojie_orm_test"
+```
+
+任何不是连接错误的失败都是真实缺陷——生命周期测试里那个潜在的顺序依赖就是这样被找出来的。
+
+#### CI 缓存了什么
+
+`gradle/actions/setup-gradle` 会在每次运行之间恢复 Gradle User Home：Gradle wrapper 发行包、所有已解析的
+依赖，以及 Gradle 首次使用时生成的 API jar。这正是避免每次重走安装流程的关键。不要给 `setup-java` 加
+`cache: gradle`，也不要为 Gradle User Home 另加 `actions/cache` —— 该 action 的文档明确说明两者都会与它的
+缓存机制冲突。
+
+缓存提供方设为 `basic`，即基于 `actions/cache` 的 MIT 实现。默认的 `enhanced` 是专有组件，对公开仓库免费、
+对私有仓库处于预览阶段；如果想要更小、去重后的缓存条目，改一行即可。缓存只会由默认分支写入，其他运行从它
+恢复。每个 job 的摘要都会报告恢复了什么、保存了什么。
+
+有两样东西是刻意不缓存的：
+
+- **Gradle 构建缓存。** 开启 `org.gradle.caching` 也会让 `Test` 任务可被缓存，而“从缓存得到的测试结果”并不
+  等于“测试真的跑过”。本项目的编译耗时相对于下载量而言微不足道。
+- **MySQL 容器镜像。** GitHub 无法缓存 Docker 镜像，所以 `mysql-testcontainers` 每次参与运行都会拉取
+  `mysql:8.4`。这正是另一个数据库 job 改用 runner 镜像自带 MySQL、而不是 service 容器的原因：那个 job 一次
+  都不拉取；它还被限制为只在默认分支运行，好让 PR 只付一次拉取而不是两次。`mysql-testcontainers` 另外被标记
+  为 `cache-read-only`：它与 `mysql-installed` 解析同一批依赖，让它写入只会多出一份大条目，并可能挤掉共享
+  条目。
+
+顺带说明：用 `actions/cache` 缓存 `docker save` 出来的 tar 并不是出路——tar 未压缩，比它替代的那次拉取更大，
+还会和 Gradle 条目抢同一份缓存配额，并且每个 job 都得加 shell 胶水。
+
+`ubuntu-latest` 已自带 JDK 25，所以 `actions/setup-java` 通常什么都不装。如果将来的镜像移除了它，action 会
+下载 JDK——那是 Gradle 缓存唯一帮不上忙的一项下载。
+
 ### 为什么没有“模拟服务端”方案
 
 MockBukkit 装不下 Skript。它加载插件的方式是生成主类的子类，因此 `final` 的主类根本无法加载，而 Skript 的

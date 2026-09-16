@@ -168,7 +168,13 @@ class MysqlDatabaseLifecycleIntegrationTest {
     }
 
     @Test
-    fun `the registry resolves the mysql factory by type name`() {
+    fun `the registry resolves the mysql factory once it has been loaded`() {
+        // The factory registers itself from its init block, which runs the first time anything
+        // touches the object; the plugin relies on the same rule when it loads its candidates.
+        // Reading it here keeps this test independent of which test ran first.
+        val factory = MysqlDatabaseFactory
+        assertEquals("MySQL", factory.typeName)
+
         val database = assertIs<JdbcDatabase>(DatabaseRegistry.get("MySQL", emptyMap()))
 
         assertEquals("com.mysql.cj.jdbc.Driver", database.driver)

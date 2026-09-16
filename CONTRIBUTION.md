@@ -261,6 +261,72 @@ Write integration test methods as `= runBlocking<Unit> { ... }`. JUnit only disc
 that return `void`, and helpers such as `assertFailsWith` and `assertNotNull` return a value, so an
 expression-bodied test would otherwise be compiled, never run, and never reported.
 
+### Continuous integration
+
+`.github/workflows/ci.yml` runs three jobs:
+
+- `test` runs the unit and Skript tests plus `ktlintCheck`, and needs nothing else.
+- `mysql-installed` runs the JDBC integration tests against the MySQL that the runner image already
+  installs, which it starts with `systemctl`. That costs no image pull at all, and it puts the
+  version the image ships (8.0 today) next to the 8.4 the other job pins, so the suite covers two
+  servers for one pull. The connection details are passed as `-P` properties rather than environment
+  variables, because a Gradle property is delivered with every invocation even when the daemon was
+  started earlier.
+- `mysql-testcontainers` runs the same suite with no server configured, which is the path a developer
+  uses locally, so the Docker detection and the pinned `mysql:8.4` image get exercised as well. It
+  runs only on the default branch and on demand, because a container image is the one thing the cache
+  cannot help with.
+
+A database-backed test that only runs when someone remembers to start a container is a test nobody
+trusts. Any type, query, or converter that can only be checked against a server belongs in a job that
+has one.
+
+Every MySQL test fails with a plain connection error when the configured server is unreachable, which
+is how the suite can be checked for execution-order problems without a database:
+
+```bash
+./gradlew :generic-jdbc-implementation:integrationTest \
+  -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:1/xiaojie_orm_test"
+```
+
+Any failure that is not a connection error is a real defect. This is how a latent order dependency in
+the lifecycle tests was found.
+
+#### What CI caches
+
+`gradle/actions/setup-gradle` restores the Gradle User Home between runs: the Gradle wrapper
+distribution, every resolved dependency, and the API jars Gradle generates on first use. That is what
+stops a run from repeating the installation. Do not add `cache: gradle` to `setup-java` or an
+`actions/cache` entry for the Gradle User Home — the action's documentation warns that both interfere
+with it.
+
+The cache provider is `basic`, the MIT implementation on top of `actions/cache`. The default
+`enhanced` provider is a proprietary component, free for public repositories and in preview for
+private ones; switching is one line if smaller, deduplicated entries are worth it. Caches are written
+only from the default branch, and every run restores from it. Each job's summary reports what was
+restored and saved.
+
+Two things are deliberately not cached:
+
+- **The Gradle build cache.** Enabling `org.gradle.caching` would also make `Test` tasks cacheable,
+  and a test answered from a cache is not a test that ran. Compiling this project is cheap next to
+  the downloads.
+- **The MySQL container image.** GitHub cannot cache Docker images, so `mysql-testcontainers` pulls
+  `mysql:8.4` on every run it takes part in. This is why the other database job starts the MySQL the
+  runner image already has instead of using a service container: that job pulls nothing, and it is
+  also restricted to the default branch so that pull requests pay one pull rather than two.
+  `mysql-testcontainers` is additionally marked `cache-read-only`, because it resolves the same
+  dependencies as `mysql-installed`, so letting it write would only duplicate a large entry and risk
+  evicting the shared ones.
+
+Note that a `docker save` tarball cached with `actions/cache` is not a way out: the tarball is
+uncompressed and therefore larger than the pull it replaces, it competes for the same cache budget as
+the Gradle entries, and it needs shell glue in every job.
+
+`ubuntu-latest` already carries JDK 25, so `actions/setup-java` normally installs nothing. If a future
+image drops it, the action downloads the JDK, which is the one download the Gradle cache cannot help
+with.
+
 ### Why there is no mocked server
 
 MockBukkit cannot host Skript. It loads a plugin by generating a subclass of the main class, so a

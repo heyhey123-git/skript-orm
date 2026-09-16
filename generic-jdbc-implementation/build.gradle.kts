@@ -64,16 +64,20 @@ val integrationTest by tasks.registering(Test::class) {
     useJUnitPlatform()
     shouldRunAfter(tasks.test)
 
-    // Environment variables reach the test JVM on their own; these properties are forwarded so that
-    // `-Pxiaojie.test.mysql.url=...` style overrides also work.
+    // A Gradle property wins: `-P` is delivered with every invocation, even one that reuses a daemon
+    // started before the environment was set, which is what makes a CI job deterministic. `-D` and
+    // the environment variables stay available for local runs.
     listOf(
-        "xiaojie.test.mysql.url",
-        "xiaojie.test.mysql.username",
-        "xiaojie.test.mysql.password",
-        "xiaojie.test.mysql.driver",
-        "xiaojie.test.mysql.image"
-    ).forEach { key ->
-        providers.systemProperty(key).orNull?.let { systemProperty(key, it) }
+        "xiaojie.test.mysql.url" to "XIAOJIE_TEST_MYSQL_URL",
+        "xiaojie.test.mysql.username" to "XIAOJIE_TEST_MYSQL_USERNAME",
+        "xiaojie.test.mysql.password" to "XIAOJIE_TEST_MYSQL_PASSWORD",
+        "xiaojie.test.mysql.driver" to "XIAOJIE_TEST_MYSQL_DRIVER",
+        "xiaojie.test.mysql.image" to "XIAOJIE_TEST_MYSQL_IMAGE"
+    ).forEach { (property, environmentVariable) ->
+        val value = providers.gradleProperty(property).orNull
+            ?: providers.systemProperty(property).orNull
+            ?: providers.environmentVariable(environmentVariable).orNull
+        if (value != null) systemProperty(property, value)
     }
 }
 
