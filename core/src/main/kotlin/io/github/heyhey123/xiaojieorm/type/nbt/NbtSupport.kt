@@ -12,16 +12,21 @@ import java.lang.invoke.MethodType
  * Access to SkBee's NBT classes, without compiling against them.
  *
  * This plugin ships no NBT implementation. SkBee is the only one it supports, because SkBee is what
- * gives scripts a way to write a compound in the first place (`nbt compound from "{...}"`); a value in
- * a script is therefore always one of SkBee's compounds. SkBee bundles the NBT library it uses under
- * its own package, `com.shanebeestudios.skbee.api.nbt`, so the standalone NBT API plugin and SkBee
- * cannot see each other's classes, and neither can this plugin at compile time. Every reference here
- * is looked up by name, once, and SkBee absent is a normal state rather than an error: a server
- * without it can still connect, and only a table that declares an NBT column is refused.
+ * gives scripts a way to write a compound in the first place (`nbt compound from "{...}"`), so a value
+ * in a script is always one of SkBee's compounds. SkBee bundles the NBT library it uses under its own
+ * package, `com.shanebeestudios.skbee.api.nbt`, so nothing here can be compiled against and every
+ * reference is looked up by name instead.
+ *
+ * Looking them up needs care, because SkBee is loaded as a *Paper* plugin: Paper does not put a Paper
+ * plugin's classes where a Bukkit plugin's own class loader can see them, so `Class.forName` from here
+ * fails even while SkBee is running. The plugin therefore hands this object a lookup for SkBee's own
+ * loader while it enables (see [useClassLoaderLookup]), and that loader is tried after this plugin's.
+ * Keeping the lookup a parameter is also what keeps a Bukkit reference out of this file, because the
+ * unit tests run without a server and still have to be able to load it.
  *
  * The calls themselves go through [MethodHandle] rather than `Method.invoke`: they are linked once
- * when the classes are resolved, and every converted value then passes through a call that the JIT
- * can inline, with no argument array and no access check per value.
+ * when the classes are resolved, and every converted value then passes through a call the JIT can
+ * inline, with no argument array and no access check per value.
  *
  * SNBT, the text form of a compound, is the interchange with SkBee's live values. It is faithful:
  * every tag type, list and array survives it.
@@ -41,11 +46,53 @@ object NbtSupport {
      */
     private const val SKBEE_ROOT = "com.shanebeestudios.skbee.api.nbt"
 
-    private val resolution: Resolution = Flavour.resolve(SKBEE_ROOT)
+    /** Set while the plugin enables; see [useClassLoaderLookup]. */
+    @Volatile
+    private var providedLookup: (() -> ClassLoader?)? = null
+
+    @Volatile
+    private var resolved: Resolution? = null
+
+    /**
+     * Registers where SkBee's classes can be found.
+     *
+     * The plugin calls this with a lookup that asks Bukkit for the SkBee plugin and takes its class
+     * loader. Installing it clears the cached answer, so a lookup that arrives after something already
+     * asked about NBT still takes effect.
+     */
+    fun useClassLoaderLookup(lookup: () -> ClassLoader?) {
+        providedLookup = lookup
+        resolved = null
+    }
+
+    private val resolution: Resolution
+        get() = resolved ?: resolveOnce()
+
+    private fun resolveOnce(): Resolution {
+        val provided = providedLookup?.invoke()
+        val loaders = buildList {
+            NbtSupport::class.java.classLoader?.let { add(it) }
+            if (provided != null && provided !in this) add(provided)
+        }
+        // A lookup that answers means the plugin is there, which is worth saying: "not installed" and
+        // "installed but unreachable" are different problems with different fixes.
+        return Flavour.resolve(SKBEE_ROOT, loaders, provided != null).also { resolved = it }
+    }
 
     /** Whether NBT values can be handled at all on this server. */
     val isAvailable: Boolean
         get() = resolution.flavour != null
+
+    /** The name of the plugin the NBT classes come from, for logs and messages. */
+    val provider: String
+        get() = if (isAvailable) "SkBee" else "none"
+
+    /**
+     * Why NBT cannot be used here, or null when it can. Registering a table that declares an NBT
+     * column is refused with this sentence, so it says which of the two problems it is.
+     */
+    val unavailableReason: String?
+        get() = resolution.problem
 
     /**
      * The class an NBT column holds: SkBee's compound interface, or `Any` when SkBee is absent. A
@@ -107,7 +154,7 @@ object NbtSupport {
             "Expected ${flavour.compoundClass.name}, but found ${value.javaClass.name}."
         }
         val output = ByteArrayOutputStream()
-        invoke("Failed to serialize NBT") { flavour.writeCompound.invoke(value, output) }
+        invoke("Failed to serialize NBT") { flavour.writeApiNbt.invoke(null, value, output) }
         return output.toByteArray()
     }
 
@@ -118,14 +165,13 @@ object NbtSupport {
      */
     fun fromBytes(bytes: ByteArray): Any {
         val flavour = requireFlavour("read a stored compound")
-        val compound = ByteArrayInputStream(bytes).use { input ->
-            invoke("Failed to deserialize NBT") { flavour.readNbt.invoke(input) }
-        }
-        return compound ?: throw IllegalArgumentException("The stored data holds no NBT compound.")
+        return invoke("Failed to deserialize NBT") {
+            flavour.containerFromStream.invoke(ByteArrayInputStream(bytes))
+        } ?: throw IllegalArgumentException("The stored data holds no NBT compound.")
     }
 
     /**
-     * Runs a linked call, reporting a failure as [what][description] went wrong.
+     * Runs a linked call, reporting a failure as [description] went wrong.
      *
      * A handle throws whatever the target throws, wrapped in a throwable of its own, so the cause is
      * what carries the useful message.
@@ -145,66 +191,77 @@ object NbtSupport {
     /**
      * SkBee's NBT classes, linked once by package.
      *
+     * The three handles are the library's own ways in and out: `NBTContainer(String)` parses SNBT,
+     * `NBTContainer(InputStream)` reads NBT bytes, and `NBTReflectionUtil.writeApiNBT` writes a
+     * compound to a stream. Reading bytes this way costs one call instead of two, because the
+     * container wraps the NMS tag that `readNBT` returns.
+     *
      * @property compoundClass the compound interface, which is what a column holds and what a script's
      *           value is an instance of
      * @property containerFromString builds a detached compound from SNBT
-     * @property writeCompound writes a compound to a stream as NBT
-     * @property readNbt reads a compound from a stream of NBT
+     * @property containerFromStream builds a detached compound from NBT bytes
+     * @property writeApiNbt writes a compound to a stream as NBT
      */
     private class Flavour(
         val compoundClass: Class<*>,
         val containerFromString: MethodHandle,
-        val writeCompound: MethodHandle,
-        val readNbt: MethodHandle
+        val containerFromStream: MethodHandle,
+        val writeApiNbt: MethodHandle
     ) {
 
         companion object {
 
-            /** The plugin's own lookup, which is what makes the handles below callable from here. */
+            /** This plugin's own lookup, which is what makes the handles below callable from here. */
             private val lookup: MethodHandles.Lookup = MethodHandles.lookup()
 
             /**
-             * Links the classes in [root], reporting why when they cannot be used.
+             * Links the classes in [root], trying each of [loaders] in turn.
              *
-             * SkBee missing is the normal case and is reported as such, because a server without it
-             * is expected to work; a class that is present but shaped differently means an SkBee
-             * version this plugin does not understand, which is worth saying out loud. The loader is
-             * the plugin's own, and it reaches SkBee's classes the same way this plugin reaches
-             * Skript's, so nothing here depends on load order beyond `softdepend`.
+             * [pluginFound] says whether the plugin itself was seen, which decides how a failure reads:
+             * a server without SkBee is a normal state, while an SkBee that cannot be linked is an SkBee
+             * this version does not understand, and saying so saves the reader a hunt.
              */
-            fun resolve(root: String): Resolution = try {
-                val loader = NbtSupport::class.java.classLoader
-                val compound = Class.forName("$root.NBTCompound", false, loader)
-                val container = Class.forName("$root.NBTContainer", false, loader)
-                val reflection = Class.forName("$root.NBTReflectionUtil", false, loader)
-                Resolution(
-                    Flavour(
-                        compound,
-                        lookup.findConstructor(
-                            container,
-                            MethodType.methodType(Void.TYPE, String::class.java)
-                        ),
-                        lookup.findVirtual(
-                            compound,
-                            "writeCompound",
-                            MethodType.methodType(Void.TYPE, OutputStream::class.java)
-                        ),
-                        lookup.findStatic(
-                            reflection,
-                            "readNBT",
-                            MethodType.methodType(compound, InputStream::class.java)
+            fun resolve(root: String, loaders: List<ClassLoader>, pluginFound: Boolean): Resolution {
+                var linkage: String? = null
+                for (loader in loaders) {
+                    try {
+                        val compound = Class.forName("$root.NBTCompound", false, loader)
+                        val container = Class.forName("$root.NBTContainer", false, loader)
+                        val reflection = Class.forName("$root.NBTReflectionUtil", false, loader)
+                        return Resolution(
+                            Flavour(
+                                compound,
+                                lookup.findConstructor(
+                                    container,
+                                    MethodType.methodType(Void.TYPE, String::class.java)
+                                ),
+                                lookup.findConstructor(
+                                    container,
+                                    MethodType.methodType(Void.TYPE, InputStream::class.java)
+                                ),
+                                lookup.findStatic(
+                                    reflection,
+                                    "writeApiNBT",
+                                    MethodType.methodType(Void.TYPE, compound, OutputStream::class.java)
+                                )
+                            ),
+                            null
                         )
-                    ),
-                    null
-                )
-            } catch (_: ClassNotFoundException) {
-                Resolution(null, "SkBee is not installed, and it is what provides NBT compounds")
-            } catch (error: ReflectiveOperationException) {
-                Resolution(
-                    null,
-                    "SkBee's NBT classes under $root are not the ones this plugin expects " +
-                        "(${error.message})"
-                )
+                    } catch (_: ClassNotFoundException) {
+                        continue
+                    } catch (error: ReflectiveOperationException) {
+                        linkage = error.message
+                    }
+                }
+                val problem = when {
+                    linkage != null ->
+                        "SkBee is installed, but its NBT classes under $root could not be linked ($linkage)"
+                    pluginFound ->
+                        "SkBee is installed, but its NBT classes under $root were not found"
+                    else ->
+                        "SkBee is not installed, and it is what provides NBT compounds"
+                }
+                return Resolution(null, problem)
             }
         }
     }

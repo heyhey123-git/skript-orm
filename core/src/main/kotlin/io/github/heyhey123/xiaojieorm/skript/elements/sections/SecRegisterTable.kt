@@ -167,7 +167,7 @@ class SecRegisterTable : Section() {
                     // here, while the table is being declared, rather than left to fail on the first
                     // row that is read or written.
                     require(!(type is NbtDataType && !NbtSupport.isAvailable)) {
-                        "Data type 'nbtcompound' needs SkBee, which is not installed."
+                        "Data type 'nbtcompound' cannot be used: ${NbtSupport.unavailableReason}."
                     }
                     createColumn(raw, type)
                 }

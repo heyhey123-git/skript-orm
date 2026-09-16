@@ -4,6 +4,7 @@ import ch.njol.skript.Skript
 import ch.njol.skript.util.Version
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.registerElements
+import io.github.heyhey123.xiaojieorm.type.nbt.NbtSupport
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -45,6 +46,7 @@ class XiaojieOrm : JavaPlugin() {
 
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         registerElements(registerSkriptAddon())
+        reportNbtSupport()
 
         val candidates = listOf(
             "io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDatabaseFactory",
@@ -58,6 +60,27 @@ class XiaojieOrm : JavaPlugin() {
                 Class.forName(candidate)
             } catch (_: ClassNotFoundException) {
             }
+        }
+    }
+
+    /**
+     * Tells [NbtSupport] where SkBee keeps its classes, and says in the console what it found.
+     *
+     * SkBee is a Paper plugin, and Paper does not put a Paper plugin's classes where a Bukkit plugin's
+     * own class loader can reach them, so this hands over SkBee's loader. Without it an NBT column
+     * could never be used, however plainly SkBee was installed.
+     *
+     * The line it logs earns its place: NBT is the one column type that depends on another plugin, so
+     * a server owner who reads "unavailable" here already knows why registering such a table was
+     * refused, and does not have to guess at the message the refusal gave them.
+     */
+    private fun reportNbtSupport() {
+        NbtSupport.useClassLoaderLookup { server.pluginManager.getPlugin("SkBee")?.javaClass?.classLoader }
+        val reason = NbtSupport.unavailableReason
+        if (reason == null) {
+            logger.info("NBT support: ${NbtSupport.provider}.")
+        } else {
+            logger.info("NBT support: unavailable. $reason.")
         }
     }
 
