@@ -209,16 +209,8 @@ jobs:
         with:
           cache-provider: enhanced
 
-      # run-paper keeps the server jars it downloads in the Gradle user home, under a directory
-      # setup-gradle does not cache. The key follows the version catalog, so bumping Paper or Skript
-      # fetches a fresh server instead of restoring one the run would then have to replace.
-      - name: Cache the downloaded server
-        uses: actions/cache@v4
-        with:
-          path: ~/.gradle/caches/run-task-jars
-          key: run-task-jars-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
-          restore-keys: |
-            run-task-jars-${{ runner.os }}-
+      # The Paper jar run-paper downloads lands under the Gradle user home, which the step above
+      # already caches in full, so there is nothing to cache here separately.
 
       - name: Make the wrapper executable
         run: chmod +x ./gradlew

@@ -346,8 +346,9 @@ is why the task and not a developer is what does it.
   runs only on the default branch and on demand, because a container image is the one thing the cache
   cannot help with.
 - `skript-server` boots the Paper server described above and checks what the plugin did there. It
-  needs neither Docker nor a database, so it runs on every change; the only thing worth caching is
-  the downloaded server jar, under a key that follows the version catalog.
+  needs neither Docker nor a database, so it runs on every change. The server jar it downloads lands
+  in the Gradle user home, which the Gradle state cache already covers, so the job needs no cache of
+  its own.
 
 #### When CI runs
 
