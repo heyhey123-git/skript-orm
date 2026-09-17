@@ -32,11 +32,16 @@ open class JdbcDatabase(
         const val STATEMENT_TIMEOUT_PROPERTY = "statement timeout"
 
         /**
-         * How long a statement gets when the script says nothing.
+         * How long one statement gets when the script says nothing.
          *
          * Long enough that honest work does not meet it, short enough that a statement nothing can
-         * interrupt does not hold one of the pool's connections until the server restarts. The same
-         * number as the transaction default, so there is one duration to remember rather than two.
+         * interrupt does not hold one of the pool's connections until the server restarts.
+         *
+         * It matches [Database.DEFAULT_TRANSACTION_TIMEOUT] because both are judgements about the same
+         * thing, how long database work may take before it is treated as stuck, and not because one is
+         * derived from the other. They are separate on purpose: a statement outside a transaction has no
+         * other bound, while one inside a transaction is bounded by what is left of it, so a server that
+         * wants 15 second statements and 2 minute transactions is asking for something coherent.
          */
         const val DEFAULT_STATEMENT_TIMEOUT_SECONDS = 30
 
