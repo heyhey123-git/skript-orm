@@ -14,7 +14,7 @@ back, and everything after that is reference for the parts you did not need yet.
 
 | Page | What is in it |
 | --- | --- |
-| [Connections](connections.md) | Connecting, the one-connection rule, disconnecting. |
+| [Connections](connections.md) | Connecting, named connections, switching, disconnecting. |
 | [Tables](tables.md) | Column syntax, every type, keys and modifiers, and what registering does not do. |
 | [Writing rows](writing.md) | Insert one, insert many, insert from a variable, upsert, and `values` blocks. |
 | [Reading rows](reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |

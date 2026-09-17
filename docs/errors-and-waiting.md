@@ -11,9 +11,11 @@ Two things decide what a script can see about a database operation: whether the 
 | --- | --- | --- |
 | `create a connection` | always | No `and wait`, and none is accepted. |
 | `register a database table` | always | Same. |
+| `in connection` | never | The block's own statements decide; the switch itself does no database work. |
+| `use connection`, `make ... the default` | never | They only change which connection later statements use. |
 | `select one`, `select many`, `select page`, `select ... by id` | always | A read has nothing to do until it has the rows. |
 | `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | with `and wait` | Without it the work goes to the background. |
-| `disconnect from the current database` | following line waits | Asynchronous, but the trigger continues after it finishes. |
+| `disconnect ...` | following line waits | Asynchronous, but the trigger continues after it finishes. No form reports success. |
 
 A section that waits behaves like any other delayed part of a trigger: the lines after it run later, and
 local variables keep their values across it.

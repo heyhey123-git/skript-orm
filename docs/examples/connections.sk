@@ -1,0 +1,51 @@
+# The script from docs/connections.md, kept here so the server test parses it.
+#
+# A syntax error in the documentation then fails a build instead of reaching a reader. Nothing in this
+# file is ever run: the examples only have to parse. That is why every connection here is opened in a
+# command rather than in `on load`, where the page shows it. The test server has scripts of its own
+# with connections of their own, and an extra connection at load time would sit alongside them.
+
+command /example-named-connection:
+    trigger:
+        create a connection named "logs" to database "MySQL" with properties:
+            url: "jdbc:mysql://localhost:3306/logs"
+            username: "root"
+            password: "123456"
+        if last database error is set:
+            send "Connection failed: %last database error%" to console
+            stop
+
+        # Tables belong to the connection they were registered on, so this one is registered inside
+        # the scope that makes the named connection the one in effect.
+        in connection "logs":
+            register a database table "entries":
+                id: bigint, primary key, auto increment, not null
+                message: string(255), not null
+
+command /example-write-to-logs <text>:
+    trigger:
+        in connection "logs":
+            insert one entity into table "entries" and wait:
+                values:
+                    message: arg-1
+        if last database error is set:
+            send "Could not write the entry: %last database error%" to sender
+
+command /example-read-from-logs:
+    trigger:
+        in connection "logs":
+            select many entities from table "entries" and store the results in {_entries::*}
+
+command /example-use-logs:
+    trigger:
+        use connection "logs"
+        select one entity from table "entries" and store the result in {_entry::*}
+
+command /example-switch-default:
+    trigger:
+        make connection "logs" the default
+
+command /example-close-connections:
+    trigger:
+        disconnect from connection "logs"
+        disconnect from all connections

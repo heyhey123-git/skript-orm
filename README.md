@@ -60,8 +60,9 @@ and hands results back as ordinary Skript variables and values.
 
 ## How it works
 
-- **One connection at a time.** `create a connection` makes that database the current one; creating
-  another replaces it, and `disconnect from the current database` closes it.
+- **As many connections as the script wants.** `create a connection` makes that database the default
+  one, `named "logs"` keeps another one alongside it, and `in connection "logs":` or
+  `use connection "logs"` says which one a statement uses.
 - **Everything that touches rows is a section.** Writing, reading, updating and deleting are separate
   syntaxes with their own bodies, and a read always waits for its result.
 - **A failure is a value.** After an operation written with `and wait`, `last database error` holds
@@ -72,7 +73,7 @@ and hands results back as ordinary Skript variables and values.
 | Page | What is in it |
 | --- | --- |
 | [Getting started](docs/getting-started.md) | The shortest path from an empty script to a stored row. |
-| [Connections](docs/connections.md) | Connection properties, the one-connection rule, disconnecting. |
+| [Connections](docs/connections.md) | Connection properties, named connections, switching, disconnecting. |
 | [Tables](docs/tables.md) | Column syntax, every type, keys and modifiers, and what registering does not do. |
 | [Writing rows](docs/writing.md) | Insert one, insert many, insert from a variable, upsert, `values` blocks. |
 | [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |

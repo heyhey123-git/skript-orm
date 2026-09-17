@@ -56,7 +56,7 @@ if last database error is set:
 
 ## 三条规矩
 
-- **同一时刻只有一个连接。** `create a connection` 让那个库成为当前数据库。再建一个会顶替它，`disconnect from the current database` 则把它关掉。
+- **想要几条连接就有几条。** `create a connection` 让那个库成为默认连接，`named "logs"` 再留住一条，`in connection "logs":` 或 `use connection "logs"` 决定一条语句用哪一条。
 - **碰数据的操作都是 section。** 写入、读取、更新、删除各有各的语法和主体，读取必定等结果。
 - **失败是一个值。** 写了 `and wait` 的操作结束之后，`last database error` 里就是出错原因。一切顺利时它保持为空。
 
@@ -65,7 +65,7 @@ if last database error is set:
 | 页面 | 内容 |
 | --- | --- |
 | [快速上手](docs/getting-started.zh-CN.md) | 从空脚本到存下第一行，最短的一条路。 |
-| [连接](docs/connections.zh-CN.md) | 连接属性、单连接规则、断开连接。 |
+| [连接](docs/connections.zh-CN.md) | 连接属性、具名连接、切换、断开连接。 |
 | [表](docs/tables.zh-CN.md) | 列语法、全部类型、主键与修饰符，以及建表**不会**做的事。 |
 | [写入行](docs/writing.zh-CN.md) | 插入一行或多行、从变量插入、upsert，以及 `values` 块的写法。 |
 | [读取行](docs/reading.zh-CN.md) | 查一行、多行、分页、按 id，`where` 块，以及结果的形状。 |

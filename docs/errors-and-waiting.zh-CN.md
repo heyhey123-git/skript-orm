@@ -10,9 +10,11 @@
 | --- | --- | --- |
 | `create a connection` | 总是 | 不接受也不需要 `and wait`。 |
 | `register a database table` | 总是 | 同上。 |
+| `in connection` | 不等 | 块里的语句各自决定；切换本身不做数据库工作。 |
+| `use connection`、`make ... the default` | 不等 | 它们只改变后续语句用哪条连接。 |
 | `select one`、`select many`、`select page`、`select ... by id` | 总是 | 读操作没拿到行之前无事可做。 |
 | `insert`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete` | 写了 `and wait` 才等 | 不写就交给后台。 |
-| `disconnect from the current database` | 下一行会等 | 异步执行，但 trigger 会在它结束之后继续。 |
+| `disconnect ...` | 下一行会等 | 异步执行，但 trigger 会在它结束之后继续。各写法都不报成功。 |
 
 会等的 section 和 Skript 里其它延迟部分一样：它之后的语句稍后才执行，而局部变量在此期间保持自己的值。
 

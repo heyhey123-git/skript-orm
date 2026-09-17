@@ -27,7 +27,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Create Database Connection")
-@Description("Connects to a registered database implementation and makes it current. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
+@Description("Connects to a registered database implementation. Without a name the connection becomes the default one and replaces whatever was the default; with a name it is registered under that name and leaves every other connection alone. The first connection to succeed becomes the default. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are logged and exposed as the last database error.")
 @Example(
     """
 create a connection to database "MySQL" with properties:
@@ -38,6 +38,14 @@ if last database error is set:
     send "Connection failed: %last database error%"
 """
 )
+@Example(
+    """
+create a connection named "logs" to database "MySQL" with properties:
+    url: "jdbc:mysql://localhost:3306/logs"
+    username: "root"
+    password: "123456"
+"""
+)
 @Since("1.0")
 class SecCreateConnection : Section() {
 
@@ -46,10 +54,17 @@ class SecCreateConnection : Section() {
             SkriptSyntax.section(
                 addon,
                 SecCreateConnection::class.java,
+                // The named form comes first: its literal `named` is what keeps the two apart, but the
+                // unnamed pattern lists no expression before the database type, so order still decides
+                // which one a line is tried against first.
+                "create [a] connection named %string% to [database] %string% [with properties]",
                 "create [a] connection to [database] %string% [with properties]"
             )
         }
     }
+
+    /** The name to register under, or null for the form that replaces the default connection. */
+    private var nameExpr: Expression<String>? = null
 
     private lateinit var databaseNameExpr: Expression<String>
     private lateinit var connectionProperties: Map<String, String>
@@ -64,7 +79,12 @@ class SecCreateConnection : Section() {
         triggerItems: List<TriggerItem?>
     ): Boolean {
         parser.hasDelayBefore = Kleenean.TRUE
-        databaseNameExpr = expressions[0] as Expression<String>
+        if (matchedPattern == 0) {
+            nameExpr = expressions[0] as Expression<String>
+            databaseNameExpr = expressions[1] as Expression<String>
+        } else {
+            databaseNameExpr = expressions[0] as Expression<String>
+        }
         return parseNode(sectionNode)
     }
 
@@ -89,6 +109,18 @@ class SecCreateConnection : Section() {
             ErrorPrinter.printErrorMessageWithDetail(
                 firstLine,
                 "Database name in create connection section can't be null."
+            )
+            return walk(event, false)
+        }
+
+        // Only the named form reads this, and a name that resolved to nothing is a mistake worth
+        // stopping for: connecting anyway would quietly replace the default connection instead.
+        val connectionName = nameExpr?.getSingle(actualEvent)
+        if (nameExpr != null && connectionName == null) {
+            SkriptDatabaseErrors.set(actualEvent, "Connection name in create connection section can't be null.")
+            ErrorPrinter.printErrorMessageWithDetail(
+                firstLine,
+                "Connection name in create connection section can't be null."
             )
             return walk(event, false)
         }
@@ -129,7 +161,11 @@ class SecCreateConnection : Section() {
         XiaojieOrm.ioScope.launch {
             var failure: Throwable? = null
             try {
-                Database.replaceWith(database, url, username, password)
+                if (connectionName != null) {
+                    Database.createConnection(connectionName, database, url, username, password)
+                } else {
+                    Database.replaceWith(database, url, username, password)
+                }
             } catch (_: CancellationException) {
                 return@launch
             } catch (error: Throwable) {
@@ -160,6 +196,11 @@ class SecCreateConnection : Section() {
         return null
     }
 
-    override fun toString(event: Event?, debug: Boolean) =
-        "create connection to database ${databaseNameExpr.toString(event, debug)}"
+    override fun toString(event: Event?, debug: Boolean): String =
+        if (nameExpr == null) {
+            "create connection to database ${databaseNameExpr.toString(event, debug)}"
+        } else {
+            "create connection named ${nameExpr?.toString(event, debug)} to database " +
+                databaseNameExpr.toString(event, debug)
+        }
 }

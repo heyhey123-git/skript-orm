@@ -202,10 +202,12 @@ class MysqlDatabaseLifecycleIntegrationTest {
         assertEquals(1L, written.affectedCount)
     }
 
-    /** Leaves the global lifecycle with no current database and open for the next test. */
+    /** Leaves the global lifecycle with no connection registered and open for the next test. */
     private fun resetLifecycle() {
         runBlocking {
-            if (Database.current != null) Database.shutdown()
+            // Unconditional: a named connection can outlive the default one, so a null `current` does
+            // not mean nothing is registered.
+            Database.shutdown()
             Database.beginLifecycle()
         }
     }

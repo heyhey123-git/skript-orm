@@ -241,13 +241,22 @@ val prepareServerTest by tasks.registering {
         // credentials come from the properties, not the repository.
         if (serverTestUsesDatabase) {
             sourceDirectory.dir("database").asFile.copyRecursively(scripts, overwrite = true)
-            val setup = scripts.resolve("00-setup.sk")
-            setup.writeText(
-                setup.readText()
-                    .replace("__URL__", serverTestDatabaseUrl.get())
-                    .replace("__USERNAME__", serverTestDatabaseUsername.get())
-                    .replace("__PASSWORD__", serverTestDatabasePassword.get())
-            )
+            // Every script carrying the placeholders is filled in, not only the setup: the connection
+            // element opens a second connection of its own and needs the same credentials.
+            val url = serverTestDatabaseUrl.get()
+            val username = serverTestDatabaseUsername.get()
+            val password = serverTestDatabasePassword.get()
+            scripts.walkTopDown()
+                .filter { it.extension == "sk" }
+                .forEach { script ->
+                    val text = script.readText()
+                    if ("__URL__" !in text) return@forEach
+                    script.writeText(
+                        text.replace("__URL__", url)
+                            .replace("__USERNAME__", username)
+                            .replace("__PASSWORD__", password)
+                    )
+                }
         }
         // The finisher is written rather than copied, because its count is the number of scripts that
         // report a detail line. Deriving it means adding an element cannot leave a stale number behind.
@@ -332,6 +341,24 @@ val serverTestChecks = buildMap {
         put("roundtrip now", "")
         put("roundtrip later", "")
         put("roundtrip by id", "")
+        // Named connections. Only the named connection registered `orm_secondary`, so the read outside
+        // the scope has to report the table lookup failing while the scoped one succeeds: that
+        // difference is what proves the scope chose a connection at all.
+        put("connections create", "")
+        put("connections register", "")
+        put("connections write", "")
+        put("connections unscoped", "Table 'orm_secondary' not found.")
+        put("connections scoped", "")
+        put("connections default", "")
+        // `disconnect` without a name closes the connection in effect. The two lines after it say what
+        // it closed: the default still answers for its own table, and the named connection is gone.
+        put("connections disconnect", "ran")
+        put("connections default after", "")
+        put("connections gone", "No connection named 'secondary', and no connection has been created yet.")
+        // `use connection` switches for the rest of the event, and the connection it names has no table
+        // of its own: the lookup failing is what shows the switch reached it.
+        put("connections create tertiary", "")
+        put("connections used", "Table 'orm_roundtrip' not found.")
     }
 }
 

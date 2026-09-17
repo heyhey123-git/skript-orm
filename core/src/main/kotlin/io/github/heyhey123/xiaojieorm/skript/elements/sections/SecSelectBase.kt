@@ -14,6 +14,7 @@ import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.queries.Queries
+import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
@@ -122,9 +123,9 @@ abstract class SecSelectBase : Section() {
         val trigger = this.trigger ?: return walk(event, false)
         SkriptDatabaseErrors.clear(actualEvent)
 
-        val database = Database.current ?: run {
-            SkriptDatabaseErrors.set(actualEvent, "No database connected.")
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "No database connected.")
+        val database = ConnectionScope.resolve(event) ?: run {
+            SkriptDatabaseErrors.set(actualEvent, ConnectionScope.noConnectionMessage())
+            ErrorPrinter.printErrorMessageWithDetail(trigger, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 

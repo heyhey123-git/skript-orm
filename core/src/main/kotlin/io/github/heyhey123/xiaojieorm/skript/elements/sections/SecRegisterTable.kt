@@ -12,6 +12,7 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
@@ -149,7 +150,8 @@ class SecRegisterTable : Section() {
         val trigger = this.trigger ?: return walk(event, false)
         SkriptDatabaseErrors.clear(actualEvent)
 
-        val database = Database.current ?: return fail(actualEvent, trigger, "No database connected.")
+        val database = ConnectionScope.resolve(actualEvent)
+            ?: return fail(actualEvent, trigger, ConnectionScope.noConnectionMessage())
         val tableName = tableNameExpr.getSingle(actualEvent)
             ?: return fail(actualEvent, trigger, "Table name is null.")
         if (database.tables.containsKey(tableName)) {

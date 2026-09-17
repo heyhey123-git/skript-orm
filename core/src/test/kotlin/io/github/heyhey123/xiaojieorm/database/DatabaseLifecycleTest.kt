@@ -562,17 +562,161 @@ class DatabaseLifecycleTest {
         assertTrue(Database.isShuttingDown)
     }
 
+    // ---------------------------------------------------------------- named connections
+
+    @Test
+    fun `a named connection is registered without replacing the default`() = runBlocking<Unit> {
+        val unnamed = connectedDatabase("default")
+
+        val named = connectedDatabase(named = "logs")
+
+        assertSame(unnamed, Database.current)
+        assertSame(named, Database.connection("logs"))
+        assertEquals(listOf("logs"), Database.connectionNames)
+        assertEquals(0, unnamed.disconnectCalls.get())
+        assertEquals(0, named.disconnectCalls.get())
+    }
+
+    @Test
+    fun `the first connection becomes the default`() = runBlocking<Unit> {
+        val named = connectedDatabase(named = "logs")
+
+        assertSame(named, Database.current)
+        assertSame(named, Database.connection("logs"))
+    }
+
+    @Test
+    fun `a named connection can be made the default`() = runBlocking<Unit> {
+        val first = connectedDatabase("first")
+        val second = connectedDatabase(named = "logs")
+
+        assertTrue(Database.makeDefault("logs"))
+        assertSame(second, Database.current)
+        assertFalse(Database.makeDefault("missing"))
+        assertSame(second, Database.current)
+        assertEquals(0, first.disconnectCalls.get())
+    }
+
+    @Test
+    fun `an unnamed connection replaces the default role but keeps a named connection alive`() =
+        runBlocking<Unit> {
+            val named = connectedDatabase(named = "logs")
+
+            val unnamed = connectedDatabase("default")
+
+            assertSame(unnamed, Database.current)
+            assertSame(named, Database.connection("logs"))
+            assertEquals(0, named.disconnectCalls.get())
+
+            // Still reachable by name, so its operations are still accepted.
+            named.withQueries { }
+        }
+
+    @Test
+    fun `an unknown name is not a connection`() = runBlocking<Unit> {
+        connectedDatabase(named = "logs")
+
+        assertNull(Database.connection("archive"))
+        assertEquals(listOf("logs"), Database.connectionNames)
+        assertFalse(Database.makeDefault("archive"))
+    }
+
+    @Test
+    fun `reconnecting a name replaces only that connection`() = runBlocking<Unit> {
+        val other = connectedDatabase(named = "main")
+        val first = connectedDatabase(named = "logs")
+
+        val second = connectedDatabase(named = "logs")
+
+        assertEquals(1, first.disconnectCalls.get())
+        assertFalse(first.isConnected)
+        assertSame(second, Database.connection("logs"))
+        assertSame(other, Database.connection("main"))
+        assertEquals(0, other.disconnectCalls.get())
+        assertEquals(listOf("logs", "main"), Database.connectionNames)
+    }
+
+    @Test
+    fun `disconnecting a named connection leaves the others alone`() = runBlocking<Unit> {
+        val first = connectedDatabase(named = "logs")
+        val second = connectedDatabase(named = "main")
+
+        first.disconnect()
+
+        assertNull(Database.connection("logs"))
+        assertEquals(listOf("main"), Database.connectionNames)
+        assertTrue(second.isConnected)
+    }
+
+    @Test
+    fun `disconnectAll closes every connection and keeps the lifecycle open`() = runBlocking<Unit> {
+        val default = connectedDatabase("default")
+        val named = connectedDatabase(named = "logs")
+
+        Database.disconnectAll()
+
+        assertEquals(1, default.disconnectCalls.get())
+        assertEquals(1, named.disconnectCalls.get())
+        assertNull(Database.current)
+        assertTrue(Database.connectionNames.isEmpty())
+        assertFalse(Database.isShuttingDown)
+    }
+
+    @Test
+    fun `shutdown closes every connection`() = runBlocking<Unit> {
+        val default = connectedDatabase("default")
+        val named = connectedDatabase(named = "logs")
+
+        Database.shutdown()
+
+        assertEquals(1, default.disconnectCalls.get())
+        assertEquals(1, named.disconnectCalls.get())
+        assertNull(Database.current)
+        assertTrue(Database.connectionNames.isEmpty())
+        assertTrue(Database.isShuttingDown)
+    }
+
+    @Test
+    fun `beginLifecycle refuses to start while a named connection is registered`() = runBlocking<Unit> {
+        connectedDatabase(named = "logs")
+
+        assertFailsWith<IllegalStateException> { Database.beginLifecycle() }
+    }
+
+    @Test
+    fun `a named connection stays out of the registry when connecting fails`() = runBlocking<Unit> {
+        val database = ControllableDatabase("broken")
+        database.connectFailure = IllegalStateException("refused")
+
+        assertFailsWith<IllegalStateException> {
+            Database.createConnection("logs", database, URL, USER, PASSWORD)
+        }
+
+        assertNull(Database.connection("logs"))
+        assertTrue(Database.connectionNames.isEmpty())
+        assertNull(Database.current)
+    }
+
     // ---------------------------------------------------------------- helpers
 
-    private suspend fun connectedDatabase(label: String = "database"): ControllableDatabase {
+    private suspend fun connectedDatabase(
+        label: String = "database",
+        named: String? = null
+    ): ControllableDatabase {
         val database = ControllableDatabase(label)
-        Database.replaceWith(database, URL, USER, PASSWORD)
+        if (named == null) {
+            Database.replaceWith(database, URL, USER, PASSWORD)
+        } else {
+            Database.createConnection(named, database, URL, USER, PASSWORD)
+        }
         return database
     }
 
     /** Restores the global lifecycle so the next test starts from a clean, open state. */
     private fun resetLifecycle() = runBlocking {
-        if (Database.current != null) Database.shutdown()
+        // Unconditional, because a named connection can outlive the default one: `current` being null
+        // does not mean nothing is registered.
+        Database.shutdown()
         Database.beginLifecycle()
     }
 }

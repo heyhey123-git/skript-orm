@@ -34,8 +34,8 @@ internal object DatabaseWork {
      * for `last database error` has already been stored at that point.
      */
     fun resolveTable(event: Event, trigger: Trigger, tableNameExpr: Expression<String>): Target? {
-        val database = Database.current ?: run {
-            report(event, trigger, "No database connected.")
+        val database = ConnectionScope.resolve(event) ?: run {
+            report(event, trigger, ConnectionScope.noConnectionMessage())
             return null
         }
 

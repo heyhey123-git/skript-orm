@@ -79,8 +79,9 @@ abstract class MysqlIntegrationTestBase {
     fun openDatabase() {
         val endpoint = MysqlTestServer.requireEndpoint()
         runBlocking {
-            // A previous test class may have aborted before its teardown ran.
-            if (Database.current != null) Database.shutdown()
+            // A previous test class may have aborted before its teardown ran. Shutting down is not
+            // conditional on there being a default connection: a named one can outlive it.
+            Database.shutdown()
             Database.beginLifecycle()
             val opened = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
             Database.replaceWith(opened, endpoint.jdbcUrl, endpoint.username, endpoint.password)

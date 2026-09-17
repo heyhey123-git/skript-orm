@@ -165,6 +165,12 @@ section 只有在该行以冒号结尾时才会被识别，因此 body 可省略
 
 - `SecSelectBase` 与 `SecWriteBase` 承载共享的解析与派发逻辑。`SecCreateConnection` 与
   `SecRegisterTable` 独立实现，因为它们不符合这两种形态。
+- 一条语句用哪条连接由 `ConnectionScope` 决定：最内层 `in connection` 作用域、本事件的
+  `use connection`、最后是默认连接。作用域按事件保存（与 `last database error` 同一形状），所以函数
+  调用会继承它，`wait` 之后的续接也仍然看得见它。
+- `SecInConnection` 的主体是代码，因此用 `loadCode` 装载；装载同时把它登记进解析器的
+  current sections，`exit`、`stop` 提前离开主体时才会通知到它。主体末尾还要接一个自己的
+  `TriggerItem`，因为 Skript 没有“主体结束”回调，而这个节点的存在与否决定了作用域会不会泄漏。
 - 写入是异步的。`and wait` 标签决定后续内容是否等待：等待式写入会保留事件 continuation，并通过
   `last database error` 暴露失败；而即发即弃式写入会立刻继续，后续失败只能写日志。
 - 所有值都在主线程、派发之前解析完成，此时局部变量仍附着在事件上。

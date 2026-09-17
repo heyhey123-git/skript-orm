@@ -10,12 +10,15 @@ import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectById
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectManyUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectOneUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectPageUnfiltered
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSetDefaultConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffUpdateByIdFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffUpsertByIdFromVariable
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffUseConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.expressions.ExprLastDatabaseError
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecCreateConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecDelete
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecDeleteById
+import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecInConnection
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecInsertIfAbsent
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecInsertMany
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecInsertOne
@@ -49,13 +52,16 @@ internal fun registerElements(addon: SkriptAddon) {
     EffSelectManyUnfiltered.register(addon)
     EffSelectOneUnfiltered.register(addon)
     EffSelectPageUnfiltered.register(addon)
+    EffSetDefaultConnection.register(addon)
     EffUpdateByIdFromVariable.register(addon)
     EffUpsertByIdFromVariable.register(addon)
+    EffUseConnection.register(addon)
     ExprLastDatabaseError.register(addon)
 
     SecCreateConnection.register(addon)
     SecDelete.register(addon)
     SecDeleteById.register(addon)
+    SecInConnection.register(addon)
     SecInsertIfAbsent.register(addon)
     SecInsertMany.register(addon)
     SecInsertOne.register(addon)

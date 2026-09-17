@@ -49,9 +49,13 @@ was replaced since, which starts with no tables registered.
 
 ## "No database connected."
 
-There is no current database: nobody connected yet, the connection failed, or something disconnected.
-Since a failed connection leaves the previous one closed, a single bad credential can put the server in
-this state for every script. See [Connections](connections.md).
+There is no connection in effect: nobody connected yet, the connection failed, or something
+disconnected. Since a failed connection leaves the previous one closed, a single bad credential can put
+the server in this state for every script. See [Connections](connections.md).
+
+Once named connections exist but none of them is the default, the message says that instead and lists
+the names, because `use connection "logs"` or `make connection "logs" the default` is then the fix
+rather than another `create a connection`.
 
 ## A column reads as unset, and the row exists
 

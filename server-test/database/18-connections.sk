@@ -1,0 +1,86 @@
+# Named connections, scoped switching, and what an unqualified statement resolves to.
+#
+# `00-setup.sk` connects without a name, so that connection is the default and owns `orm_roundtrip`.
+# This script adds a second one under a name and checks that the two stay apart: the table it registers
+# exists on the named connection only, so a statement that resolves to the default cannot find it. That
+# is what makes the scoped and the used lines below assertions rather than smoke tests.
+#
+# The unqualified `disconnect` is checked in the middle of that, because it is the one statement that
+# would otherwise act on a connection the script is not using: with a scope in effect it has to close
+# the connection the scope names, and the default has to still answer afterwards.
+#
+# `elements/16-disconnect` waits for this script to finish before it closes the default connection,
+# because an unscoped statement with no default connection would report "No database connected."
+# instead of the table lookups this script is about.
+every 5 seconds:
+    if {xiaojie::selftest::done::connections} is set:
+        stop trigger
+    if {xiaojie::selftest::started::connections} is set:
+        stop trigger
+    if {xiaojie::selftest::done::setup} is not set:
+        stop trigger
+    set {xiaojie::selftest::started::connections} to true
+
+    create a connection named "secondary" to database "MySQL" with properties:
+        url: "__URL__"
+        username: "__USERNAME__"
+        password: "__PASSWORD__"
+    log "XIAOJIE_SELFTEST detail: connections create -> %last database error%"
+
+    # Registering inside the scope is what proves the scope reaches table registration too.
+    in connection "secondary":
+        register a database table "orm_secondary":
+            id: bigint, primary key, auto increment, not null
+            label: string(32), nullable
+    log "XIAOJIE_SELFTEST detail: connections register -> %last database error%"
+
+    in connection "secondary":
+        insert one entity into table "orm_secondary" and wait:
+            values:
+                label: "scoped"
+    log "XIAOJIE_SELFTEST detail: connections write -> %last database error%"
+
+    # The default connection was never told about this table, so this has to fail. It is the line that
+    # fails if the scope leaks into the rest of the event.
+    select one entity from table "orm_secondary" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections unscoped -> %last database error%"
+
+    # Back inside the scope, the same statement has to succeed.
+    in connection "secondary":
+        select one entity from table "orm_secondary" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections scoped -> %last database error%"
+
+    # The default connection still answers for its own table after the scope has ended.
+    select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections default -> %last database error%"
+
+    # Without a name, `disconnect` closes the connection in effect, which here is the scope's.
+    in connection "secondary":
+        disconnect
+    log "XIAOJIE_SELFTEST detail: connections disconnect -> ran"
+
+    # The scope is over, so this resolves to the default again. Had the disconnect above closed the
+    # default instead, this read would report "No database connected."
+    select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections default after -> %last database error%"
+
+    # And the named connection really is gone, rather than merely being out of scope.
+    in connection "secondary":
+        select one entity from table "orm_secondary" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections gone -> %last database error%"
+
+    # `use connection` switches for the rest of the event. This second named connection has no tables
+    # registered, so the read fails on the lookup: that failure is one the default connection could not
+    # have produced for `orm_roundtrip`, which is what makes it evidence of the switch.
+    create a connection named "tertiary" to database "MySQL" with properties:
+        url: "__URL__"
+        username: "__USERNAME__"
+        password: "__PASSWORD__"
+    log "XIAOJIE_SELFTEST detail: connections create tertiary -> %last database error%"
+
+    use connection "tertiary"
+    select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections used -> %last database error%"
+
+    disconnect from all connections
+    set {xiaojie::selftest::done::connections} to true

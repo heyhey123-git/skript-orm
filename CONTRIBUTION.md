@@ -189,6 +189,14 @@ section!` in the log and runs the section anyway. Those notes are expected, not 
 
 - `SecSelectBase` and `SecWriteBase` hold the shared parsing and dispatch logic.
   `SecCreateConnection` and `SecRegisterTable` are standalone because they do not fit either shape.
+- Which connection a statement uses is decided by `ConnectionScope`: the innermost `in connection`
+  scope, then a `use connection` in the same event, then the default connection. Scopes are kept per
+  event, the shape `last database error` already uses, so a function call inherits them and a
+  continuation after a `wait` still sees them.
+- `SecInConnection` holds code rather than a payload, so it loads its body with `loadCode`. That is
+  also what puts the section into the parser's current sections, which is how `exit` and `stop`
+  reaching it are noticed. A `TriggerItem` of its own closes the body, because Skript has no
+  end-of-body callback and whether that node is wired in decides whether the scope leaks.
 - Writes are asynchronous. The `and wait` tag decides whether the continuation waits: a waiting write
   preserves the event continuation and exposes failures through `last database error`, while a
   fire-and-forget write continues immediately and can only log a later failure.

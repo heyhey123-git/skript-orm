@@ -18,15 +18,15 @@ abstract class Database {
     companion object {
 
         /**
-         * Mutex that protects the lifecycle state of the database: the current connection, the
-         * connection state, and the active operation count.
+         * Mutex that protects the lifecycle state of the database: which connections are published,
+         * the connection state of each, and the active operation count.
          */
         private val lifecycleMutex = Mutex()
 
         /**
          * Mutex that serializes every transition: connecting, replacing, and disconnecting.
          *
-         * [replaceWith] performs the whole connect while holding this lock, so a connect can never
+         * [publish] performs the whole connect while holding this lock, so a connect can never
          * overlap another transition. Nothing has to track a connection attempt that is still in
          * flight, because by the time a transition acquires this lock the previous one has either
          * published its database or cleaned up after failing. The same invariant is why
@@ -35,10 +35,48 @@ abstract class Database {
          */
         private val transitionMutex = Mutex()
 
-        /** The currently active, fully initialized database connection. */
+        /**
+         * Connections a script registered under a name.
+         *
+         * The map is concurrent because statements resolve a connection on the server thread while
+         * the lifecycle updates registrations from whatever thread performs the transition. The rules
+         * about who may be added, replaced and removed still run under [lifecycleMutex].
+         */
+        private val connections: MutableMap<String, Database> = ConcurrentHashMap()
+
+        /**
+         * The connection a statement uses when neither a scope nor an event names one.
+         *
+         * This is a field rather than an entry of [connections] for two reasons: a connection created
+         * without a name is not registered under one at all, and a named connection may also be the
+         * default, so the two roles are not the same thing.
+         */
         @Volatile
-        var current: Database? = null
-            private set
+        private var defaultConnection: Database? = null
+
+        /** The default connection, or null when nothing is connected. */
+        val current: Database?
+            get() = defaultConnection
+
+        /** The registered names, sorted so that a message reads the same way twice. */
+        val connectionNames: List<String>
+            get() = connections.keys.sorted()
+
+        /** The connection registered under [name], or null when no script has connected one yet. */
+        fun connection(name: String): Database? = connections[name]
+
+        /**
+         * Makes a registered connection the default one.
+         *
+         * @return false when no connected database carries that name.
+         */
+        fun makeDefault(name: String): Boolean {
+            if (isShuttingDown) return false
+            val candidate = connections[name] ?: return false
+            if (!candidate.isConnected) return false
+            defaultConnection = candidate
+            return true
+        }
 
         @Volatile
         var isShuttingDown: Boolean = false
@@ -46,44 +84,110 @@ abstract class Database {
 
         /** Reopens the global database lifecycle when the plugin is enabled. */
         fun beginLifecycle() {
-            check(current == null) {
+            check(defaultConnection == null && connections.isEmpty()) {
                 "Cannot begin a database lifecycle while resources from the previous lifecycle still exist."
             }
             isShuttingDown = false
         }
 
         /**
-         * Replaces the current database connection. Concurrent replacement requests are serialized by
+         * Replaces the default database connection. Concurrent replacement requests are serialized by
          * the transition lock: each one waits for the previous transition, disconnects the active
          * database, and then connects the requested instance.
          */
         suspend fun replaceWith(database: Database, url: String, user: String, password: String) {
+            publish(null, database, url, user, password)
+        }
+
+        /**
+         * Connects [database] and registers it under [name], leaving every other connection alone.
+         *
+         * A name already in use is replaced, which is what reconnecting from a reloaded `on load`
+         * looks like. The first connection to succeed becomes the default, so a script with one
+         * connection never has to name it.
+         */
+        suspend fun createConnection(
+            name: String,
+            database: Database,
+            url: String,
+            user: String,
+            password: String
+        ) {
+            publish(name, database, url, user, password)
+        }
+
+        private suspend fun publish(
+            name: String?,
+            database: Database,
+            url: String,
+            user: String,
+            password: String
+        ) {
             transitionMutex.withLock {
                 check(!isShuttingDown) { "Database lifecycle is shutting down." }
 
-                val active = lifecycleMutex.withLock { current }
-                active?.disconnectInternal()
+                // An unnamed connection replaces the default, which is what `create a connection`
+                // without a name has always done. A named one replaces only its own name.
+                //
+                // The previous default is disconnected only when no name keeps it reachable. A named
+                // connection that happened to be the default keeps running and merely stops being the
+                // default, so mixing the two forms cannot silently close a connection the script
+                // registered under a name. The role is vacated either way, which is what a failed
+                // connect is allowed to leave behind.
+                val replaced = lifecycleMutex.withLock {
+                    if (name == null) {
+                        val previous = defaultConnection
+                        defaultConnection = null
+                        previous?.takeIf { it.connectionName == null }
+                    } else {
+                        connections[name]
+                    }
+                }
+                if (replaced != null && replaced !== database) replaced.disconnectInternal()
 
                 check(!isShuttingDown) { "Database lifecycle is shutting down." }
-                database.connectInternal(url, user, password)
+                database.connectInternal(url, user, password, name)
             }
         }
 
         /**
-         * Prevents new connections and operations and then disconnects the active database. Taking
-         * the transition lock also waits for a connection attempt that is already in progress.
+         * Prevents new connections and operations and then disconnects every connection. Taking the
+         * transition lock also waits for a connection attempt that is already in progress.
          */
         suspend fun shutdown() {
             lifecycleMutex.withLock {
                 isShuttingDown = true
             }
+            withContext(NonCancellable) {
+                disconnectAllInternal()
+            }
+        }
+
+        /** Disconnects every connection without closing the lifecycle. */
+        suspend fun disconnectAll() {
+            disconnectAllInternal()
+        }
+
+        /**
+         * Disconnects every published connection, reporting the first failure once the rest have
+         * been closed. The snapshot is taken before the first disconnect, because each one removes
+         * its own registration.
+         */
+        private suspend fun disconnectAllInternal() {
             transitionMutex.withLock {
-                val active = lifecycleMutex.withLock { current }
-                if (active != null) {
-                    withContext(NonCancellable) {
-                        active.disconnectInternal()
+                val active = lifecycleMutex.withLock {
+                    (listOfNotNull(defaultConnection) + connections.values).distinct()
+                }
+
+                var failure: Throwable? = null
+                for (database in active) {
+                    try {
+                        database.disconnectInternal()
+                    } catch (error: Throwable) {
+                        if (failure == null) failure = error else failure.addSuppressed(error)
                     }
                 }
+                failure?.let { throw it }
             }
         }
     }
@@ -102,6 +206,16 @@ abstract class Database {
     var state: State = State.DISCONNECTED
         private set
 
+    /**
+     * The name this connection is registered under, or null when it was created without one.
+     *
+     * A script can only reach a connection through its name or by it being the default, so this is
+     * also what tells a statement whether the instance in front of it is still reachable.
+     */
+    @Volatile
+    var connectionName: String? = null
+        private set
+
     val isConnected: Boolean
         get() = state == State.CONNECTED
 
@@ -117,12 +231,19 @@ abstract class Database {
     private var activeOperations: Int = 0
     private var operationsDrained: CompletableDeferred<Unit>? = null
 
-    private suspend fun connectInternal(url: String, user: String, password: String) {
+    private suspend fun connectInternal(url: String, user: String, password: String, name: String?) {
         lifecycleMutex.withLock {
             check(!isShuttingDown) { "Database lifecycle is shutting down." }
             check(state == State.DISCONNECTED) { "Database is not disconnected: $state." }
-            check(current == null) {
-                "Another database is already connected. Disconnect it before connecting a new database."
+            if (name == null) {
+                check(defaultConnection == null) {
+                    "Another database is already connected. Disconnect it before connecting a new database."
+                }
+            } else {
+                val existing = connections[name]
+                check(existing == null || existing === this) {
+                    "A connection named '$name' is already registered."
+                }
             }
 
             state = State.CONNECTING
@@ -139,7 +260,9 @@ abstract class Database {
             lifecycleMutex.withLock {
                 check(!isShuttingDown) { "Database lifecycle began shutting down while connecting." }
                 state = State.CONNECTED
-                current = this
+                connectionName = name
+                if (name != null) connections[name] = this
+                if (name == null || defaultConnection == null) defaultConnection = this
             }
         } catch (error: Throwable) {
             withContext(NonCancellable) {
@@ -151,11 +274,28 @@ abstract class Database {
                 lifecycleMutex.withLock {
                     queries = null
                     state = State.DISCONNECTED
-                    if (current === this@Database) current = null
+                    unpublish()
                 }
             }
             throw error
         }
+    }
+
+    /**
+     * Takes this instance out of the registry. Called while holding [lifecycleMutex], where the
+     * lifecycle's own bookkeeping about what is published lives.
+     */
+    private fun unpublish() {
+        val name = connectionName
+        if (name != null) connections.remove(name, this)
+        if (defaultConnection === this@Database) defaultConnection = null
+        connectionName = null
+    }
+
+    /** Whether this instance is still reachable, either as a named connection or as the default. */
+    private fun isPublished(): Boolean {
+        val name = connectionName
+        return defaultConnection === this@Database || (name != null && connections[name] === this)
     }
 
     /** Initializes implementation-specific resources and [queries]. */
@@ -186,7 +326,7 @@ abstract class Database {
      */
     private suspend fun acquireOperation(): Queries = lifecycleMutex.withLock {
         check(!isShuttingDown) { "Database lifecycle is shutting down." }
-        check(state == State.CONNECTED && current === this) { "Database is not connected." }
+        check(state == State.CONNECTED && isPublished()) { "Database is not connected." }
         val activeQueries = checkNotNull(queries) { "Database queries are not initialized." }
         activeOperations++
         activeQueries
@@ -227,7 +367,7 @@ abstract class Database {
             when (state) {
                 State.DISCONNECTED -> return
 
-                // Unreachable as long as connectInternal only runs inside replaceWith, which holds
+                // Unreachable as long as connectInternal only runs inside publish, which holds
                 // the transition lock every caller of this method also takes. Kept as a guard
                 // because falling through would close a database that is still initializing.
                 State.CONNECTING -> error("Cannot disconnect a database while it is still connecting.")
@@ -262,7 +402,7 @@ abstract class Database {
                 lifecycleMutex.withLock {
                     queries = null
                     state = State.DISCONNECTED
-                    if (current === this@Database) current = null
+                    unpublish()
                     disconnectCompletion = null
                 }
                 completion?.complete(Unit)
