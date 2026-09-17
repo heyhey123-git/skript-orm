@@ -60,7 +60,7 @@ if last database error is set:
 """
 )
 @Example("database transaction on connection \"logs\" with timeout 2 minutes:")
-@Since("1.0")
+@Since("1.0.0")
 class SecTransaction : ScopedBodySection() {
 
     companion object {

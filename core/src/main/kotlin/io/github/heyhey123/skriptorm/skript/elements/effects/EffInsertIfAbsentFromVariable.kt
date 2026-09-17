@@ -27,7 +27,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 insert entity {_user::*} if absent into table "users" and wait
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffInsertIfAbsentFromVariable : Effect() {
 
     companion object {

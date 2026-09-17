@@ -39,7 +39,7 @@ in connection "logs":
             message: "written to the logs database"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecInConnection : ScopedBodySection() {
 
     companion object {

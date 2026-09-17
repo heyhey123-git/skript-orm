@@ -28,7 +28,7 @@ select many entities from table "users" and store the results in {_users::*}
 send "first: %{_users::1::name}%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffSelectManyUnfiltered : Effect() {
 
     companion object {

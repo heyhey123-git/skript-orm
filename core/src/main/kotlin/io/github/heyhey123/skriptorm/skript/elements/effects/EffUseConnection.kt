@@ -48,7 +48,7 @@ command /newlog:
                 message: "the command ran"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffUseConnection : Effect() {
 
     companion object {

@@ -41,7 +41,7 @@ register a database table "users":
     age: int, nullable
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecRegisterTable : Section() {
 
     companion object {

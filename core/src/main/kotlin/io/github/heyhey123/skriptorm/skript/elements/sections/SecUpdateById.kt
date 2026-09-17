@@ -24,7 +24,7 @@ update one entity in table "users" by id {_id} and wait:
 update one entity {_changes::*} in table "users" by id {_id}:
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecUpdateById : SecWriteBase() {
 
     companion object {

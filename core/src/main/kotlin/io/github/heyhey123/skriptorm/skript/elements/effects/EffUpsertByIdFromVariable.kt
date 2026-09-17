@@ -30,7 +30,7 @@ set {_user::name} to "Alice"
 upsert one entity {_user::*} in table "users" by id {_user::id} and wait
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffUpsertByIdFromVariable : Effect() {
 
     companion object {

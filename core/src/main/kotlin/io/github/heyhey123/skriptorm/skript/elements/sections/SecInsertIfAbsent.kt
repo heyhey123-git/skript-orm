@@ -23,7 +23,7 @@ insert entity if absent into table "users" and wait:
 insert entity {_user::*} if absent into table "archived_users"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecInsertIfAbsent : SecWriteBase() {
 
     companion object {

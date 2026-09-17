@@ -29,7 +29,7 @@ select one entity from table "users" and store the result in {_user::*}
 insert one {_user::*} into table "archived_users"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffInsertOneFromVariable : Effect() {
 
     companion object {

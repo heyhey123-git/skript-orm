@@ -19,7 +19,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecDelete : SecWriteBase() {
 
     companion object {

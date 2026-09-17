@@ -31,7 +31,7 @@ select entity from table "users" by id {_id} and store the result in {_user::*}
 send "%{_user::name}%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffSelectById : Effect() {
 
     companion object {

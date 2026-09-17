@@ -19,7 +19,7 @@ select one entity from table "users" and store the result in {_user::*}:
 send "name: %{_user::name}%, age: %{_user::age}%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecSelectOne : SecSelectBase() {
 
     companion object {

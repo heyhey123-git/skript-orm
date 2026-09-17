@@ -32,7 +32,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 make connection "logs" the default
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffSetDefaultConnection : Effect() {
 
     companion object {

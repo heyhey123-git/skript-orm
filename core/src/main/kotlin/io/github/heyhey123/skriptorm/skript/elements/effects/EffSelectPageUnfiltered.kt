@@ -28,7 +28,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 send "%{_page::1::name}%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffSelectPageUnfiltered : Effect() {
 
     companion object {

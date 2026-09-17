@@ -28,7 +28,7 @@ update entities {_changes::*} in table "users" and wait:
         name = "Alice"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecUpdate : SecWriteBase() {
 
     companion object {

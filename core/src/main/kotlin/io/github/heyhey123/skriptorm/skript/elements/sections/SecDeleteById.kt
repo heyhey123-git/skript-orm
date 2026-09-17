@@ -18,7 +18,7 @@ if last database error is set:
     send "Delete failed: %last database error%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecDeleteById : SecWriteBase() {
 
     companion object {

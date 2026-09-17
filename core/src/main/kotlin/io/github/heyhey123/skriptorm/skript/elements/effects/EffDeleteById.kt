@@ -26,7 +26,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 delete one entity from table "users" by id {_id} and wait
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffDeleteById : Effect() {
 
     companion object {

@@ -26,7 +26,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 delete entities from table "logs" with limit 500 and wait
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffDeleteUnfiltered : Effect() {
 
     companion object {

@@ -18,7 +18,7 @@ select many entities from table "users" and store the results in {_users::*}:
 send "%{_users::1::name}%"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecSelectMany : SecSelectBase() {
 
     companion object {

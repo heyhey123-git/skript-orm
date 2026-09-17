@@ -30,7 +30,7 @@ set {_user::age} to {_user::age} + 1
 update one entity {_user::*} in table "users" by id {_user::id} and wait
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffUpdateByIdFromVariable : Effect() {
 
     companion object {

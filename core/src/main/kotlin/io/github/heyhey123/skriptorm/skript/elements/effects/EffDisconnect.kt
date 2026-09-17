@@ -39,7 +39,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Example("disconnect from the current database")
 @Example("disconnect from connection \"logs\"")
 @Example("disconnect from all connections")
-@Since("1.0")
+@Since("1.0.0")
 class EffDisconnect : Effect() {
 
     companion object {

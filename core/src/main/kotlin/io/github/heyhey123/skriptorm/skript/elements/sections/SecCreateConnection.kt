@@ -49,7 +49,7 @@ create a connection named "logs" to database "MySQL" with properties:
     password: "123456"
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class SecCreateConnection : Section() {
 
     companion object {

@@ -40,7 +40,7 @@ database transaction:
         rollback database transaction
 """
 )
-@Since("1.0")
+@Since("1.0.0")
 class EffRollbackTransaction : Effect() {
 
     companion object {
