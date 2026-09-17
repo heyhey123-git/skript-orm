@@ -11,7 +11,7 @@ pluginManagement {
 plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "0.8.0"
 }
-rootProject.name = "xiaojie-orm"
+rootProject.name = "skript-orm"
 include("mongodb-implementation")
 include("generic-jdbc-implementation")
 include("core")

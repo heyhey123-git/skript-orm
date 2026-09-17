@@ -5,9 +5,9 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::disconnect} is set:
+    if {skriptorm::selftest::done::disconnect} is set:
         stop trigger
 
     disconnect from the current database
-    log "XIAOJIE_SELFTEST detail: disconnect -> ran"
-    set {xiaojie::selftest::done::disconnect} to true
+    log "SKRIPTORM_SELFTEST detail: disconnect -> ran"
+    set {skriptorm::selftest::done::disconnect} to true

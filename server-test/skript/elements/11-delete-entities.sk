@@ -5,11 +5,11 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::delete-entities} is set:
+    if {skriptorm::selftest::done::delete-entities} is set:
         stop trigger
 
     delete entities from table "orm_selftest" with limit 10 and wait:
         where all:
             name = "nobody"
-    log "XIAOJIE_SELFTEST detail: delete entities -> %last database error%"
-    set {xiaojie::selftest::done::delete-entities} to true
+    log "SKRIPTORM_SELFTEST detail: delete entities -> %last database error%"
+    set {skriptorm::selftest::done::delete-entities} to true

@@ -31,7 +31,7 @@ param(
     # Where the documentation is read from. The default is the repository this script lives in.
     [string]$RepositoryRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path,
 
-    [string]$RepositoryUrl = 'https://github.com/heyhey123-git/xiaojie-orm',
+    [string]$RepositoryUrl = 'https://github.com/heyhey123-git/skript-orm',
 
     [string]$Branch = 'master'
 )

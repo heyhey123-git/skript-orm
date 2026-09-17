@@ -1,4 +1,4 @@
-**xiaojie-orm**
+**skript-orm**
 
 - [首页](Home)
 - [快速上手](Getting-Started)
@@ -22,4 +22,4 @@
 
 ---
 
-内容以[仓库](https://github.com/heyhey123-git/xiaojie-orm)里的 `docs/` 为准，请不要在这里直接改。
+内容以[仓库](https://github.com/heyhey123-git/skript-orm)里的 `docs/` 为准，请不要在这里直接改。

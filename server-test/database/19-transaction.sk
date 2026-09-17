@@ -14,13 +14,13 @@
 # `elements/16-disconnect` waits for this script before it closes the default connection, because the
 # reads here need it.
 every 5 seconds:
-    if {xiaojie::selftest::done::transaction} is set:
+    if {skriptorm::selftest::done::transaction} is set:
         stop trigger
-    if {xiaojie::selftest::started::transaction} is set:
+    if {skriptorm::selftest::started::transaction} is set:
         stop trigger
-    if {xiaojie::selftest::done::setup} is not set:
+    if {skriptorm::selftest::done::setup} is not set:
         stop trigger
-    set {xiaojie::selftest::started::transaction} to true
+    set {skriptorm::selftest::started::transaction} to true
 
     register a database table "orm_transaction":
         id: bigint, primary key, auto increment, not null
@@ -31,7 +31,7 @@ every 5 seconds:
         insert one entity into table "orm_transaction" and wait:
             values:
                 label: "committed"
-    log "XIAOJIE_SELFTEST detail: transaction commit -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: transaction commit -> %last database error%"
 
     # 2. The read names a table that does not exist, so it fails inside the body. The insert after it
     #    must not run, and the insert before it must not survive.
@@ -43,10 +43,10 @@ every 5 seconds:
         insert one entity into table "orm_transaction" and wait:
             values:
                 label: "after the failure"
-    log "XIAOJIE_SELFTEST detail: transaction failed -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: transaction failed -> %last database error%"
 
     select many entities from table "orm_transaction" and store the results in {_tx::rows::*}
-    log "XIAOJIE_SELFTEST detail: transaction rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
+    log "SKRIPTORM_SELFTEST detail: transaction rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
 
     # 3. An explicit rollback undoes the body and leaves the section, so the insert after it never runs.
     database transaction:
@@ -57,10 +57,10 @@ every 5 seconds:
         insert one entity into table "orm_transaction" and wait:
             values:
                 label: "after the rollback"
-    log "XIAOJIE_SELFTEST detail: transaction rollback -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: transaction rollback -> %last database error%"
 
     select many entities from table "orm_transaction" and store the results in {_tx::rows::*}
-    log "XIAOJIE_SELFTEST detail: transaction rollback rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
+    log "SKRIPTORM_SELFTEST detail: transaction rollback rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
 
     # 4. The timeout is what keeps a script that stops mid-transaction from holding a connection: the
     #    wait below outlives it, and the transaction is rolled back while the trigger is parked.
@@ -72,15 +72,15 @@ every 5 seconds:
         insert one entity into table "orm_transaction" and wait:
             values:
                 label: "after the timeout"
-    log "XIAOJIE_SELFTEST detail: transaction timeout -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: transaction timeout -> %last database error%"
 
     select many entities from table "orm_transaction" and store the results in {_tx::rows::*}
-    log "XIAOJIE_SELFTEST detail: transaction timeout rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
+    log "SKRIPTORM_SELFTEST detail: transaction timeout rows -> row1=%{_tx::rows::1::label}% row2=%{_tx::rows::2::label}%"
 
     # A statement inside a transaction waits on its own, and a table cannot be registered in one.
     database transaction:
         register a database table "orm_transaction_refused":
             id: bigint, primary key, auto increment, not null
-    log "XIAOJIE_SELFTEST detail: transaction refuse -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: transaction refuse -> %last database error%"
 
-    set {xiaojie::selftest::done::transaction} to true
+    set {skriptorm::selftest::done::transaction} to true

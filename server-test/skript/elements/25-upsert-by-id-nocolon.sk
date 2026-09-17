@@ -3,11 +3,11 @@
 # No colon on purpose: this write takes its values from the variable, so there is nothing to indent, and
 # Skript warns about every section that has none.
 every 5 seconds:
-    if {xiaojie::selftest::done::upsert-by-id-nocolon} is set:
+    if {skriptorm::selftest::done::upsert-by-id-nocolon} is set:
         stop trigger
 
     set {_row::id} to 1
     set {_row::name} to "Alice"
     upsert one entity {_row::*} in table "orm_selftest" by id 1 and wait
-    log "XIAOJIE_SELFTEST detail: upsert by id without colon -> %last database error%"
-    set {xiaojie::selftest::done::upsert-by-id-nocolon} to true
+    log "SKRIPTORM_SELFTEST detail: upsert by id without colon -> %last database error%"
+    set {skriptorm::selftest::done::upsert-by-id-nocolon} to true

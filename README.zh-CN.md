@@ -1,4 +1,4 @@
-# xiaojie-orm
+# skript-orm
 
 写给 Skript 的 ORM。表描述一次，往后读写行都照 Skript 的写法来，SQL 由插件代劳。
 
@@ -53,7 +53,7 @@ command /adduser <text> <integer>:
 
 ## 安装
 
-1. 到 releases 页面取 `xiaojieorm-<version>.jar`，或者自己构建，见 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md)。
+1. 到 releases 页面取 `skriptorm-<version>.jar`，或者自己构建，见 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md)。
 2. 把 jar 与 Skript 一并放进 `plugins/`。
 3. 启动一次服务端，再把连接和建表写进脚本，`/sk reload` 即可。这两件事都由脚本完成，没有配置文件要改。
 

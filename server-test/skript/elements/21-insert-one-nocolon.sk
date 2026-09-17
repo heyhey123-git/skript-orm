@@ -3,11 +3,11 @@
 # No colon on purpose: this write takes its row from the variable, so there is nothing to indent, and
 # Skript warns about every section that has none.
 every 5 seconds:
-    if {xiaojie::selftest::done::insert-one-nocolon} is set:
+    if {skriptorm::selftest::done::insert-one-nocolon} is set:
         stop trigger
 
     set {_row::name} to "Alice"
     set {_row::age} to 1 + 1
     insert one {_row::*} into table "orm_selftest" and wait
-    log "XIAOJIE_SELFTEST detail: insert one from variable without colon -> %last database error%"
-    set {xiaojie::selftest::done::insert-one-nocolon} to true
+    log "SKRIPTORM_SELFTEST detail: insert one from variable without colon -> %last database error%"
+    set {skriptorm::selftest::done::insert-one-nocolon} to true

@@ -5,12 +5,12 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::select-many} is set:
+    if {skriptorm::selftest::done::select-many} is set:
         stop trigger
 
     select many entities from table "orm_selftest" and store the results in {_many::*}:
         where any:
             name != "nobody"
             age <= 99
-    log "XIAOJIE_SELFTEST detail: select many -> %last database error%"
-    set {xiaojie::selftest::done::select-many} to true
+    log "SKRIPTORM_SELFTEST detail: select many -> %last database error%"
+    set {skriptorm::selftest::done::select-many} to true

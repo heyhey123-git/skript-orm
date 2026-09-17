@@ -7,9 +7,9 @@
 # but this form has nothing to put in a body, and Skript warns about every section that has none. Written
 # as a statement it is an effect instead, and Skript has nothing to warn about.
 every 5 seconds:
-    if {xiaojie::selftest::done::select-one-unfiltered} is set:
+    if {skriptorm::selftest::done::select-one-unfiltered} is set:
         stop trigger
 
     select one entity from table "orm_selftest" and store the result in {_unfiltered::*}
-    log "XIAOJIE_SELFTEST detail: select one unfiltered -> %last database error%"
-    set {xiaojie::selftest::done::select-one-unfiltered} to true
+    log "SKRIPTORM_SELFTEST detail: select one unfiltered -> %last database error%"
+    set {skriptorm::selftest::done::select-one-unfiltered} to true

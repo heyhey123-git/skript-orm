@@ -6,9 +6,9 @@
 # No colon on purpose: `select many` with a `where` block is a section and needs one, but this form has
 # nothing for a body, and Skript warns about every section that has none.
 every 5 seconds:
-    if {xiaojie::selftest::done::select-many-unfiltered} is set:
+    if {skriptorm::selftest::done::select-many-unfiltered} is set:
         stop trigger
 
     select many entities from table "orm_selftest" and store the results in {_many::*}
-    log "XIAOJIE_SELFTEST detail: select many unfiltered -> %last database error%"
-    set {xiaojie::selftest::done::select-many-unfiltered} to true
+    log "SKRIPTORM_SELFTEST detail: select many unfiltered -> %last database error%"
+    set {skriptorm::selftest::done::select-many-unfiltered} to true

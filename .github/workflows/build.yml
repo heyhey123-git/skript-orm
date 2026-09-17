@@ -67,7 +67,7 @@ jobs:
       - name: Upload the jar
         uses: actions/upload-artifact@v6
         with:
-          name: xiaojieorm-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
+          name: skriptorm-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
           path: build/dist/*.jar
           # A build that produced no jar is a failure, not an empty artifact.
           if-no-files-found: error

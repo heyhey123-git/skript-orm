@@ -1,8 +1,8 @@
-# 为 Xiaojie ORM 贡献代码
+# 为 Skript ORM 贡献代码
 
 [English version](CONTRIBUTION.md)
 
-Xiaojie ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：公开 API 和内部结构
+Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：公开 API 和内部结构
 都仍可能调整。单元测试与可选的 MySQL 集成测试覆盖了当前行为（见第 8 节）。
 
 我们遵循三个原则：**适度抽象**、**可读性优于技巧**、**对外接口小而友好**。当某处改动与原则冲突时，
@@ -60,7 +60,7 @@ Skript 只需改一个文件里的一行，测试所运行的产物也不会与�
 
 目录里只应放 Paper 的稳定版构建。更新的发布线如果仍以 ALPHA 发布，就不算升级。
 
-Skript 的最低版本要求由 `XiaojieOrm.onEnable` 在运行时检查，而不是写在 `plugin.yml` 里：原因见
+Skript 的最低版本要求由 `SkriptOrm.onEnable` 在运行时检查，而不是写在 `plugin.yml` 里：原因见
 `MINIMUM_SKRIPT_VERSION` 上的 KDoc——带版本号的 `depend` 条目根本无法生效。
 
 ---
@@ -244,7 +244,7 @@ classpath 上的部分：
 运行中的 Skript 里。
 
 `MinimumSkriptVersionTest` 刻意不覆盖我们自己的代码，而是固定 Skript 自身
-`ch.njol.skript.util.Version` 的排序行为——`XiaojieOrm.onEnable` 里的版本下限依赖它。这个下限只是一次
+`ch.njol.skript.util.Version` 的排序行为——`SkriptOrm.onEnable` 里的版本下限依赖它。这个下限只是一次
 比较，而它两种出错方向都无法从本仓库的代码里看出来。
 
 **JDBC 测试**（`generic-jdbc-implementation`）让真实实现连接真实 MySQL，并让每个受支持类型走一遍自己的转换器
@@ -259,11 +259,11 @@ classpath 上的部分：
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest \
-  -Pxiaojie.test.mysql.url="jdbc:mysql://localhost:3306/xiaojie_orm_test"
+  -Pskriptorm.test.mysql.url="jdbc:mysql://localhost:3306/skriptorm_test"
 ```
 
-同样的设置也可以从环境变量读取：`XIAOJIE_TEST_MYSQL_URL`、`XIAOJIE_TEST_MYSQL_USERNAME`、
-`XIAOJIE_TEST_MYSQL_PASSWORD`、`XIAOJIE_TEST_MYSQL_DRIVER`、`XIAOJIE_TEST_MYSQL_IMAGE`。当既没有
+同样的设置也可以从环境变量读取：`SKRIPTORM_TEST_MYSQL_URL`、`SKRIPTORM_TEST_MYSQL_USERNAME`、
+`SKRIPTORM_TEST_MYSQL_PASSWORD`、`SKRIPTORM_TEST_MYSQL_DRIVER`、`SKRIPTORM_TEST_MYSQL_IMAGE`。当既没有
 Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不是静默通过。
 
 集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper 与 Skript，因为 JDBC 类型注册表在初始化
@@ -296,7 +296,7 @@ Minecraft 服务端。它运行的版本取自版本目录里的 `paper`，因�
 `server-test/skript/` 负责驱动这些元素：`elements/` 下每个元素一个文件，因此失败时从文件名就能看出是哪个
 元素。这里刻意不连接任何数据库：每个元素都应当停在数据库查找这一步，并通过 `last database error` 报告
 `No database connected.`，这样所有元素无需数据库服务端也能真实跑完。每个元素都会输出一行
-`XIAOJIE_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript 无法解析的语句会被
+`SKRIPTORM_SELFTEST`，`serverTest` 任务拿这些行与 `build.gradle.kts` 里的清单核对。Skript 无法解析的语句会被
 报错并跳过，所以「某个 pattern 不再注册」会表现为缺少一行，而不是悄悄通过。
 
 `docs/examples/` 也会被复制进同一个服务端，因此文档页面上的 Skript 片段同样要过解析这一关：插件不认的语句
@@ -306,7 +306,7 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 
 - 实际工作放在周期触发器里，因为服务端尚在启动时 Skript 的 `on script load` 不会触发
   （SkriptLang/Skript#5754），所以任何依赖脚本加载的写法都用不上。
-- 每个元素跑完就把自己记进 `{xiaojie::selftest::done::*}`，全部到齐后 `99-finish.sk` 停服。它的第二个
+- 每个元素跑完就把自己记进 `{skriptorm::selftest::done::*}`，全部到齐后 `99-finish.sk` 停服。它的第二个
   触发器负责在「始终没到齐」时停服，这正是把「卡住的运行」变成「失败的运行」的机制；它不使用本插件的语法，
   因此当出问题的正是插件本身时它照样能跑。也正因如此，`prepareServerTest` 会删掉 Skript 的数据目录：元素的
   运行守卫存在那里，留下一个会让下一次运行跳过某个元素。
@@ -314,7 +314,7 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 `prepareServerTest` 负责写入运行目录 `build/server-test`：`server.properties`、测试脚本，以及 `eula.txt`。
 写入最后这个文件意味着为这个一次性测试服务端接受 Minecraft EULA——这也是由任务而非开发者去做的原因。
 
-同一批元素脚本也可以对着数据库跑。传入 JDBC 测试使用的那组 MySQL 属性（`-Pxiaojie.test.mysql.url`、
+同一批元素脚本也可以对着数据库跑。传入 JDBC 测试使用的那组 MySQL 属性（`-Pskriptorm.test.mysql.url`、
 `username`、`password`）后，会额外铺上 `server-test/database/`：一个由 `prepareServerTest` 写入凭据的 setup
 脚本（连接并注册它自己的表），以及一个 roundtrip 脚本（写入一行、读回、比对）。此时元素脚本面对的是真实连接
 ——这也是唯一能覆盖 `values` / `where` 里「脚本值 → 列」转换的方式：转换发生在数据库查找之后，没有数据库的
@@ -376,7 +376,7 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest \
-  -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:1/xiaojie_orm_test"
+  -Pskriptorm.test.mysql.url="jdbc:mysql://127.0.0.1:1/skriptorm_test"
 ```
 
 任何不是连接错误的失败都是真实缺陷——生命周期测试里那个潜在的顺序依赖就是这样被找出来的。
@@ -436,7 +436,7 @@ Skript 测试里仍然用到 MockBukkit，但只把它当作一个 Bukkit 服务
 3. 实现 `Queries`，为每种操作构造对应的查询对象。
 4. 为每个受支持的逻辑类型实现 `DataType`，在后端需要不同表示时覆盖 `converter`。
 5. 实现 `DatabaseFactory`，并在 `init` 块中注册到 `DatabaseRegistry`。
-6. 在 `XiaojieOrm.onEnable()` 的候选列表中加上工厂类名，让插件加载它。
+6. 在 `SkriptOrm.onEnable()` 的候选列表中加上工厂类名，让插件加载它。
 
 实现可以把某个操作标记为不支持，但不得把它静默降级成另一个操作。
 

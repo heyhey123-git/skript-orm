@@ -17,17 +17,17 @@
 #
 # Offline there is no shared connection to protect, so the element runs on its own schedule there.
 every 5 seconds:
-    if {xiaojie::selftest::done::disconnect} is set:
+    if {skriptorm::selftest::done::disconnect} is set:
         stop trigger
-    if {xiaojie::selftest::done::roundtrip} is not set:
+    if {skriptorm::selftest::done::roundtrip} is not set:
         stop trigger
-    if {xiaojie::selftest::done::connections} is not set:
+    if {skriptorm::selftest::done::connections} is not set:
         stop trigger
-    if {xiaojie::selftest::done::transaction} is not set:
+    if {skriptorm::selftest::done::transaction} is not set:
         stop trigger
 
     disconnect from the current database
-    log "XIAOJIE_SELFTEST detail: disconnect -> ran"
+    log "SKRIPTORM_SELFTEST detail: disconnect -> ran"
 
     # The all-form is driven here too, because this is the last script that needs a connection: every
     # other one that reads the database has recorded itself by now. The connection it closes is this
@@ -37,6 +37,6 @@ every 5 seconds:
         username: "__USERNAME__"
         password: "__PASSWORD__"
     disconnect from all connections
-    log "XIAOJIE_SELFTEST detail: disconnect all -> ran"
+    log "SKRIPTORM_SELFTEST detail: disconnect all -> ran"
 
-    set {xiaojie::selftest::done::disconnect} to true
+    set {skriptorm::selftest::done::disconnect} to true

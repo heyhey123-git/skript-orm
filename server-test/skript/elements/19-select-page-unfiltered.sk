@@ -6,9 +6,9 @@
 # No colon on purpose: `select page` with a `where` block is a section and needs one, but this form has
 # nothing for a body, and Skript warns about every section that has none.
 every 5 seconds:
-    if {xiaojie::selftest::done::select-page-unfiltered} is set:
+    if {skriptorm::selftest::done::select-page-unfiltered} is set:
         stop trigger
 
     select page 1 with size 5 from table "orm_selftest" and store the results in {_page::*}
-    log "XIAOJIE_SELFTEST detail: select page unfiltered -> %last database error%"
-    set {xiaojie::selftest::done::select-page-unfiltered} to true
+    log "SKRIPTORM_SELFTEST detail: select page unfiltered -> %last database error%"
+    set {skriptorm::selftest::done::select-page-unfiltered} to true

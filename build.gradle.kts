@@ -20,7 +20,7 @@ plugins {
 // Read from the catalog because the shaded jar's relocation prefixes embed both versions.
 val kotlinVersion = libs.versions.kotlin.get()
 val kotlinCoroutinesVersion = libs.versions.coroutines.get()
-val shadePrefix = "io.github.heyhey123.xiaojieorm.libs"
+val shadePrefix = "io.github.heyhey123.skriptorm.libs"
 
 // -PbundleModules=mod1,mod2
 val bundledModules: List<String> = run {
@@ -102,7 +102,7 @@ dependencies {
 
 tasks {
     base {
-        archivesName.set("xiaojieorm")
+        archivesName.set("skriptorm")
     }
 
     withType<ShadowJar> {
@@ -197,13 +197,13 @@ dependencies {
 // A database for the server test, read from the same keys the JDBC integration tests read, so one
 // `-P` set configures both layers. Without a url the run has no database, which is the default and
 // how it runs locally; with one, the element scripts run against it and a round trip joins them.
-val serverTestDatabaseUrl = providers.gradleProperty("xiaojie.test.mysql.url")
-    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_URL"))
-val serverTestDatabaseUsername = providers.gradleProperty("xiaojie.test.mysql.username")
-    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_USERNAME"))
+val serverTestDatabaseUrl = providers.gradleProperty("skriptorm.test.mysql.url")
+    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_URL"))
+val serverTestDatabaseUsername = providers.gradleProperty("skriptorm.test.mysql.username")
+    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_USERNAME"))
     .orElse("root")
-val serverTestDatabasePassword = providers.gradleProperty("xiaojie.test.mysql.password")
-    .orElse(providers.environmentVariable("XIAOJIE_TEST_MYSQL_PASSWORD"))
+val serverTestDatabasePassword = providers.gradleProperty("skriptorm.test.mysql.password")
+    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_PASSWORD"))
     .orElse("")
 val serverTestUsesDatabase = serverTestDatabaseUrl.isPresent
 
@@ -263,7 +263,7 @@ val prepareServerTest by tasks.registering {
         val finisher = scripts.resolve("99-finish.sk")
         val reporting = scripts.walkTopDown()
             .filter { it.extension == "sk" && it != finisher }
-            .count { "XIAOJIE_SELFTEST detail:" in it.readText() }
+            .count { "SKRIPTORM_SELFTEST detail:" in it.readText() }
         finisher.writeText(finisher.readText().replace("__ELEMENT_COUNT__", reporting.toString()))
         sourceDirectory.file("server.properties").asFile
             .copyTo(run.resolve("server.properties"), overwrite = true)
@@ -396,7 +396,7 @@ val serverTest by tasks.registering(VerifySkriptServerTest::class) {
 /**
  * Checks the log a `runServer` run wrote.
  *
- * The Skript side of the test reports what it did as `XIAOJIE_SELFTEST` lines, so the assertions
+ * The Skript side of the test reports what it did as `SKRIPTORM_SELFTEST` lines, so the assertions
  * live here, where they can be read and changed without writing Skript.
  */
 abstract class VerifySkriptServerTest : DefaultTask() {
@@ -436,7 +436,7 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
         requireInLog(
             "Paper never enabled this plugin, so the addon was not under test at all.",
-            "Enabling xiaojie-orm v${expectedPluginVersion.get()}"
+            "Enabling skript-orm v${expectedPluginVersion.get()}"
         )
         requireInLog(
             "The server did not run the Skript this plugin is built against.",
@@ -444,18 +444,18 @@ abstract class VerifySkriptServerTest : DefaultTask() {
         )
         requireInLog(
             "The self-test never reached its end, so a section it drives did not get through.",
-            "XIAOJIE_SELFTEST=PASS"
+            "SKRIPTORM_SELFTEST=PASS"
         )
 
-        val failures = lines.filter { "XIAOJIE_SELFTEST=FAIL" in it }
+        val failures = lines.filter { "SKRIPTORM_SELFTEST=FAIL" in it }
         if (failures.isNotEmpty()) {
             // One line each, because these lines are what CI annotates and annotations are capped.
-            problems += failures.map { "The self-test reported: ${it.substringAfter("XIAOJIE_SELFTEST=").trim()}" }
+            problems += failures.map { "The self-test reported: ${it.substringAfter("SKRIPTORM_SELFTEST=").trim()}" }
         }
 
-        // "XIAOJIE_SELFTEST detail: <element> -> <message>"
+        // "SKRIPTORM_SELFTEST detail: <element> -> <message>"
         val reported = lines
-            .mapNotNull { line -> line.substringAfter("XIAOJIE_SELFTEST detail: ", "").ifEmpty { null } }
+            .mapNotNull { line -> line.substringAfter("SKRIPTORM_SELFTEST detail: ", "").ifEmpty { null } }
             .associate { line -> line.substringBeforeLast(" -> ") to line.substringAfterLast(" -> ") }
 
         expectedChecks.get().forEach { (element, message) ->
@@ -514,7 +514,7 @@ abstract class VerifySkriptServerTest : DefaultTask() {
                     problems.forEach { appendLine("  - $it") }
                     appendLine()
                     appendLine("What the test reported (last 40 matching log lines):")
-                    appendLine(indent(lines.filter { "XIAOJIE_SELFTEST" in it }.takeLast(40)))
+                    appendLine(indent(lines.filter { "SKRIPTORM_SELFTEST" in it }.takeLast(40)))
                     appendLine()
                     appendLine("What Skript said about the test scripts:")
                     appendLine(indent(reportedScriptProblems(lines).takeLast(40)))

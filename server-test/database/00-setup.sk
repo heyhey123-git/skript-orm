@@ -1,7 +1,7 @@
 # Connects the run to the database it was pointed at, and gives it a table of its own.
 #
 # `prepareServerTest` writes this file with the credentials substituted, because they come from the
-# `xiaojie.test.mysql.*` properties and do not belong in the repository. It fires before the element
+# `skriptorm.test.mysql.*` properties and do not belong in the repository. It fires before the element
 # scripts so they run against a live connection.
 #
 # The table here is deliberately not the one the element scripts register: two `register table`
@@ -13,9 +13,9 @@
 # register the table twice; the start guard stops that, and the marker at the end is what
 # `99-finish.sk` waits for.
 every 1 second:
-    if {xiaojie::selftest::started::setup} is set:
+    if {skriptorm::selftest::started::setup} is set:
         stop trigger
-    set {xiaojie::selftest::started::setup} to true
+    set {skriptorm::selftest::started::setup} to true
 
     create a connection to database "MySQL" with properties:
         url: "__URL__"
@@ -26,7 +26,7 @@ every 1 second:
         # makes, and it is the same property a script would raise for a query that needs longer.
         statement timeout: 20
     if last database error is set:
-        log "XIAOJIE_SELFTEST=FAIL setup connection: %last database error%"
+        log "SKRIPTORM_SELFTEST=FAIL setup connection: %last database error%"
 
     register a database table "orm_roundtrip":
         id: bigint, primary key, auto increment, not null
@@ -37,13 +37,13 @@ every 1 second:
         # whose only NBT implementation is SkBee's.
         data: nbtcompound, nullable
     if last database error is set:
-        log "XIAOJIE_SELFTEST=FAIL setup table: %last database error%"
+        log "SKRIPTORM_SELFTEST=FAIL setup table: %last database error%"
 
     # Registering waits for the table to exist, so a read from this script says whether it took effect:
     # "Table 'orm_roundtrip' not found." here would mean every later statement is working against a
     # table the connection does not know about.
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::setup::*}
-    log "XIAOJIE_SELFTEST detail: setup select -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: setup select -> %last database error%"
 
-    log "XIAOJIE_SELFTEST detail: setup -> ran"
-    set {xiaojie::selftest::done::setup} to true
+    log "SKRIPTORM_SELFTEST detail: setup -> ran"
+    set {skriptorm::selftest::done::setup} to true

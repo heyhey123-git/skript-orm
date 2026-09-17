@@ -5,7 +5,7 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::insert-one} is set:
+    if {skriptorm::selftest::done::insert-one} is set:
         stop trigger
 
     set {_name} to "Alice"
@@ -14,5 +14,5 @@ every 5 seconds:
         values:
             name: {_name}
             age: {_age}
-    log "XIAOJIE_SELFTEST detail: insert one -> %last database error%"
-    set {xiaojie::selftest::done::insert-one} to true
+    log "SKRIPTORM_SELFTEST detail: insert one -> %last database error%"
+    set {skriptorm::selftest::done::insert-one} to true

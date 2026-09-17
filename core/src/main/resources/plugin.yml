@@ -1,6 +1,6 @@
-name: xiaojie-orm
+name: skript-orm
 version: '${version}'
-main: io.github.heyhey123.xiaojieorm.XiaojieOrm
+main: io.github.heyhey123.skriptorm.SkriptOrm
 description: A ORM plugin for Skript, aimed at providing a user-friendly & high performance interface for Skript users to create and manage database operations.
 author: heyhey123
 api-version: '26.2'

@@ -116,16 +116,16 @@ jobs:
           mysql -h 127.0.0.1 -uroot -proot -e 'SELECT VERSION()'
 
       - name: Create the test database
-        run: mysql -h 127.0.0.1 -uroot -proot -e 'CREATE DATABASE IF NOT EXISTS xiaojie_orm_test'
+        run: mysql -h 127.0.0.1 -uroot -proot -e 'CREATE DATABASE IF NOT EXISTS skriptorm_test'
 
       # The properties are passed instead of the environment so the test JVM cannot miss them, and so
       # Testcontainers is not consulted at all.
       - name: Run the JDBC integration tests
         run: |
           ./gradlew :generic-jdbc-implementation:integrationTest --stacktrace \
-            -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:3306/xiaojie_orm_test" \
-            -Pxiaojie.test.mysql.username=root \
-            -Pxiaojie.test.mysql.password=root
+            -Pskriptorm.test.mysql.url="jdbc:mysql://127.0.0.1:3306/skriptorm_test" \
+            -Pskriptorm.test.mysql.username=root \
+            -Pskriptorm.test.mysql.password=root
 
       - name: Annotate failing tests
         if: failure()
@@ -138,9 +138,9 @@ jobs:
       - name: Run the Skript server test against the same server
         run: |
           ./gradlew serverTest --stacktrace \
-            -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:3306/xiaojie_orm_test" \
-            -Pxiaojie.test.mysql.username=root \
-            -Pxiaojie.test.mysql.password=root
+            -Pskriptorm.test.mysql.url="jdbc:mysql://127.0.0.1:3306/skriptorm_test" \
+            -Pskriptorm.test.mysql.username=root \
+            -Pskriptorm.test.mysql.password=root
 
       # The same as the other job's step: the harness writes its problems beside the log, and this
       # turns them, plus anything the server itself complained about, into annotations.
@@ -160,7 +160,7 @@ jobs:
           # went wrong; fall back to whatever it complained about.
           log=build/server-test/logs/latest.log
           if [ -f "$log" ]; then
-            grep -E 'XIAOJIE_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
+            grep -E 'SKRIPTORM_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
               echo "::error::$line"
             done
           fi
@@ -284,7 +284,7 @@ jobs:
           # went wrong; fall back to whatever it complained about.
           log=build/server-test/logs/latest.log
           if [ -f "$log" ]; then
-            grep -E 'XIAOJIE_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
+            grep -E 'SKRIPTORM_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
               echo "::error::$line"
             done
           fi

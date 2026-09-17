@@ -13,7 +13,7 @@
 #
 # This is the only script that holds the shared connection across a wait, so the disconnect element
 # may not fire while it runs: `server-test/database/elements/16-disconnect.sk` replaces that element
-# in database mode and waits for `{xiaojie::selftest::done::roundtrip}`. Without that, the reads below
+# in database mode and waits for `{skriptorm::selftest::done::roundtrip}`. Without that, the reads below
 # report "No database connected." and look exactly like a write that stored nothing.
 #
 # The NBT column is the other thing only this script can cover. The test server installs SkBee and no
@@ -30,9 +30,9 @@
 every 5 seconds:
     # A start guard, because every step in this script waits on the database: without it a second
     # firing would begin while the first is still working through the row.
-    if {xiaojie::selftest::started::roundtrip} is set:
+    if {skriptorm::selftest::started::roundtrip} is set:
         stop trigger
-    set {xiaojie::selftest::started::roundtrip} to true
+    set {skriptorm::selftest::started::roundtrip} to true
 
     # Nothing is deleted here on purpose: a delete that ran late would remove the very row these
     # checks are about, which is one of the things this script is trying to tell apart.
@@ -43,9 +43,9 @@ every 5 seconds:
         values:
             name: "Alice"
             age: 30
-            data: nbt compound from "{xiaojie:1}"
+            data: nbt compound from "{skriptorm:1}"
     if last database error is set:
-        log "XIAOJIE_SELFTEST=FAIL roundtrip insert: %last database error%"
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip insert: %last database error%"
 
     # The filter is here to give the section a body. Skript warns about any section with nothing indented
     # under its colon, and that warning is Skript's, not this plugin's, with no switch to turn it off. The
@@ -53,32 +53,32 @@ every 5 seconds:
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::now::*}:
         where all:
             id >= 1
-    log "XIAOJIE_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}% (error: %last database error%)"
+    log "SKRIPTORM_SELFTEST detail: roundtrip now -> %{orm_selftest::now::*}% (error: %last database error%)"
 
     wait 5 seconds
 
     select one entity from table "orm_roundtrip" and store the result in {orm_selftest::later::*}:
         where all:
             id >= 1
-    log "XIAOJIE_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}% (error: %last database error%)"
+    log "SKRIPTORM_SELFTEST detail: roundtrip later -> %{orm_selftest::later::*}% (error: %last database error%)"
     if {orm_selftest::later::id} is not set:
-        log "XIAOJIE_SELFTEST=FAIL roundtrip found no row even after waiting"
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip found no row even after waiting"
     if {orm_selftest::later::name} is not "Alice":
-        log "XIAOJIE_SELFTEST=FAIL roundtrip read back name '%{orm_selftest::later::name}%' instead of 'Alice'"
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip read back name '%{orm_selftest::later::name}%' instead of 'Alice'"
     if {orm_selftest::later::age} is not 30:
-        log "XIAOJIE_SELFTEST=FAIL roundtrip read back age '%{orm_selftest::later::age}%' instead of 30"
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip read back age '%{orm_selftest::later::age}%' instead of 30"
     # SkBee renders a compound as SNBT, so its text says whether the tag survived the database and the
     # crossing back into SkBee's type. A column that came back unset renders as '<none>'.
-    if "%{orm_selftest::later::data}%" does not contain "xiaojie":
-        log "XIAOJIE_SELFTEST=FAIL roundtrip read back nbt '%{orm_selftest::later::data}%' instead of a compound holding xiaojie"
+    if "%{orm_selftest::later::data}%" does not contain "skriptorm":
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip read back nbt '%{orm_selftest::later::data}%' instead of a compound holding skriptorm"
 
     # A `where` on the primary key, which does not depend on any stored value being right.
     select one entity from table "orm_roundtrip" and store the result in {_id::*}:
         where all:
             id >= 1
-    log "XIAOJIE_SELFTEST detail: roundtrip by id -> %{_id::*}% (error: %last database error%)"
+    log "SKRIPTORM_SELFTEST detail: roundtrip by id -> %{_id::*}% (error: %last database error%)"
     if {_id::id} is not set:
-        log "XIAOJIE_SELFTEST=FAIL roundtrip found no row through a where on the primary key"
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip found no row through a where on the primary key"
 
-    log "XIAOJIE_SELFTEST detail: roundtrip -> ran"
-    set {xiaojie::selftest::done::roundtrip} to true
+    log "SKRIPTORM_SELFTEST detail: roundtrip -> ran"
+    set {skriptorm::selftest::done::roundtrip} to true

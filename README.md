@@ -1,4 +1,4 @@
-# xiaojie-orm
+# skript-orm
 
 An ORM for Skript: describe a table once, then read and write rows with Skript syntax instead of
 writing SQL.
@@ -55,7 +55,7 @@ and hands results back as ordinary Skript variables and values.
 
 ## Install
 
-1. Download `xiaojieorm-<version>.jar` from the releases page, or build it yourself
+1. Download `skriptorm-<version>.jar` from the releases page, or build it yourself
    ([CONTRIBUTION.md](CONTRIBUTION.md)).
 2. Put the jar in `plugins/`, next to Skript.
 3. Start the server once, then write the connection and the table into a script and `/sk reload` it.

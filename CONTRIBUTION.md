@@ -1,8 +1,8 @@
-# Contributing to Xiaojie ORM
+# Contributing to Skript ORM
 
 [中文版](CONTRIBUTION.zh-CN.md)
 
-Xiaojie ORM is a Skript addon that exposes database operations as Skript elements. It is in early
+Skript ORM is a Skript addon that exposes database operations as Skript elements. It is in early
 development: both the public API and the internal structure may still change. Unit tests and an
 opt-in MySQL integration suite cover the current behaviour (see §8).
 
@@ -67,7 +67,7 @@ Two entries are not free to move on their own:
 Only stable Paper builds belong in the catalog. A newer line that is still published as ALPHA is not
 an upgrade.
 
-Skript's own floor is checked at runtime in `XiaojieOrm.onEnable`, not declared in `plugin.yml`: see
+Skript's own floor is checked at runtime in `SkriptOrm.onEnable`, not declared in `plugin.yml`: see
 the KDoc on `MINIMUM_SKRIPT_VERSION` for why a version-qualified `depend` entry cannot work.
 
 ---
@@ -281,7 +281,7 @@ from an omitted column. The reachable surface stops at expression evaluation, be
 value expression needs Skript's syntax registry, which only exists inside a running Skript.
 
 `MinimumSkriptVersionTest` covers no code of ours on purpose. It pins Skript's own
-`ch.njol.skript.util.Version` ordering, which the version floor in `XiaojieOrm.onEnable` depends on:
+`ch.njol.skript.util.Version` ordering, which the version floor in `SkriptOrm.onEnable` depends on:
 that floor is a single comparison, and both ways it can be wrong are invisible from this repository.
 
 **JDBC tests** (`generic-jdbc-implementation`) run the real implementation against a real MySQL
@@ -299,11 +299,11 @@ the tables they use:
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest \
-  -Pxiaojie.test.mysql.url="jdbc:mysql://localhost:3306/xiaojie_orm_test"
+  -Pskriptorm.test.mysql.url="jdbc:mysql://localhost:3306/skriptorm_test"
 ```
 
-The same settings are read from `XIAOJIE_TEST_MYSQL_URL`, `XIAOJIE_TEST_MYSQL_USERNAME`,
-`XIAOJIE_TEST_MYSQL_PASSWORD`, `XIAOJIE_TEST_MYSQL_DRIVER`, and `XIAOJIE_TEST_MYSQL_IMAGE`. When
+The same settings are read from `SKRIPTORM_TEST_MYSQL_URL`, `SKRIPTORM_TEST_MYSQL_USERNAME`,
+`SKRIPTORM_TEST_MYSQL_PASSWORD`, `SKRIPTORM_TEST_MYSQL_DRIVER`, and `SKRIPTORM_TEST_MYSQL_IMAGE`. When
 neither Docker nor an external server is available, the MySQL tests abort with a reason instead of
 passing silently.
 
@@ -343,7 +343,7 @@ compatible one.
 the element through the file it happened in. Nothing is connected to a database on purpose: every
 element is expected to stop at the database lookup and report `No database connected.` through
 `last database error`, which runs all of them for real without a database server. Each element
-logs a `XIAOJIE_SELFTEST` line, and the `serverTest` task checks those lines against the list in
+logs a `SKRIPTORM_SELFTEST` line, and the `serverTest` task checks those lines against the list in
 `build.gradle.kts`. A statement Skript cannot parse is reported and then skipped, so a pattern that
 stops registering shows up as a missing line instead of passing quietly.
 
@@ -366,7 +366,7 @@ and `eula.txt`. Writing that last file accepts the Minecraft EULA for this dispo
 is why the task and not a developer is what does it.
 
 The same element scripts also run against a database. Passing the MySQL properties the JDBC tests use
-(`-Pxiaojie.test.mysql.url`, `username`, `password`) adds `server-test/database/`: a setup script that
+(`-Pskriptorm.test.mysql.url`, `username`, `password`) adds `server-test/database/`: a setup script that
 `prepareServerTest` writes with the credentials substituted, which connects and registers a table of
 its own, and a round trip that writes a row, reads it back and compares it. The element scripts then
 run against the live connection, which is the only way to cover the value conversions inside `values`
@@ -445,7 +445,7 @@ is how the suite can be checked for execution-order problems without a database:
 
 ```bash
 ./gradlew :generic-jdbc-implementation:integrationTest \
-  -Pxiaojie.test.mysql.url="jdbc:mysql://127.0.0.1:1/xiaojie_orm_test"
+  -Pskriptorm.test.mysql.url="jdbc:mysql://127.0.0.1:1/skriptorm_test"
 ```
 
 Any failure that is not a connection error is a real defect. This is how a latent order dependency in
@@ -522,7 +522,7 @@ NPEs instead of returning nodes.
    needs a different representation.
 5. Implement `DatabaseFactory` and register it in `DatabaseRegistry` from an `init` block.
 6. Make the plugin load the factory by adding its class name to the candidate list in
-   `XiaojieOrm.onEnable()`.
+   `SkriptOrm.onEnable()`.
 
 An implementation may report an operation as unsupported, but it must not silently degrade it into a
 different operation.

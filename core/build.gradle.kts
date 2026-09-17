@@ -43,7 +43,7 @@ tasks.test {
 }
 
 // plugin.yml is the only resource this module ships, and Bukkit reports its `version` in the
-// "Enabling xiaojie-orm v..." line and to `/version`. Expanding it from the project version keeps it
+// "Enabling skript-orm v..." line and to `/version`. Expanding it from the project version keeps it
 // honest when the version is bumped in gradle.properties.
 tasks.processResources {
     filesMatching("plugin.yml") {

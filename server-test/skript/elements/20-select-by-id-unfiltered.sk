@@ -7,9 +7,9 @@
 # section spelling stays in `10-select-by-id.sk`, so both spellings keep their coverage, and this one costs
 # no empty-section warning.
 every 5 seconds:
-    if {xiaojie::selftest::done::select-by-id-unfiltered} is set:
+    if {skriptorm::selftest::done::select-by-id-unfiltered} is set:
         stop trigger
 
     select entity from table "orm_selftest" by id 1 and store the result in {_by_id::*}
-    log "XIAOJIE_SELFTEST detail: select by id unfiltered -> %last database error%"
-    set {xiaojie::selftest::done::select-by-id-unfiltered} to true
+    log "SKRIPTORM_SELFTEST detail: select by id unfiltered -> %last database error%"
+    set {skriptorm::selftest::done::select-by-id-unfiltered} to true

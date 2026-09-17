@@ -16,61 +16,61 @@
 # the table lookups this script is about, and the round trip would look like a write that stored
 # nothing.
 every 5 seconds:
-    if {xiaojie::selftest::done::connections} is set:
+    if {skriptorm::selftest::done::connections} is set:
         stop trigger
-    if {xiaojie::selftest::started::connections} is set:
+    if {skriptorm::selftest::started::connections} is set:
         stop trigger
-    if {xiaojie::selftest::done::setup} is not set:
+    if {skriptorm::selftest::done::setup} is not set:
         stop trigger
-    set {xiaojie::selftest::started::connections} to true
+    set {skriptorm::selftest::started::connections} to true
 
     create a connection named "secondary" to database "MySQL" with properties:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"
-    log "XIAOJIE_SELFTEST detail: connections create -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections create -> %last database error%"
 
     # Registering inside the scope is what proves the scope reaches table registration too.
     in connection "secondary":
         register a database table "orm_secondary":
             id: bigint, primary key, auto increment, not null
             label: string(32), nullable
-    log "XIAOJIE_SELFTEST detail: connections register -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections register -> %last database error%"
 
     in connection "secondary":
         insert one entity into table "orm_secondary" and wait:
             values:
                 label: "scoped"
-    log "XIAOJIE_SELFTEST detail: connections write -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections write -> %last database error%"
 
     # The default connection was never told about this table, so this has to fail. It is the line that
     # fails if the scope leaks into the rest of the event.
     select one entity from table "orm_secondary" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections unscoped -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections unscoped -> %last database error%"
 
     # Back inside the scope, the same statement has to succeed.
     in connection "secondary":
         select one entity from table "orm_secondary" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections scoped -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections scoped -> %last database error%"
 
     # The default connection still answers for its own table after the scope has ended.
     select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections default -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections default -> %last database error%"
 
     # Without a name, `disconnect` closes the connection in effect, which here is the scope's.
     in connection "secondary":
         disconnect
-    log "XIAOJIE_SELFTEST detail: connections disconnect -> ran"
+    log "SKRIPTORM_SELFTEST detail: connections disconnect -> ran"
 
     # The scope is over, so this resolves to the default again. Had the disconnect above closed the
     # default instead, this read would report "No database connected."
     select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections default after -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections default after -> %last database error%"
 
     # And the named connection really is gone, rather than merely being out of scope.
     in connection "secondary":
         select one entity from table "orm_secondary" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections gone -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections gone -> %last database error%"
 
     # `use connection` switches for the rest of the event. This second named connection has no tables
     # registered, so the read fails on the lookup: that failure is one the default connection could not
@@ -79,22 +79,22 @@ every 5 seconds:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"
-    log "XIAOJIE_SELFTEST detail: connections create tertiary -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections create tertiary -> %last database error%"
 
     use connection "tertiary"
     select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections used -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections used -> %last database error%"
 
     # The named form closes the connection it names, whatever a scope or a switch says.
     disconnect from connection "tertiary"
-    log "XIAOJIE_SELFTEST detail: connections named disconnect -> ran"
+    log "SKRIPTORM_SELFTEST detail: connections named disconnect -> ran"
     in connection "tertiary":
         select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
-    log "XIAOJIE_SELFTEST detail: connections tertiary gone -> %last database error%"
+    log "SKRIPTORM_SELFTEST detail: connections tertiary gone -> %last database error%"
 
     # Nothing here may close a connection this script did not create. `disconnect from all connections`
     # belongs to the disconnect element, which runs after this script for exactly that reason: the
     # default connection is the one `00-setup.sk` made, `17-roundtrip.sk` holds it across a five second
     # wait, and closing it in between makes that script's reads report "No database connected." and look
     # like a write that stored nothing.
-    set {xiaojie::selftest::done::connections} to true
+    set {skriptorm::selftest::done::connections} to true

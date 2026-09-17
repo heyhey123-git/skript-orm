@@ -5,7 +5,7 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::insert-one-from-variable} is set:
+    if {skriptorm::selftest::done::insert-one-from-variable} is set:
         stop trigger
 
     set {_row::name} to "Alice"
@@ -14,5 +14,5 @@ every 5 seconds:
     # spelling the documentation shows. `21-insert-one-nocolon.sk` is the same statement written the
     # other way round.
     insert one {_row::*} into table "orm_selftest" and wait
-    log "XIAOJIE_SELFTEST detail: insert one from variable -> %last database error%"
-    set {xiaojie::selftest::done::insert-one-from-variable} to true
+    log "SKRIPTORM_SELFTEST detail: insert one from variable -> %last database error%"
+    set {skriptorm::selftest::done::insert-one-from-variable} to true

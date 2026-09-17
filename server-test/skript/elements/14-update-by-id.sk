@@ -5,12 +5,12 @@
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
 every 5 seconds:
-    if {xiaojie::selftest::done::update-by-id} is set:
+    if {skriptorm::selftest::done::update-by-id} is set:
         stop trigger
 
     set {_age} to 1 + 1
     update one entity in table "orm_selftest" by id 1 and wait:
         values:
             age: {_age}
-    log "XIAOJIE_SELFTEST detail: update by id -> %last database error%"
-    set {xiaojie::selftest::done::update-by-id} to true
+    log "SKRIPTORM_SELFTEST detail: update by id -> %last database error%"
+    set {skriptorm::selftest::done::update-by-id} to true

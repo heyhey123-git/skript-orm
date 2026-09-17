@@ -3,9 +3,9 @@
 # No colon on purpose: this form never had a body to give, and Skript warns about every section that has
 # none. The section spelling stays in `12-delete-by-id.sk`, so both keep their coverage.
 every 5 seconds:
-    if {xiaojie::selftest::done::delete-by-id-nocolon} is set:
+    if {skriptorm::selftest::done::delete-by-id-nocolon} is set:
         stop trigger
 
     delete one entity from table "orm_selftest" by id 1 and wait
-    log "XIAOJIE_SELFTEST detail: delete by id without colon -> %last database error%"
-    set {xiaojie::selftest::done::delete-by-id-nocolon} to true
+    log "SKRIPTORM_SELFTEST detail: delete by id without colon -> %last database error%"
+    set {skriptorm::selftest::done::delete-by-id-nocolon} to true

@@ -58,11 +58,11 @@ val integrationTest by tasks.registering(Test::class) {
     // started before the environment was set, which is what makes a CI job deterministic. `-D` and
     // the environment variables stay available for local runs.
     listOf(
-        "xiaojie.test.mysql.url" to "XIAOJIE_TEST_MYSQL_URL",
-        "xiaojie.test.mysql.username" to "XIAOJIE_TEST_MYSQL_USERNAME",
-        "xiaojie.test.mysql.password" to "XIAOJIE_TEST_MYSQL_PASSWORD",
-        "xiaojie.test.mysql.driver" to "XIAOJIE_TEST_MYSQL_DRIVER",
-        "xiaojie.test.mysql.image" to "XIAOJIE_TEST_MYSQL_IMAGE"
+        "skriptorm.test.mysql.url" to "SKRIPTORM_TEST_MYSQL_URL",
+        "skriptorm.test.mysql.username" to "SKRIPTORM_TEST_MYSQL_USERNAME",
+        "skriptorm.test.mysql.password" to "SKRIPTORM_TEST_MYSQL_PASSWORD",
+        "skriptorm.test.mysql.driver" to "SKRIPTORM_TEST_MYSQL_DRIVER",
+        "skriptorm.test.mysql.image" to "SKRIPTORM_TEST_MYSQL_IMAGE"
     ).forEach { (property, environmentVariable) ->
         val value = providers.gradleProperty(property).orNull
             ?: providers.systemProperty(property).orNull

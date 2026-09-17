@@ -74,7 +74,7 @@ jobs:
 
       - name: Check the jar agrees with the version
         run: |
-          jar="build/dist/xiaojieorm-${{ steps.version.outputs.version }}.jar"
+          jar="build/dist/skriptorm-${{ steps.version.outputs.version }}.jar"
           if [ ! -f "$jar" ]; then
             echo "::error::no $jar was produced, so the jar and gradle.properties disagree."
             ls -l build/dist
@@ -85,8 +85,8 @@ jobs:
       - name: Publish the release
         run: |
           gh release create "v${{ steps.version.outputs.version }}" \
-            "build/dist/xiaojieorm-${{ steps.version.outputs.version }}.jar" \
-            "build/dist/xiaojieorm-${{ steps.version.outputs.version }}.jar.sha256" \
+            "build/dist/skriptorm-${{ steps.version.outputs.version }}.jar" \
+            "build/dist/skriptorm-${{ steps.version.outputs.version }}.jar.sha256" \
             --target "$GITHUB_SHA" \
             --title "v${{ steps.version.outputs.version }}" \
             --generate-notes
@@ -99,6 +99,6 @@ jobs:
             echo "| | |"
             echo "| --- | --- |"
             echo "| Commit | \`$GITHUB_SHA\` |"
-            echo "| Jar | \`xiaojieorm-${{ steps.version.outputs.version }}.jar\` |"
+            echo "| Jar | \`skriptorm-${{ steps.version.outputs.version }}.jar\` |"
             echo "| Release | https://github.com/$GITHUB_REPOSITORY/releases/tag/v${{ steps.version.outputs.version }} |"
           } >> "$GITHUB_STEP_SUMMARY"

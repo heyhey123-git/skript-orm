@@ -1,6 +1,6 @@
 # Finishes the run, or fails it.
 #
-# Each script records itself in {xiaojie::selftest::done::*} once its detail line is in the log, so
+# Each script records itself in {skriptorm::selftest::done::*} once its detail line is in the log, so
 # this stops the server as soon as they have all reported. Its second trigger is what turns a hung run
 # into a failing one, and it uses no addon syntax, so it also runs when the addon is the thing that
 # broke.
@@ -10,10 +10,10 @@
 # is still reported rather than hidden: the failure line says how many arrived.
 
 every 5 seconds:
-    if size of {xiaojie::selftest::done::*} is __ELEMENT_COUNT__:
-        log "XIAOJIE_SELFTEST=PASS"
+    if size of {skriptorm::selftest::done::*} is __ELEMENT_COUNT__:
+        log "SKRIPTORM_SELFTEST=PASS"
         stop the server
 
 every 30 seconds:
-    log "XIAOJIE_SELFTEST=FAIL the self-test did not finish: %size of {xiaojie::selftest::done::*}% of __ELEMENT_COUNT__ elements reported"
+    log "SKRIPTORM_SELFTEST=FAIL the self-test did not finish: %size of {skriptorm::selftest::done::*}% of __ELEMENT_COUNT__ elements reported"
     stop the server
