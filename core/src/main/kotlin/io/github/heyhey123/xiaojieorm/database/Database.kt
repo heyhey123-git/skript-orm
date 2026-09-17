@@ -52,10 +52,10 @@ abstract class Database {
          * hangs `disconnect`, and with it server shutdown, because the plugin's own disable runs
          * `shutdown` while the main thread waits for it.
          *
-         * An implementation that knows its own limits overrides [Database.drainTimeout] rather than
+         * An implementation that knows its own limits overrides [Database.closeWaitTimeout] rather than
          * leaving this value to cover operations it knows can run longer.
          */
-        val DEFAULT_DRAIN_TIMEOUT: Duration = Duration.ofSeconds(30)
+        val DEFAULT_CLOSE_WAIT_TIMEOUT: Duration = Duration.ofSeconds(30)
 
         /**
          * Where the lifecycle says what it had to do to finish, installed by the plugin when it enables.
@@ -336,8 +336,8 @@ abstract class Database {
      * Longer than the slowest operation it can legitimately be running, so that work which is about to
      * finish is not killed by a shutdown. An implementation with its own statement timeout says so here.
      */
-    open val drainTimeout: Duration
-        get() = DEFAULT_DRAIN_TIMEOUT
+    open val closeWaitTimeout: Duration
+        get() = DEFAULT_CLOSE_WAIT_TIMEOUT
 
     private var disconnectCompletion: CompletableDeferred<Unit>? = null
     private var activeOperations: Int = 0
@@ -549,7 +549,7 @@ abstract class Database {
         if (waiter == null) return
         val outstanding = lifecycleMutex.withLock { activeOperations }
         try {
-            withTimeout(drainTimeout.toMillis()) {
+            withTimeout(closeWaitTimeout.toMillis()) {
                 waiter.await()
             }
         } catch (_: TimeoutCancellationException) {

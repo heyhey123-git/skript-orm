@@ -726,7 +726,7 @@ class DatabaseLifecycleTest {
 
         val warnings = CopyOnWriteArrayList<String>()
         Database.warn = { message -> warnings += message }
-        database.drainTimeout = Duration.ofMillis(100)
+        database.closeWaitTimeout = Duration.ofMillis(100)
 
         withTimeout(GATE_TIMEOUT_SECONDS * 1000) { database.disconnect() }
 
@@ -802,7 +802,7 @@ private class ControllableDatabase(private val label: String) : Database() {
     override val dataTypes: DataTypes = NoDataTypes
 
     /** Settable so the test that cannot drain does not wait the production default out. */
-    override var drainTimeout: Duration = DEFAULT_DRAIN_TIMEOUT
+    override var closeWaitTimeout: Duration = DEFAULT_CLOSE_WAIT_TIMEOUT
 
     val connectEntered = CountDownLatch(1)
     val disconnectEntered = CountDownLatch(1)

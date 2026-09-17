@@ -76,11 +76,11 @@ open class JdbcDatabase(
      * Longer than a statement may take, so that a statement which is about to time out on its own does:
      * it fails, releases its lease, and the disconnect it interrupted goes on to close the pool as usual.
      */
-    override val drainTimeout: Duration
+    override val closeWaitTimeout: Duration
         get() = if (statementTimeoutSeconds > 0) {
             Duration.ofSeconds(statementTimeoutSeconds.toLong() + DRAIN_MARGIN_SECONDS)
         } else {
-            DEFAULT_DRAIN_TIMEOUT
+            DEFAULT_CLOSE_WAIT_TIMEOUT
         }
 
     override fun doConnect(settings: ConnectionSettings) {
