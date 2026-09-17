@@ -1,4 +1,5 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.net.URI
 import java.nio.file.Files
@@ -615,6 +616,9 @@ abstract class DownloadFile : DefaultTask() {
  * lost a pattern, an example that would show an empty first line, or a version that disagrees with
  * `gradle.properties` would otherwise reach SkriptHub unnoticed. It is the server test's log check one
  * layer up.
+ *
+ * What is written out is that document with the blank lines around every example taken off; see
+ * [withoutBlankEdges] for why the tool's copy carries them.
  */
 abstract class CollectGendocs : DefaultTask() {
 
@@ -701,12 +705,53 @@ abstract class CollectGendocs : DefaultTask() {
 
         val target = destination.get().asFile
         target.parentFile.mkdirs()
-        target.writeText(source.readText())
+        target.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(withoutBlankEdges(document))))
         logger.lifecycle(
             "{} entries written to {}, ready for SkriptHub's JSON import.",
             entries.size,
             target.relativeTo(project.projectDir)
         )
+    }
+
+    /**
+     * The document with the blank lines around every example taken off.
+     *
+     * An `@Example` written as a raw string carries the newline after its opening quotes and the one
+     * before its closing quotes, because those closing quotes sit on a line of their own — which is how
+     * every example here is written, and what keeps the Skript lines at column zero instead of indented
+     * along with the annotation. Neither newline means anything to SkriptHub, which shows each as an
+     * empty first or last line of the example, so both ends are taken off here. The opening one is no
+     * longer written by the annotations, and the check above keeps it that way.
+     */
+    private fun withoutBlankEdges(document: Map<String, Any?>): Map<String, Any?> {
+        val trimmedDocument = LinkedHashMap<String, Any?>(document.size)
+        document.forEach { (key, value) ->
+            val entries = value as? List<*>
+            if (entries == null) {
+                trimmedDocument[key] = value
+                return@forEach
+            }
+            trimmedDocument[key] = entries.map { entry ->
+                val fields = entry as? Map<*, *> ?: return@map entry
+                val trimmedFields = LinkedHashMap<Any?, Any?>(fields.size)
+                fields.forEach { (field, fieldValue) ->
+                    val examples = if (field == "examples") fieldValue as? List<*> else null
+                    trimmedFields[field] = examples
+                        ?.map { example -> trimBlankEdges(example.toString()) }
+                        ?: fieldValue
+                }
+                trimmedFields
+            }
+        }
+        return trimmedDocument
+    }
+
+    /** [example] without blank lines at either end, keeping the indentation of the lines it has. */
+    private fun trimBlankEdges(example: String): String {
+        val lines = example.split("\n").toMutableList()
+        while (lines.size > 1 && lines.first().isBlank()) lines.removeAt(0)
+        while (lines.size > 1 && lines.last().isBlank()) lines.removeAt(lines.size - 1)
+        return lines.joinToString("\n")
     }
 }
 
