@@ -555,9 +555,10 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 // SkriptHub reads an addon's syntax from a JSON file that SkriptHubDocsTool generates on a running
 // server, and its dashboard imports that file with a paste. `./gradlew gendocs` does the whole thing
 // locally: it builds the jar, boots a disposable Paper server carrying Skript, this plugin and the
-// tool, has that server generate the documentation, and writes the result where the repository keeps
-// it. None of it belongs in CI — the upload is a person pasting text — so the tool's version is
-// pinned here rather than tracked.
+// tool, has that server generate the documentation, and leaves the result in `build/skripthub/`. It is
+// a build output rather than a tracked file, because the annotations are the source and this is only
+// what they generate. Nothing here belongs in CI either: the upload is a person pasting text, so the
+// tool's version is pinned instead of floating.
 // ---------------------------------------------------------------------------------------------
 
 // SkriptHubDocsTool 1.17 wants Skript 2.15 or newer, and the server below carries the Skript this
@@ -587,6 +588,13 @@ abstract class DownloadFile : DefaultTask() {
     @TaskAction
     fun download() {
         val file = target.get().asFile
+        // The version is part of the name, so a file that is already here is the file this url names:
+        // asking the network again for something it has already delivered is wasted, and on a machine
+        // where the download is slow or blocked it is the difference between working and not.
+        if (file.isFile && file.length() > 0L) {
+            logger.lifecycle("{} is already downloaded.", file.name)
+            return
+        }
         file.parentFile.mkdirs()
         // Downloaded beside the real name and then moved onto it, so an interrupted transfer is never
         // taken for the complete file by the next run.
@@ -601,7 +609,7 @@ abstract class DownloadFile : DefaultTask() {
 }
 
 /**
- * Checks the JSON the documentation tool wrote, and copies it into the repository.
+ * Checks the JSON the documentation tool wrote, and copies it out of the run directory.
  *
  * The file is generated from the annotations, so it is checked rather than trusted: an element that
  * lost a pattern, an example that would show an empty first line, or a version that disagrees with
@@ -614,7 +622,7 @@ abstract class CollectGendocs : DefaultTask() {
     @get:InputFile
     abstract val generated: RegularFileProperty
 
-    /** Where the repository keeps the file that is pasted into SkriptHub. */
+    /** Where the generated file is left, for a person to paste into SkriptHub. */
     @get:OutputFile
     abstract val destination: RegularFileProperty
 
@@ -792,7 +800,7 @@ val gendocs by tasks.registering(CollectGendocs::class) {
             directory.file("plugins/SkriptHubDocsTool/documentation/skript-orm.json")
         }
     )
-    destination.set(layout.projectDirectory.file("docs/skripthub/skript-orm.json"))
+    destination.set(layout.buildDirectory.file("skripthub/skript-orm.json"))
     expectedVersion.set(version.toString())
 }
 
