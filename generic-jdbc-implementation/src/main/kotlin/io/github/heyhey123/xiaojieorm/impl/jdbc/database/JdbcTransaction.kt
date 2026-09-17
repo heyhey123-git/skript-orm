@@ -26,12 +26,14 @@ class JdbcTransaction(
      * cursor that ends inside this transaction releases its result set and its statement and leaves the
      * connection alone.
      *
-     * The statement timeout the source imposes is the transaction's own. A statement that hangs cannot
-     * be interrupted by a rollback, because rolling back waits for the statement running on the same
-     * connection, so the statement has to be the thing that gives up first.
+     * The statement timeout the source answers with is what is left until this transaction's deadline,
+     * not the whole timeout: a statement starting at second 29 of a 30 second transaction must not be
+     * given another 30. A statement that hangs cannot be interrupted by a rollback either, because
+     * rolling back waits for the statement running on the same connection, so the statement has to be
+     * the thing that gives up first.
      */
     override val queries: Queries = JdbcQueries(
-        PinnedConnectionSource(connection, statementTimeoutSeconds = statementTimeoutSeconds(timeout)),
+        PinnedConnectionSource(connection, deadlineNanos = System.nanoTime() + timeout.toNanos()),
         dialect
     )
 
@@ -68,12 +70,5 @@ class JdbcTransaction(
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
         failure?.let { throw it }
-    }
-
-    private companion object {
-
-        /** The transaction's own deadline, in whole seconds, as a floor of one. */
-        fun statementTimeoutSeconds(timeout: Duration): Int =
-            timeout.toSeconds().coerceIn(1L, Int.MAX_VALUE.toLong()).toInt()
     }
 }

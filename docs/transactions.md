@@ -95,6 +95,10 @@ When it expires, the transaction is rolled back and the next statement inside it
 write a long `wait` inside a transaction: it holds a connection and any row locks the body has taken
 while it waits.
 
+A statement inside a transaction is not given the whole timeout but what is left of it, so the last
+statement cannot outlive the transaction by another full timeout. The connection's own
+[statement timeout](connections.md) still applies underneath: a statement gets the shorter of the two.
+
 ## What it does not do
 
 - **It is not a lock.** A transaction decides whether a group of statements happens at all. Two scripts

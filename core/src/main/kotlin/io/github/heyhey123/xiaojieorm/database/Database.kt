@@ -49,14 +49,13 @@ abstract class Database {
          * it is a wait on someone else's code: a statement whose timeout the driver ignores, a `commit`
          * waiting on a lock, or a `CREATE TABLE` waiting on a metadata lock, which MySQL bounds by
          * `lock_wait_timeout` and whose default is a year. Without a bound of our own, one such operation
-         * is enough to hang `disconnect`, and with it server shutdown, since the plugin's own disable
-         * runs `shutdown` while the main thread waits for it.
+         * hangs `disconnect`, and with it server shutdown, because the plugin's own disable runs
+         * `shutdown` while the main thread waits for it.
          *
-         * It should be longer than the slowest operation a script can legitimately start, and longer than
-         * a statement timeout once there is one; the value only costs anything when something is already
-         * stuck. Mutable so a test can shorten it.
+         * An implementation that knows its own limits overrides [Database.drainTimeout] rather than
+         * leaving this value to cover operations it knows can run longer.
          */
-        internal var drainTimeout: Duration = Duration.ofSeconds(30)
+        val DEFAULT_DRAIN_TIMEOUT: Duration = Duration.ofSeconds(30)
 
         /**
          * Where the lifecycle says what it had to do to finish, installed by the plugin when it enables.
@@ -331,6 +330,15 @@ abstract class Database {
     /** Data types supported by this database. */
     abstract val dataTypes: DataTypes
 
+    /**
+     * How long this database's disconnect waits for operations that hold a lease before closing anyway.
+     *
+     * Longer than the slowest operation it can legitimately be running, so that work which is about to
+     * finish is not killed by a shutdown. An implementation with its own statement timeout says so here.
+     */
+    open val drainTimeout: Duration
+        get() = DEFAULT_DRAIN_TIMEOUT
+
     private var disconnectCompletion: CompletableDeferred<Unit>? = null
     private var activeOperations: Int = 0
     private var operationsDrained: CompletableDeferred<Unit>? = null
@@ -463,8 +471,18 @@ abstract class Database {
     }
 
     private suspend fun disconnectInternal() {
+        // Three answers this method gets under the lifecycle lock and acts on outside it. None of them can
+        // be a field: a second caller arriving mid-disconnect reads the field, while these carry what this
+        // call found. None of the waiting may happen while the lock is held either, because the code that
+        // completes a deferred takes that same lock.
+
+        /** Another disconnect is already running, so this caller waits for it instead of closing twice. */
         var existingDisconnect: CompletableDeferred<Unit>? = null
+
+        /** Non-null when operations held a lease as this disconnect began; completed when the last ends. */
         var operationWaiter: CompletableDeferred<Unit>? = null
+
+        /** Completed when this disconnect has finished, whichever way it went, to release the waiters. */
         var completion: CompletableDeferred<Unit>? = null
 
         lifecycleMutex.withLock {

@@ -95,6 +95,31 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
         )
     }
 
+    /**
+     * A property an implementation does not know is passed through and ignored, so a name written with
+     * different spacing has to mean the same property rather than become a second one that nothing reads.
+     */
+    @Test
+    fun `extra spaces inside a property name do not make it a different property`() {
+        val section = section(
+            """
+            create a connection to database "MySQL" with properties:
+            ${TAB}url: "jdbc:mysql://localhost:3306/mydb"
+            ${TAB}statement   timeout: 5
+            """.trimIndent()
+        )
+
+        assertEquals(
+            mapOf(
+                "url" to "jdbc:mysql://localhost:3306/mydb",
+                "username" to "",
+                "password" to "",
+                "statement timeout" to "5"
+            ),
+            ConnectionPropertiesParser.collectFrom(section)
+        )
+    }
+
     @Test
     fun `a body without a url is rejected`() {
         val section = section(

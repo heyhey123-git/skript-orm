@@ -163,6 +163,32 @@ anyone who can read the script file or run `/sk` commands that print syntax. Two
 - Keep the connections in their own script, so the file that holds the credentials is the file you
   think about when you set permissions.
 
+## Statement timeout
+
+Every statement gets **30 seconds**. Change it per connection:
+
+```sk
+create a connection to database "MySQL" with properties:
+    url: "jdbc:mysql://localhost:3306/mydb"
+    username: "root"
+    password: "123456"
+    statement timeout: 15
+```
+
+- `0` means no limit, which is what the driver does by default: wait as long as it takes.
+- The timeout exists because one statement that never finishes holds one of the pool's connections until
+  the server is restarted, and there is nothing else that would end it.
+- What it guarantees is that the script stops waiting, not that the server stopped working: the driver
+  cancels the statement, and MySQL does that by killing the query from another connection.
+- It covers one statement. Waiting for a free connection, and `commit`/`rollback` waiting on a lock, are
+  not covered by it; those are bounded by the server's own limits and by `socketTimeout` in the url.
+- MySQL's `innodb_lock_wait_timeout` defaults to 50 seconds, longer than this, so a statement waiting on
+  a lock is cancelled by this timeout first and reports a timeout rather than a lock wait. Raise this
+  value past 50 if you would rather read MySQL's own message.
+
+Inside a transaction, a statement gets what is left of the transaction's own timeout instead; see
+[Transactions](transactions.md).
+
 ## Several operations at once
 
 A connection keeps a small pool of database connections, so operations do not have to queue behind each

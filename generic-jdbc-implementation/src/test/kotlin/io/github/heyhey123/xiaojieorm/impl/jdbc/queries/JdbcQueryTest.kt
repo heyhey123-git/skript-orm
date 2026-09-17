@@ -15,11 +15,13 @@ import java.sql.Connection
 import java.sql.JDBCType
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLTimeoutException
 import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class JdbcQueryTest {
 
@@ -53,38 +55,56 @@ class JdbcQueryTest {
     }
 
     @Test
-    fun `statement timeout validates and applies only positive values`() {
+    fun `the timeout the connection source asks for is applied to the statement`() {
         val statement = mockk<PreparedStatement>(relaxed = true)
-        TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = 0).configureStatement(statement)
-        verify(exactly = 0) { statement.queryTimeout = any() }
+        val source = PooledConnectionSource(mockk(relaxed = true), timeoutSeconds = 4)
 
-        TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = 9).configureStatement(statement)
-        verify(exactly = 1) { statement.queryTimeout = 9 }
+        val applied = TestJdbcQuery(source).configureStatement(statement)
+
+        assertEquals(4, applied)
+        verify { statement.queryTimeout = 4 }
+    }
+
+    @Test
+    fun `a source that asks for no timeout leaves the driver's default alone`() {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+
+        val applied = TestJdbcQuery(PooledConnectionSource(mockk(relaxed = true))).configureStatement(statement)
+
+        assertEquals(0, applied)
+        verify(exactly = 0) { statement.queryTimeout = any() }
+    }
+
+    @Test
+    fun `a negative timeout from a source is rejected`() {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val source = PooledConnectionSource(mockk(relaxed = true), timeoutSeconds = -1)
 
         assertFailsWith<IllegalArgumentException> {
-            TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = -1)
-                .configureStatement(statement)
+            TestJdbcQuery(source).configureStatement(statement)
         }
     }
 
+    /**
+     * What the driver throws says only that the statement was cancelled. The script author needs the two
+     * things it does not say: how long the statement was given, and that the connection is still usable.
+     */
     @Test
-    fun `the connection source can impose a shorter statement timeout than the query asks for`() {
+    fun `a cancelled statement says how long it was given`() {
+        val connection = mockk<Connection>(relaxed = true)
         val statement = mockk<PreparedStatement>(relaxed = true)
-        val source = PooledConnectionSource(mockk(relaxed = true), statementTimeoutSeconds = 4)
+        val dataSource = mockk<DataSource>()
+        every { dataSource.connection } returns connection
+        val source = PooledConnectionSource(dataSource, timeoutSeconds = 30)
+        every { connection.prepareStatement(any()) } returns statement
+        every { statement.executeQuery() } throws SQLTimeoutException("Statement cancelled", "HYT00", 0)
 
-        TestJdbcQuery(source, queryTimeoutSeconds = 30).configureStatement(statement)
+        val thrown = assertFailsWith<SQLTimeoutException> {
+            runBlocking { TestJdbcQuery(source).executeCursor("SELECT") {} }
+        }
 
-        verify { statement.queryTimeout = 4 }
-    }
-
-    @Test
-    fun `a query without a timeout takes the one its source imposes`() {
-        val statement = mockk<PreparedStatement>(relaxed = true)
-        val source = PooledConnectionSource(mockk(relaxed = true), statementTimeoutSeconds = 4)
-
-        TestJdbcQuery(source).configureStatement(statement)
-
-        verify { statement.queryTimeout = 4 }
+        assertTrue("did not finish within 30 second(s)" in (thrown.message ?: ""), thrown.message ?: "")
+        assertTrue("still usable" in (thrown.message ?: ""), thrown.message ?: "")
     }
 
     @Test
@@ -194,7 +214,7 @@ class JdbcQueryTest {
         val connection = mockk<Connection>(relaxed = true)
         every { connection.prepareStatement("SELECT") } returns statement
         every { statement.executeQuery() } returns resultSet
-        val source = PinnedConnectionSource(connection)
+        val source = PinnedConnectionSource(connection, deadlineNanos = deadlineIn(30))
         val query = TestJdbcQuery(source)
 
         assertSame(connection, source.borrow())
@@ -207,19 +227,36 @@ class JdbcQueryTest {
         verify(exactly = 0) { connection.close() }
     }
 
+    /**
+     * A transaction's timeout is a deadline, not a duration: the statement is given what is left of it,
+     * so the last statement of a transaction cannot outlive the transaction by a whole timeout.
+     */
+    @Test
+    fun `a pinned source answers with what is left of its deadline`() {
+        val connection = mockk<Connection>(relaxed = true)
+        val withinThirtySeconds = PinnedConnectionSource(connection, deadlineNanos = deadlineIn(30))
+        val alreadyPast = PinnedConnectionSource(connection, deadlineNanos = System.nanoTime() - 1)
+
+        assertTrue(withinThirtySeconds.statementTimeoutSeconds() in 29..30)
+        // Nothing left is still one second: a statement that started too late has to give up rather than
+        // run without a bound, which is what lets the transaction's rollback proceed.
+        assertEquals(1, alreadyPast.statementTimeoutSeconds())
+    }
+
     @Test
     fun `a pinned source releases a borrowed connection without closing it`() {
         val connection = mockk<Connection>(relaxed = true)
-        val source = PinnedConnectionSource(connection)
+        val source = PinnedConnectionSource(connection, deadlineNanos = deadlineIn(30))
 
         source.release(connection)
 
         verify(exactly = 0) { connection.close() }
     }
 
+    private fun deadlineIn(seconds: Long): Long = System.nanoTime() + seconds * 1_000_000_000L
+
     private class TestJdbcQuery(
         override val connectionSource: JdbcConnectionSource,
-        override val queryTimeoutSeconds: Int = 0,
         override val dialect: JdbcDialect = GenericJdbcDialect
     ) : JdbcQuery
 }

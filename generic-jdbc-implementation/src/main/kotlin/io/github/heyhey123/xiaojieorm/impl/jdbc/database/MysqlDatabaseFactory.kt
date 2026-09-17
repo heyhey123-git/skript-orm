@@ -25,6 +25,9 @@ object MysqlDatabaseFactory : DatabaseFactory {
     override val typeName: String
         get() = "MySQL"
 
-    override fun create(properties: Map<String, String>) =
-        JdbcDatabase(driverName, MysqlJdbcDialect)
+    override fun create(properties: Map<String, String>) = JdbcDatabase(
+        driverName,
+        MysqlJdbcDialect,
+        JdbcDatabase.statementTimeoutSeconds(properties)
+    )
 }

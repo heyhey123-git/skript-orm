@@ -20,6 +20,9 @@ object ConnectionPropertiesParser {
 
     private const val URL = "url"
 
+    /** Runs of whitespace inside a property name, collapsed so that spacing cannot hide a property. */
+    private val WHITESPACE = Regex("\\s+")
+
     /** The properties a connection always reads, so that no caller has to check for them. */
     private val CONNECTION_PROPERTIES = listOf(URL, "username", "password")
 
@@ -31,6 +34,10 @@ object ConnectionPropertiesParser {
      * credentials wants, so a body only needs the properties it actually sets. Any other property is
      * passed through to the implementation.
      *
+     * A name is trimmed and its inner runs of whitespace are collapsed to one space, so that
+     * `statement  timeout` and `statement timeout` are the same property. Anything else would be
+     * ignored silently, since an implementation only looks up the names it knows.
+     *
      * @param section the body of the section
      * @return every connection property, plus every extra property the body declares
      * @throws IllegalArgumentException if a property is a block, is malformed, or is declared without
@@ -40,7 +47,7 @@ object ConnectionPropertiesParser {
         val declared = linkedMapOf<String, String>()
         for (node in section) {
             val line = requireNotNull(node.key) { "A connection property cannot be empty." }
-            val name = line.substringBefore(':').trim()
+            val name = line.substringBefore(':').trim().replace(WHITESPACE, " ")
             // A property written without a value ends its line with a colon, which is what turns it
             // into a section node, empty or not.
             if (node is SectionNode) {

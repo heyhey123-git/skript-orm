@@ -33,6 +33,7 @@ open class JdbcInsertMany(
         try {
             return connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
+                    val timeout = configureStatement(statement)
                     valuesList.forEach { row ->
                         columns.forEachIndexed { index, key ->
                             val column = requireNotNull(table.getColumnByName(key)) {
@@ -43,7 +44,7 @@ open class JdbcInsertMany(
                         statement.addBatch()
                     }
 
-                    val counts = statement.executeLargeBatch()
+                    val counts = executeWithTimeoutReported(timeout) { statement.executeLargeBatch() }
                     var affected = 0L
                     var countExact = true
                     counts.forEach { count ->

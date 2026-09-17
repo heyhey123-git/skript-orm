@@ -21,6 +21,10 @@ every 1 second:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"
+        # A property the implementation reads, set to something other than the default so a bad value
+        # would fail the connection here. It is generous enough not to meet any statement this run
+        # makes, and it is the same property a script would raise for a query that needs longer.
+        statement timeout: 20
     if last database error is set:
         log "XIAOJIE_SELFTEST=FAIL setup connection: %last database error%"
 

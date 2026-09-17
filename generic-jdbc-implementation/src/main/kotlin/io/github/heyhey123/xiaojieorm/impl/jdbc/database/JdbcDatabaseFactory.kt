@@ -15,6 +15,6 @@ object JdbcDatabaseFactory : DatabaseFactory {
     override fun create(properties: Map<String, String>): JdbcDatabase {
         val driver = properties["driver"]
             ?: throw IllegalArgumentException("JDBC driver class name must be provided in properties with key 'driver'")
-        return JdbcDatabase(driver, GenericJdbcDialect)
+        return JdbcDatabase(driver, GenericJdbcDialect, JdbcDatabase.statementTimeoutSeconds(properties))
     }
 }

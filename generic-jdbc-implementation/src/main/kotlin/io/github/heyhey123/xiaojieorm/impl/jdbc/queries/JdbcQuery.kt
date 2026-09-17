@@ -8,6 +8,7 @@ import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.PreparedStatement
+import java.sql.SQLTimeoutException
 
 /**
  * Shared blocking JDBC execution boundary; `suspend` methods do not switch dispatchers.
@@ -22,13 +23,6 @@ interface JdbcQuery {
 
     val connectionSource: JdbcConnectionSource
     val dialect: JdbcDialect
-
-    /**
-     * Statement timeout in seconds for the statements this query builds. Zero leaves the driver's
-     * default unchanged; negative values are rejected when a statement is configured.
-     */
-    val queryTimeoutSeconds: Int
-        get() = 0
 
     /**
      * Binds [where] from the 1-based [startIndex] and returns the next free parameter index.
@@ -46,26 +40,18 @@ interface JdbcQuery {
     }
 
     /**
-     * The timeout actually applied: the shorter of what the query asks for and what the connection
-     * source imposes.
+     * Applies the statement timeout the connection source asks for, and returns it so that a statement
+     * cancelled by it can say how long it was given.
      *
-     * A transaction uses the second to bound statements it cannot otherwise interrupt, because rolling
-     * a transaction back waits for the statement running on its connection.
+     * Zero leaves the driver's default alone, which is what a connection with no timeout wants. A
+     * negative value is a mistake in the source rather than something a script did, so it is rejected
+     * here instead of being passed to the driver.
      */
-    fun effectiveTimeoutSeconds(): Int {
-        val own = queryTimeoutSeconds
-        val imposed = connectionSource.statementTimeoutSeconds
-        require(own >= 0 && imposed >= 0) { "JDBC query timeout must not be negative." }
-        return when {
-            own == 0 -> imposed
-            imposed == 0 -> own
-            else -> minOf(own, imposed)
-        }
-    }
-
-    fun configureStatement(statement: PreparedStatement) {
-        val seconds = effectiveTimeoutSeconds()
+    fun configureStatement(statement: PreparedStatement): Int {
+        val seconds = connectionSource.statementTimeoutSeconds()
+        require(seconds >= 0) { "JDBC statement timeout must not be negative." }
         if (seconds > 0) statement.queryTimeout = seconds
+        return seconds
     }
 
     suspend fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult {
@@ -73,9 +59,11 @@ interface JdbcQuery {
         try {
             return connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
-                    configureStatement(statement)
+                    val timeout = configureStatement(statement)
                     bind(statement)
-                    WriteResult(statement.executeLargeUpdate())
+                    WriteResult(
+                        executeWithTimeoutReported(timeout) { statement.executeLargeUpdate() }
+                    )
                 }
             }
         } finally {
@@ -88,9 +76,9 @@ interface JdbcQuery {
         try {
             val statement = connection.prepareStatement(sql)
             try {
-                configureStatement(statement)
+                val timeout = configureStatement(statement)
                 bind(statement)
-                val resultSet = statement.executeQuery()
+                val resultSet = executeWithTimeoutReported(timeout) { statement.executeQuery() }
                 return CursorResult(
                     JdbcDataCursor(
                         resultSet = resultSet,
@@ -119,6 +107,29 @@ interface JdbcQuery {
                 error.addSuppressed(cleanupError)
             }
             throw error
+        }
+    }
+
+    /**
+     * Runs [block], turning the driver's cancellation into something a script author can act on.
+     *
+     * What the driver throws says only that the statement was cancelled; the two things worth knowing
+     * are how long it was given and that the connection is still usable afterwards, since the script's
+     * next statement will be sent on it.
+     */
+    fun <T> executeWithTimeoutReported(seconds: Int, block: () -> T): T {
+        if (seconds <= 0) return block()
+        return try {
+            block()
+        } catch (error: SQLTimeoutException) {
+            throw SQLTimeoutException(
+                "The statement did not finish within $seconds second(s) and was cancelled. " +
+                    "The connection is still usable; raise 'statement timeout' on it if this kind of " +
+                    "statement legitimately needs longer.",
+                error.sqlState,
+                error.errorCode,
+                error
+            )
         }
     }
 }

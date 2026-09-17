@@ -726,7 +726,7 @@ class DatabaseLifecycleTest {
 
         val warnings = CopyOnWriteArrayList<String>()
         Database.warn = { message -> warnings += message }
-        Database.drainTimeout = Duration.ofMillis(100)
+        database.drainTimeout = Duration.ofMillis(100)
 
         withTimeout(GATE_TIMEOUT_SECONDS * 1000) { database.disconnect() }
 
@@ -766,8 +766,7 @@ class DatabaseLifecycleTest {
         // does not mean nothing is registered.
         Database.shutdown()
         Database.beginLifecycle()
-        // Both are process-global, so a test that changes one has to put it back.
-        Database.drainTimeout = Duration.ofSeconds(30)
+        // Process-global, so a test that installs one has to remove it again.
         Database.warn = {}
     }
 }
@@ -801,6 +800,9 @@ private fun awaitUntil(description: String, condition: () -> Boolean) {
 private class ControllableDatabase(private val label: String) : Database() {
 
     override val dataTypes: DataTypes = NoDataTypes
+
+    /** Settable so the test that cannot drain does not wait the production default out. */
+    override var drainTimeout: Duration = DEFAULT_DRAIN_TIMEOUT
 
     val connectEntered = CountDownLatch(1)
     val disconnectEntered = CountDownLatch(1)
