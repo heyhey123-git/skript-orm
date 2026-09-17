@@ -59,11 +59,11 @@ class JdbcInsertManyTest {
 
         assertEquals(WriteResult(3), result)
         verifyOrder {
-            statement.setObject(1, 10, JDBCType.INTEGER)
-            statement.setObject(2, 1, JDBCType.INTEGER)
+            statement.setObject(1, 10, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setObject(2, 1, JDBCType.INTEGER.vendorTypeNumber)
             statement.addBatch()
-            statement.setObject(1, 20, JDBCType.INTEGER)
-            statement.setObject(2, 2, JDBCType.INTEGER)
+            statement.setObject(1, 20, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setObject(2, 2, JDBCType.INTEGER.vendorTypeNumber)
             statement.addBatch()
             statement.executeLargeBatch()
         }

@@ -29,7 +29,10 @@ internal fun PreparedStatement.bindValue(index: Int, value: Any?, type: DataType
     val converter = type.converter as ValueConverter<Any, Any>
     val storageValue = converter.toStorage(value)
     try {
-        setObject(index, storageValue, jdbcType.jdbcType)
+        // The `int` target type, not the `SQLType` one added in JDBC 4.2: both are the same call on
+        // most drivers, but SQLite's implements only this one, and a plugin cannot choose its server's
+        // driver. `setNull` above is written the same way for the same reason.
+        setObject(index, storageValue, jdbcType.jdbcType.vendorTypeNumber)
         if (storageValue is Blob) {
             synchronized(boundBlobs) {
                 boundBlobs.getOrPut(this) { mutableListOf() }.add(storageValue)

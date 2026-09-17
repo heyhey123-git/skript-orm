@@ -65,7 +65,7 @@ class JdbcConditionTranslatorTest {
         )
 
         assertEquals(5, offset)
-        verify(exactly = 1) { statement.setObject(3, 10, JDBCType.INTEGER) }
-        verify(exactly = 1) { statement.setObject(4, 20, JDBCType.INTEGER) }
+        verify(exactly = 1) { statement.setObject(3, 10, JDBCType.INTEGER.vendorTypeNumber) }
+        verify(exactly = 1) { statement.setObject(4, 20, JDBCType.INTEGER.vendorTypeNumber) }
     }
 }

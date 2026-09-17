@@ -39,8 +39,8 @@ class JdbcQueryTest {
         val next = query.bindWhere(table, where, statement, startIndex = 4)
 
         assertEquals(6, next)
-        verify { statement.setObject(4, 2, JDBCType.INTEGER) }
-        verify { statement.setObject(5, 3, JDBCType.INTEGER) }
+        verify { statement.setObject(4, 2, JDBCType.INTEGER.vendorTypeNumber) }
+        verify { statement.setObject(5, 3, JDBCType.INTEGER.vendorTypeNumber) }
     }
 
     @Test
@@ -51,7 +51,7 @@ class JdbcQueryTest {
         assertFailsWith<IllegalArgumentException> {
             query.bindWhere(table, WhereClause.All(false, listOf(Condition.Equals("missing", 1))), statement)
         }
-        verify(exactly = 0) { statement.setObject(any(), any(), any<JDBCType>()) }
+        verify(exactly = 0) { statement.setObject(any(), any(), any<Int>()) }
     }
 
     @Test
@@ -117,7 +117,7 @@ class JdbcQueryTest {
         every { statement.executeLargeUpdate() } returns 7
         val query = TestJdbcQuery(PooledConnectionSource(dataSource))
 
-        val result = query.executeUpdate("UPDATE") { it.setObject(1, 1, JDBCType.INTEGER) }
+        val result = query.executeUpdate("UPDATE") { it.setObject(1, 1, JDBCType.INTEGER.vendorTypeNumber) }
 
         assertEquals(7, result.affectedCount)
         verify { statement.close() }

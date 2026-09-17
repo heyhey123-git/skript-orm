@@ -41,7 +41,7 @@ class JdbcConcreteQueriesTest {
 
         JdbcSelectMany(where, fixture.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { fixture.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"age\" = ? AND \"name\" IS NULL") }
-        verify { fixture.statement.setObject(1, 18, JDBCType.INTEGER) }
+        verify { fixture.statement.setObject(1, 18, JDBCType.INTEGER.vendorTypeNumber) }
 
         val one = cursorFixture()
         JdbcSelectOne(null, one.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
@@ -50,7 +50,7 @@ class JdbcConcreteQueriesTest {
         val byId = cursorFixture()
         JdbcSelectById(7, byId.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { byId.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 1") }
-        verify { byId.statement.setObject(1, 7, JDBCType.INTEGER) }
+        verify { byId.statement.setObject(1, 7, JDBCType.INTEGER.vendorTypeNumber) }
     }
 
     @Test
@@ -59,7 +59,7 @@ class JdbcConcreteQueriesTest {
         JdbcInsertOne(linkedMapOf("name" to "A", "age" to null), insert.connectionSource, GenericJdbcDialect).execute(table)
         verify { insert.connection.prepareStatement("INSERT INTO \"users\" (\"name\", \"age\") VALUES (?, ?)") }
         verifyOrder {
-            insert.statement.setObject(1, "A", JDBCType.VARCHAR)
+            insert.statement.setObject(1, "A", JDBCType.VARCHAR.vendorTypeNumber)
             insert.statement.setNull(2, JDBCType.INTEGER.vendorTypeNumber)
         }
 
@@ -77,10 +77,10 @@ class JdbcConcreteQueriesTest {
 
         verify { fixture.connection.prepareStatement("UPDATE `users` SET `name` = ? WHERE `age` = ? LIMIT 2") }
         verifyOrder {
-            fixture.statement.setObject(1, "B", JDBCType.VARCHAR)
-            fixture.statement.setObject(2, 18, JDBCType.INTEGER)
+            fixture.statement.setObject(1, "B", JDBCType.VARCHAR.vendorTypeNumber)
+            fixture.statement.setObject(2, 18, JDBCType.INTEGER.vendorTypeNumber)
         }
-        verify(exactly = 0) { fixture.statement.setObject(any(), any(), JDBCType.BIGINT) }
+        verify(exactly = 0) { fixture.statement.setObject(any(), any(), JDBCType.BIGINT.vendorTypeNumber) }
     }
 
     @Test
@@ -88,22 +88,22 @@ class JdbcConcreteQueriesTest {
         val update = updateFixture()
         JdbcUpdateById(5, linkedMapOf("name" to "C", "age" to 20), update.connectionSource, GenericJdbcDialect).execute(table)
         verifyOrder {
-            update.statement.setObject(1, "C", JDBCType.VARCHAR)
-            update.statement.setObject(2, 20, JDBCType.INTEGER)
-            update.statement.setObject(3, 5, JDBCType.INTEGER)
+            update.statement.setObject(1, "C", JDBCType.VARCHAR.vendorTypeNumber)
+            update.statement.setObject(2, 20, JDBCType.INTEGER.vendorTypeNumber)
+            update.statement.setObject(3, 5, JDBCType.INTEGER.vendorTypeNumber)
         }
 
         val upsert = updateFixture()
         JdbcUpsertById(5, mapOf("name" to "C"), upsert.connectionSource, MysqlJdbcDialect).execute(table)
         verifyOrder {
-            upsert.statement.setObject(1, 5, JDBCType.INTEGER)
-            upsert.statement.setObject(2, "C", JDBCType.VARCHAR)
+            upsert.statement.setObject(1, 5, JDBCType.INTEGER.vendorTypeNumber)
+            upsert.statement.setObject(2, "C", JDBCType.VARCHAR.vendorTypeNumber)
         }
 
         val delete = updateFixture()
         JdbcDeleteById(5, delete.connectionSource, GenericJdbcDialect).execute(table)
         verify { delete.connection.prepareStatement("DELETE FROM \"users\" WHERE \"id\" = ?") }
-        verify { delete.statement.setObject(1, 5, JDBCType.INTEGER) }
+        verify { delete.statement.setObject(1, 5, JDBCType.INTEGER.vendorTypeNumber) }
     }
 
     @Test
@@ -114,7 +114,7 @@ class JdbcConcreteQueriesTest {
         JdbcDelete(1, where, fixture.connectionSource, MysqlJdbcDialect).execute(table)
 
         verify { fixture.connection.prepareStatement("DELETE FROM `users` WHERE `name` IS NULL OR `age` > ? LIMIT 1") }
-        verify { fixture.statement.setObject(1, 10, JDBCType.INTEGER) }
+        verify { fixture.statement.setObject(1, 10, JDBCType.INTEGER.vendorTypeNumber) }
     }
 
     @Test
@@ -124,15 +124,15 @@ class JdbcConcreteQueriesTest {
         val mysql = cursorFixture()
         JdbcSelectPage(25, 3, null, mysql.connectionSource, MysqlJdbcDialect).execute(table).cursor.close()
         verifyOrder {
-            mysql.statement.setObject(1, 25, JDBCType.INTEGER)
-            mysql.statement.setObject(2, 50L, JDBCType.BIGINT)
+            mysql.statement.setObject(1, 25, JDBCType.INTEGER.vendorTypeNumber)
+            mysql.statement.setObject(2, 50L, JDBCType.BIGINT.vendorTypeNumber)
         }
 
         val generic = cursorFixture()
         JdbcSelectPage(25, 3, null, generic.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verifyOrder {
-            generic.statement.setObject(1, 25, JDBCType.INTEGER)
-            generic.statement.setObject(2, 50L, JDBCType.BIGINT)
+            generic.statement.setObject(1, 25, JDBCType.INTEGER.vendorTypeNumber)
+            generic.statement.setObject(2, 50L, JDBCType.BIGINT.vendorTypeNumber)
         }
     }
 

@@ -30,8 +30,10 @@ open class JdbcSelectPage(
             var index = bindWhere(table, where, statement)
             pageSql.parameterOrder.forEach { parameter ->
                 when (parameter) {
-                    JdbcPageParameter.LIMIT -> statement.setObject(index++, pageSize, JDBCType.INTEGER)
-                    JdbcPageParameter.OFFSET -> statement.setObject(index++, offset, JDBCType.BIGINT)
+                    JdbcPageParameter.LIMIT ->
+                        statement.setObject(index++, pageSize, JDBCType.INTEGER.vendorTypeNumber)
+                    JdbcPageParameter.OFFSET ->
+                        statement.setObject(index++, offset, JDBCType.BIGINT.vendorTypeNumber)
                 }
             }
         }

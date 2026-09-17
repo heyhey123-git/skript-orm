@@ -24,7 +24,7 @@ class JdbcParameterBinderTest {
         statement.bindValue(2, null, IntJdbcDataType())
 
         verify(exactly = 1) { statement.setNull(2, JDBCType.INTEGER.vendorTypeNumber) }
-        verify(exactly = 0) { statement.setObject(any(), any(), any<JDBCType>()) }
+        verify(exactly = 0) { statement.setObject(any(), any(), any<Int>()) }
     }
 
     @Test
@@ -45,7 +45,7 @@ class JdbcParameterBinderTest {
         statement.bindValue(1, 7, type)
 
         assertEquals(1, conversions)
-        verify { statement.setObject(1, "stored:7", JDBCType.INTEGER) }
+        verify { statement.setObject(1, "stored:7", JDBCType.INTEGER.vendorTypeNumber) }
     }
 
     @Test
@@ -54,7 +54,7 @@ class JdbcParameterBinderTest {
 
         assertFailsWith<IllegalArgumentException> { statement.bindValue(1, "x", StringDataType()) }
         assertFailsWith<IllegalArgumentException> { statement.bindValue(1, "x", IntJdbcDataType()) }
-        verify(exactly = 0) { statement.setObject(any(), any(), any<JDBCType>()) }
+        verify(exactly = 0) { statement.setObject(any(), any(), any<Int>()) }
     }
 
     @Test
@@ -76,7 +76,7 @@ class JdbcParameterBinderTest {
         val blob = mockk<Blob>()
         val bindFailure = IllegalStateException("bind")
         val freeFailure = IllegalStateException("free")
-        every { statement.setObject(1, blob, JDBCType.BLOB) } throws bindFailure
+        every { statement.setObject(1, blob, JDBCType.BLOB.vendorTypeNumber) } throws bindFailure
         every { blob.free() } throws freeFailure
 
         val thrown = assertFailsWith<IllegalStateException> { statement.bindValue(1, "domain", blobType(blob)) }
