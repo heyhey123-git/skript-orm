@@ -83,6 +83,8 @@ When the order matters, write `and wait` and let the script say so.
 ## Failures that are not about the database
 
 Some failures happen before anything is sent, and they are reported the same way: a table that was never
-registered on this connection, a column that the table description does not have, a value the column
-cannot hold, `null` where the column says `not null`, or a second registration of the same table. All of
-them appear in `last database error` right after the section.
+registered on this connection, a column the table description does not have, a value Skript cannot
+convert to the column's type, or a second registration of the same table. All of them appear in
+`last database error` right after the section. What the database itself refuses, such as a `null` where
+the column says `not null` or a value that is too long for the column, comes back from the database
+instead, so it is only reported when the section waits.

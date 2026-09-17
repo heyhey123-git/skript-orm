@@ -37,9 +37,10 @@ The plugin therefore does not compile against, or depend on, any NBT implementat
 classes up by name when the first NBT value is handled and links them, which is why:
 
 - **The standalone NBT API plugin is not supported**, and installing it neither helps nor conflicts.
-- **No SkBee version is pinned.** Any version that still exposes the NBT classes under
-  `com.shanebeestudios.skbee.api.nbt` works; a version that moved them would make NBT unavailable, which
-  is reported rather than crashing.
+- **No SkBee version is pinned, but NBT is linked against a fixed set of names.** A version that still
+  has `NBTCompound`, a `NBTContainer(String)` and `NBTContainer(InputStream)` constructor, and the static
+  `NBTReflectionUtil.writeApiNBT`, under `com.shanebeestudios.skbee.api.nbt`, works; a version that moved
+  or reshaped any of them makes NBT unavailable, which is reported rather than crashing.
 - **A server without SkBee is fully usable**, except for NBT columns: registering a table that declares
   one is refused with a message naming SkBee. See [Types](types.md).
 

@@ -66,9 +66,9 @@ allows them to.** Both sections accept that, so a forgotten `where` is not an er
 delete entities from table "users" and wait
 ```
 
-A `where` block whose condition list is empty is almost always a mistake; the sections that take a
-values block, such as `update`, will refuse one, but a plain delete has nothing else to go on. When the
-intent is "all rows", write it as such and keep a `with limit` in mind.
+A `where` block whose condition list is empty is refused when the script is parsed, for `delete` just as
+much as for `update`; to act on every row, write `delete entities from table "users"` with no `where`
+block at all. When the intent is "all rows", write it as such and keep a `with limit` in mind.
 
 ## Limits
 
@@ -96,8 +96,13 @@ select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = arg-1
 set {_user::age} to {_user::age} + 1
-update one entity {_user::*} in table "users" by id {_user::id} and wait
+set {_id} to {_user::id}
+delete {_user::id}
+update one entity {_user::*} in table "users" by id {_id} and wait
 ```
 
 With `update`, only the columns in the variable are touched; with `upsert` the row is created when the
-primary key is not there yet. See [Cookbook](cookbook.md).
+primary key is not there yet. Neither `update by id` nor `upsert by id` accepts a variable straight from a
+select: a select result always contains the primary key, and both refuse values that contain it. Take the
+key out first, as the example does, and pass its value to `by id` separately. See
+[Cookbook](cookbook.md).

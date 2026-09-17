@@ -7,15 +7,16 @@
 ## 先说效果
 
 ```sk
-create a connection to database "MySQL" with properties:
-    url: "jdbc:mysql://localhost:3306/mydb"
-    username: "root"
-    password: "123456"
+on load:
+    create a connection to database "MySQL" with properties:
+        url: "jdbc:mysql://localhost:3306/mydb"
+        username: "root"
+        password: "123456"
 
-register a database table "users":
-    id: bigint, primary key, auto increment, not null
-    name: string(64), not null
-    age: int, nullable
+    register a database table "users":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
 
 command /whois <text>:
     trigger:
@@ -29,12 +30,14 @@ command /whois <text>:
 ```
 
 ```sk
-insert one entity into table "users" and wait:
-    values:
-        name: "Alice"
-        age: 25
-if last database error is set:
-    send "写入失败: %last database error%" to console
+command /adduser <text> <integer>:
+    trigger:
+        insert one entity into table "users" and wait:
+            values:
+                name: arg-1
+                age: arg-2
+        if last database error is set:
+            send "写入失败: %last database error%" to console
 ```
 
 两段里都没有一句 SQL。语句由插件拼好，在服务端线程之外执行，回到脚本里依然是普通的变量和值，伸手就能用。

@@ -28,7 +28,6 @@ command /adduser <text>:
         add 1 to {users::next-id}
         upsert one entity in table "users" by id {users::next-id} and wait:
             values:
-                id: {users::next-id}
                 name: arg-1
         if last database error is set:
             send "Could not store %arg-1%: %last database error%" to sender
@@ -45,7 +44,6 @@ player:
 on join:
     upsert one entity in table "players" by id uuid of player and wait:
         values:
-            uuid: uuid of player
             name: name of player
             last_seen: now
     if last database error is set:
@@ -121,13 +119,19 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
-    if size of {_page-rows::*} is 0:
+    # Walk the row indices: every row is a sub-list, so a row index is done when a column of the next
+    # row is unset. `{_row} is 1` after the walk means the page itself came back empty.
+    set {_row} to 1
+    while {_page-rows::%{_row}%::name} is set:
+        send "%{_page-rows::%{_row}%::name}%" to console
+        add 1 to {_row}
+    if {_row} is 1:
         exit loop
-    loop {_page-rows::*}:
-        # The counter is a `while`, so this is the only loop in play and `loop-value` is unambiguous.
-        send "%{_page-rows::%loop-value%::name}%" to console
     add 1 to {_page}
 ```
+
+A row is a sub-list of the result variable, so `size of {_page-rows::*}` counts first-layer values
+rather than rows, which is why the recipe counts the row indices itself.
 
 The loop bound is a safety net: without a count query, an upper bound is what keeps a script from paging
 forever when a condition keeps matching.

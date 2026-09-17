@@ -21,8 +21,9 @@ insert one entity into table "users" and wait:
 - The right-hand side is any Skript expression, so variables, arguments and functions work.
 - Every line must be `column: expression` on one line; a nested block is only allowed where rows are
   expected (see `insert many`).
-- **A column that is left out is not part of the statement.** The database default applies, which is how
-  an auto-increment key stays automatic. Writing `null` instead stores SQL NULL; see [Types](types.md).
+- **A column that is left out is not part of the statement.** An `insert` leaves it to the database
+  default, which is how an auto-increment key stays automatic, while an `update` or an `upsert by id`
+  leaves it at its stored value. Writing `null` instead stores SQL NULL; see [Types](types.md).
 - An unknown column name fails before anything is sent to the database.
 
 ## Insert one
@@ -107,7 +108,7 @@ there" should mean:
 | --- | --- |
 | Create it, or overwrite it with these values | `upsert` |
 | Create it only if it is missing, leave the old row alone | `insert entity if absent` |
-| Know whether it was created | `upsert` or `if absent`, then read the row back and compare |
+| Know whether it was created | Only `if absent` can show it: a skipped insert leaves the old row's values, so a read-back that differs from what you wrote means the row was already there. `upsert` writes your values either way. |
 
 Both depend on the implementation's conflict rules, as their description says; the behaviour above is
 MySQL's.

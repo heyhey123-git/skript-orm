@@ -62,7 +62,7 @@ if last database error is set:
 delete entities from table "users" and wait
 ```
 
-而 `where` 块里条件列表为空，几乎总是笔误。带 values 块的 section，例如 `update`，会直接拒绝它；单纯的删除却无从判断，只能照做。真要对所有行动手，就把它写明，并且别忘了 `with limit`。
+而 `where` 块里条件列表为空，几乎总是笔误：这样的块在脚本解析时就被拒绝，`delete` 和 `update` 一样。真要对所有行动手，就整个不写 `where` 块，写成 `delete entities from table "users"`，并且别忘了 `with limit`。
 
 ## limit
 
@@ -86,7 +86,9 @@ select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = arg-1
 set {_user::age} to {_user::age} + 1
-update one entity {_user::*} in table "users" by id {_user::id} and wait
+set {_id} to {_user::id}
+delete {_user::id}
+update one entity {_user::*} in table "users" by id {_id} and wait
 ```
 
-用 `update` 时只有变量里出现的列会被碰；用 `upsert` 时主键还不存在的话会新建那一行。见 [菜谱](cookbook.zh-CN.md)。
+用 `update` 时只有变量里出现的列会被碰；用 `upsert` 时主键还不存在的话会新建那一行。只是从查询结果拿来的变量不能直接交给 `update by id` 或 `upsert by id`：它一定带着主键，而这两种写法都拒绝含主键的 values。像上面那样先把键取出来再删掉，把它的值单独交给 `by id`。见 [菜谱](cookbook.zh-CN.md)。

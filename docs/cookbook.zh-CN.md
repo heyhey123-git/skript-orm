@@ -27,7 +27,6 @@ command /adduser <text>:
         add 1 to {users::next-id}
         upsert one entity in table "users" by id {users::next-id} and wait:
             values:
-                id: {users::next-id}
                 name: arg-1
         if last database error is set:
             send "保存 %arg-1% 失败: %last database error%" to sender
@@ -43,7 +42,6 @@ command /adduser <text>:
 on join:
     upsert one entity in table "players" by id uuid of player and wait:
         values:
-            uuid: uuid of player
             name: name of player
             last_seen: now
     if last database error is set:
@@ -119,13 +117,18 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
-    if size of {_page-rows::*} is 0:
+    # 按行号自己往下走：每一行都是子列表，所以下一行的某一列没有值，就是行号到头了。
+    # 走完之后 {_row} 还是 1，说明这一页本身就是空的。
+    set {_row} to 1
+    while {_page-rows::%{_row}%::name} is set:
+        send "%{_page-rows::%{_row}%::name}%" to console
+        add 1 to {_row}
+    if {_row} is 1:
         exit loop
-    loop {_page-rows::*}:
-        # 外层用 while 计数，于是全局只有这一个 loop，loop-value 不会有歧义
-        send "%{_page-rows::%loop-value%::name}%" to console
     add 1 to {_page}
 ```
+
+`size of {_page-rows::*}` 数不出行数：它只数第一层的值，而每一行都是下一层的子列表，所以上面按行号自己往前走，走到下一行的列没有值为止。
 
 循环上界是保险。没有计数查询时，正是它拦住了“条件一直匹配、脚本翻页不止”的可能。
 

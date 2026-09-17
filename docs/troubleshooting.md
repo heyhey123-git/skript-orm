@@ -75,7 +75,9 @@ See [Types](types.md).
 ## `{_users::name}` is empty after `select many`
 
 `select many` keys rows by a one-based row index first: `{_users::1::name}`. A single matching row still
-has index 1. Use `size of {_users::*}` for the count. See [Reading rows](reading.md).
+has index 1. There is no count expression for a `rowIndex::column` result: `size of {_users::*}` counts
+first-layer values, and every row is a sub-list, so it does not count rows. Take the number of rows from
+the row keys themselves, or keep your own counter. See [Reading rows](reading.md).
 
 ## The read after a write shows the old data
 
@@ -95,7 +97,7 @@ a column type problem that only the database can judge. Either add `and wait`, o
 implementation allows. A forgotten `where` is not an error. Write the conditions, or use the `by id`
 form. See [Updating and deleting](updating-and-deleting.md).
 
-## "Data type 'nbtcompound' needs SkBee, which is not installed."
+## "Data type 'nbtcompound' cannot be used: SkBee is not installed, and it is what provides NBT compounds."
 
 The column type depends on SkBee, and registering the table is refused rather than letting the first
 row fail later. Install SkBee, or use a different type. Note that without SkBee a script cannot build an

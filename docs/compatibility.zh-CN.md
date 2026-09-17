@@ -32,8 +32,10 @@
 于是：
 
 - **不支持独立 NBT API 插件**；装它既没有帮助也不会冲突。
-- **不锁定 SkBee 版本。** 只要还把 NBT 类放在 `com.shanebeestudios.skbee.api.nbt` 下就能用；哪天挪走了，NBT 会变成
-  不可用，而这会被报告出来，而不是让插件崩溃。
+- **不锁定 SkBee 版本，但 NBT 按一组固定的类名与方法名链接。** 版本必须还在 `com.shanebeestudios.skbee.api.nbt` 下
+  提供 `NBTCompound`、`NBTContainer(String)` 与 `NBTContainer(InputStream)` 两个构造方法，以及静态的
+  `NBTReflectionUtil.writeApiNBT`；其中任何一处被挪走或改了形状，NBT 就变成不可用，而这会被报告出来，而不是让
+  插件崩溃。
 - **没有 SkBee 的服务器完全可用**，只有 NBT 列例外：注册声明了这种列的表会被拒绝，信息里点名 SkBee。见
   [类型](types.zh-CN.md)。
 

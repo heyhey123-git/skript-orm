@@ -19,7 +19,7 @@ insert one entity into table "users" and wait:
 
 - 右边可以是任何 Skript 表达式，变量、参数、函数都行。
 - 每行必须在同一行里写成 `column: expression`。只有需要多行的操作（见 `insert many`）才允许嵌套块。
-- **没写的列不会出现在语句里**，于是数据库默认值照常生效，自增主键就是这样保持自动的。想存 SQL NULL，就写 `null`；见 [类型](types.zh-CN.md)。
+- **没写的列不会出现在语句里**。插入时，数据库默认值就此生效，自增主键正是这样保持自动的；而在 `update` 与 `upsert by id` 里，没写的列保持它原来的值。想存 SQL NULL，就写 `null`；见 [类型](types.zh-CN.md)。
 - 列名不存在时，在发出任何语句之前就会失败。
 
 ## 插入一行
@@ -93,7 +93,7 @@ insert entity if absent into table "users" and wait:
 | --- | --- |
 | 没有就建、有就拿这些值覆盖 | `upsert` |
 | 只在缺失时建，已有行别动 | `insert entity if absent` |
-| 想知道到底建没建 | 先用 `upsert` 或 `if absent`，再把行读回来比较 |
+| 想知道到底建没建 | 只有 `if absent` 能看出来：插入被跳过时旧行的值原封不动，所以读回来的值和你写下的不一样，就说明那一行本来就在；`upsert` 则是不管原来有没有，都写下你的值 |
 
 两者都取决于实现自己的冲突规则，它们的描述里也是这么写的。上文说的是 MySQL 的行为。
 

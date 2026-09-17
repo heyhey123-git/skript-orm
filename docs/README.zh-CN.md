@@ -33,4 +33,4 @@
 
 中文页会镜像到仓库的 wiki，作为只读的阅读副本。`.github/workflows/wiki.yml` 在 `docs/` 变动后调用
 `scripts/publish-wiki.ps1` 生成页面，所以要以仓库为准，不要在 wiki 上直接改。页面名以及页与页之间的每条链接
-都写在那份脚本开头的映射表里。
+来自 `scripts/wiki-pages.tsv` 与 `scripts/wiki-sidebar.md`，两者就在 `scripts/publish-wiki.ps1` 旁边。

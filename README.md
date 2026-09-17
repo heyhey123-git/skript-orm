@@ -8,15 +8,16 @@ writing SQL.
 ## What a script looks like
 
 ```sk
-create a connection to database "MySQL" with properties:
-    url: "jdbc:mysql://localhost:3306/mydb"
-    username: "root"
-    password: "123456"
+on load:
+    create a connection to database "MySQL" with properties:
+        url: "jdbc:mysql://localhost:3306/mydb"
+        username: "root"
+        password: "123456"
 
-register a database table "users":
-    id: bigint, primary key, auto increment, not null
-    name: string(64), not null
-    age: int, nullable
+    register a database table "users":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
 
 command /whois <text>:
     trigger:
@@ -30,12 +31,14 @@ command /whois <text>:
 ```
 
 ```sk
-insert one entity into table "users" and wait:
-    values:
-        name: "Alice"
-        age: 25
-if last database error is set:
-    send "Insert failed: %last database error%" to console
+command /adduser <text> <integer>:
+    trigger:
+        insert one entity into table "users" and wait:
+            values:
+                name: arg-1
+                age: arg-2
+        if last database error is set:
+            send "Insert failed: %last database error%" to console
 ```
 
 There is no SQL in either block. The plugin builds the statements, runs them off the server thread,

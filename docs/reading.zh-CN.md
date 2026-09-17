@@ -26,7 +26,7 @@ select many entities from table "users" and store the results in {_users::*}:
 send "第一个: %{_users::1::name}%"
 ```
 
-行以从 1 开始的行号加列名为键，例如 `{_users::1::name}`。哪怕只匹配到一行，行号也还在，所以 `select many` 的结果读法始终如一。要行数就用 `size of {_users::*}`。
+行以从 1 开始的行号加列名为键，例如 `{_users::1::name}`。哪怕只匹配到一行，行号也还在，所以 `select many` 的结果读法始终如一。`rowIndex::column` 形状的结果没有现成的计数表达式：`size of {_users::*}` 只数第一层的值，而每一行都是子列表。行数要从行号本身取，或者自己记一个计数器。
 
 ## 分页
 

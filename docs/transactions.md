@@ -96,8 +96,9 @@ write a long `wait` inside a transaction: it holds a connection and any row lock
 while it waits.
 
 A statement inside a transaction is not given the whole timeout but what is left of it, so the last
-statement cannot outlive the transaction by another full timeout. The connection's own
-[statement timeout](connections.md) still applies underneath: a statement gets the shorter of the two.
+statement cannot outlive the transaction by another full timeout. While a transaction is open, that
+remaining time is the only limit on its statements: the connection's `statement timeout` applies to
+statements outside a transaction, not inside one.
 
 ## What it does not do
 

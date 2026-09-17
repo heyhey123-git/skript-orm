@@ -58,7 +58,7 @@ else if {_user::age} is not set:
 
 ## `select many` 之后 `{_users::name}` 是空的
 
-`select many` 的键先有行号，从 1 起：`{_users::1::name}`。只匹配到一行，行号也还是 1。要行数就用 `size of {_users::*}`。见 [读取行](reading.zh-CN.md)。
+`select many` 的键先有行号，从 1 起：`{_users::1::name}`。只匹配到一行，行号也还是 1。这种结果没有现成的计数表达式，行数要从行号本身取，或者自己记一个计数器。见 [读取行](reading.zh-CN.md)。
 
 ## 写完之后读到的还是旧数据
 
@@ -72,7 +72,7 @@ else if {_user::age} is not set:
 
 `delete entities` 和 `update entities` 允许不写 `where`，此时会作用于实现允许的所有行，漏写也不算错。补上条件，或者改用 `by id` 的写法。见 [更新与删除](updating-and-deleting.zh-CN.md)。
 
-## “Data type 'nbtcompound' needs SkBee, which is not installed.”
+## “Data type 'nbtcompound' cannot be used: SkBee is not installed, and it is what provides NBT compounds.”
 
 这个列类型依赖 SkBee，因此建表时就被拒，不会拖到第一行数据才失败。装上 SkBee，或者换个类型。再者，没有 SkBee 时脚本本来也构造不出 NBT 数据，所以这条只在“这个列本当派上用场”的服务器上出现。见 [类型](types.zh-CN.md)。
 

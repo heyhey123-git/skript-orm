@@ -23,8 +23,9 @@ name: type[(size)][, primary key][, auto increment][, not null]
 - **The name** may contain letters, digits, marks and underscores, and may not start with a digit. It is
   used as written, so keep one spelling: on a MySQL server running on Linux, table names are
   case-sensitive.
-- **The type** is one of the names in [Types](types.md). An unknown one is refused when the section is
-  read, with a message saying the connected database does not support it.
+- **The type** is one of the names in [Types](types.md). An unknown one is refused when the section runs,
+  with a message saying the connected database does not support it; it lands in `last database error`
+  right after the section.
 - **The size** in brackets applies to the types that have one (`string`, `uuid`, `location`) and must be
   greater than zero.
 - **The modifiers** are separated from the type and from each other by commas. They are

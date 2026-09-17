@@ -21,7 +21,8 @@ name: type[(size)][, primary key][, auto increment][, not null]
 
 - **列名**可以包含字母、数字、组合标记和下划线，不能以数字开头。它按原样使用，所以拼写要保持一致：在 Linux 上
   运行的 MySQL，表名是区分大小写的。
-- **类型**用 [类型](types.zh-CN.md) 里的名字。写错时会在读取这个 section 时就报错，信息说明当前数据库不支持它。
+- **类型**用 [类型](types.zh-CN.md) 里的名字。写错时，语句执行时会去当前连接的数据库里查这个类型，失败紧接着出现在
+  `last database error` 里，信息说明这个数据库不支持它。
 - **括号里的长度**只对本身有长度概念的类型有意义（`string`、`uuid`、`location`），且必须大于 0。
 - **修饰符**与类型之间、以及彼此之间都用逗号分隔，可取 `primary key`、`auto increment`、`not null`、`nullable`。
   不写 `not null` 的列就是可空的；两者同时写会报错。

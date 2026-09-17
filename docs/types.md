@@ -51,9 +51,10 @@ not a wall clock reading. Use `date` for a calendar value and `timespan` for a d
 SQL NULL is reachable, and it has two separate rules:
 
 - **Writing it.** In a `values` block, a literal `null` stores SQL NULL. Leaving the column out of the
-  block is not the same thing: a column the statement does not mention keeps whatever the database
-  default is, which for a column defined without `not null` is NULL and for an auto-increment key is
-  the next id.
+  block is not the same thing: a column that is left out is not part of the statement. An `insert`
+  leaves it to the database default, which for a column defined without `not null` is NULL and for an
+  auto-increment key is the next id, while an `update` or an `upsert by id` leaves it at its stored
+  value.
 - **Reading it.** A NULL column leaves its key unset in the result variable. In a list variable Skript
   deletes a key whose value is set to null, so a NULL column and a column that does not exist look the
   same from a script. `{_user::age} is not set` therefore means "NULL or absent", not "zero".

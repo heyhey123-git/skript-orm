@@ -28,8 +28,10 @@ send "first: %{_users::1::name}%, second: %{_users::2::name}%"
 ```
 
 Rows are keyed by a one-based row index and then the column, such as `{_users::1::name}`. The index is
-there even when only one row matched, so `select many` results are always read the same way. Use
-`size of {_users::*}` to count them.
+there even when only one row matched, so `select many` results are always read the same way. There is no
+count expression for a `rowIndex::column` result: `size of {_users::*}` counts first-layer values, and
+every row is a sub-list, so it does not count rows. Take the number of rows from the row keys themselves,
+or keep your own counter.
 
 ## Select page
 

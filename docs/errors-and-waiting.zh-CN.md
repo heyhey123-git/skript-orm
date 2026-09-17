@@ -73,5 +73,6 @@ select many entities from table "users" and store the results in {_users::*}:
 
 ## 不是数据库的失败
 
-有些失败发生在发出语句之前，但报告方式相同：这个连接上从未注册过的表、表描述里没有的列、列装不下的值、在
-`not null` 列上写 `null`、以及同名表的第二次注册。它们都会紧接着出现在 `last database error` 里。
+有些失败发生在发出语句之前，但报告方式相同：这个连接上从未注册过的表、表描述里没有的列、Skript 无法转换成
+该列类型的值、以及同一张表的第二次注册。它们都会紧接着出现在 `last database error` 里。而数据库自己拒绝的事情，
+比如在 `not null` 列上写 `null`、或者值比列还长，要等数据库回话才知道，所以只有 section 等待时才会报告。
