@@ -304,6 +304,60 @@ tasks.named<RunServer>("runServer") {
 // carries the assertions that matter. Keeping the list here rather than in the scripts means a script
 // added to one without the other fails the test instead of passing unnoticed.
 val serverTestExpectedMessage = if (serverTestUsesDatabase) "" else "No database connected."
+// The names only a run with a database reaches, in a map of their own: the scripts that report them are
+// copied only when a database is configured, while the consistency check below has to know them in both
+// modes.
+val serverTestDatabaseChecks = mapOf(
+    // The all-form, driven by the disconnect element once nothing else needs a connection.
+    "disconnect all" to "ran",
+    "setup" to "",
+    // What the setup's own read reported: empty means the table it registered is known to the
+    // connection, and "Table ... not found." would mean registration did not take effect.
+    "setup select" to "",
+    "roundtrip" to "",
+    // The round trip prints what each read returned, so a failure says whether the row exists as the
+    // steps ran, whether it appears after a plain wait, and whether a `where` finds it.
+    "roundtrip now" to "",
+    "roundtrip later" to "",
+    "roundtrip by id" to "",
+    // The same read through a literal id, which is the one `%object%` slot a script can fill with a
+    // value Skript has not typed yet.
+    "roundtrip literal id" to "",
+    // Named connections. Only the named connection registered `orm_secondary`, so the read outside the
+    // scope has to report the table lookup failing while the scoped one succeeds: that difference is
+    // what proves the scope chose a connection at all.
+    "connections create" to "",
+    "connections register" to "",
+    "connections write" to "",
+    "connections unscoped" to "Table 'orm_secondary' not found.",
+    "connections scoped" to "",
+    "connections default" to "",
+    // `disconnect` without a name closes the connection in effect. The two lines after it say what it
+    // closed: the default still answers for its own table, and the named connection is gone.
+    "connections disconnect" to "ran",
+    "connections default after" to "",
+    "connections gone" to "No connection named 'secondary', and no connection has been created yet.",
+    // `use connection` switches for the rest of the event, and the connection it names has no table of
+    // its own: the lookup failing is what shows the switch reached it. The named disconnect then closes
+    // that same connection, whatever the switch says.
+    "connections create tertiary" to "",
+    "connections used" to "Table 'orm_roundtrip' not found.",
+    "connections named disconnect" to "ran",
+    "connections tertiary gone" to "No connection named 'tertiary', and no connection has been created yet.",
+    // Transactions. `row1` is the row the first transaction committed and `row2` is `<none>` as long as
+    // nothing else survived, so one line says both that a commit worked and that a rollback did.
+    "transaction commit" to "",
+    "transaction failed" to "Table 'orm_transaction_missing' not found.",
+    "transaction rows" to "row1=committed row2=<none>",
+    "transaction rollback" to "",
+    "transaction rollback rows" to "row1=committed row2=<none>",
+    "transaction timeout" to
+        "The database transaction was open for longer than 2 seconds and was rolled back.",
+    "transaction timeout rows" to "row1=committed row2=<none>",
+    "transaction refuse" to
+        "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
+)
+
 val serverTestChecks = buildMap {
     put("register table", serverTestExpectedMessage)
     // This one names an implementation that is not installed, so it reports the same in both modes.
@@ -342,56 +396,23 @@ val serverTestChecks = buildMap {
     // it does not hold, in both modes.
     put("sqlite round trip", "ok")
     if (serverTestUsesDatabase) {
-        // The all-form, driven by the disconnect element once nothing else needs a connection.
-        put("disconnect all", "ran")
-        put("setup", "")
-        // What the setup's own read reported: empty means the table it registered is known to the
-        // connection, and "Table ... not found." would mean registration did not take effect.
-        put("setup select", "")
-        put("roundtrip", "")
-        // The round trip prints what each read returned, so a failure says whether the row exists as
-        // the steps ran, whether it appears after a plain wait, and whether a `where` finds it.
-        put("roundtrip now", "")
-        put("roundtrip later", "")
-        put("roundtrip by id", "")
-        // Named connections. Only the named connection registered `orm_secondary`, so the read outside
-        // the scope has to report the table lookup failing while the scoped one succeeds: that
-        // difference is what proves the scope chose a connection at all.
-        put("connections create", "")
-        put("connections register", "")
-        put("connections write", "")
-        put("connections unscoped", "Table 'orm_secondary' not found.")
-        put("connections scoped", "")
-        put("connections default", "")
-        // `disconnect` without a name closes the connection in effect. The two lines after it say what
-        // it closed: the default still answers for its own table, and the named connection is gone.
-        put("connections disconnect", "ran")
-        put("connections default after", "")
-        put("connections gone", "No connection named 'secondary', and no connection has been created yet.")
-        // `use connection` switches for the rest of the event, and the connection it names has no table
-        // of its own: the lookup failing is what shows the switch reached it. The named disconnect then
-        // closes that same connection, whatever the switch says.
-        put("connections create tertiary", "")
-        put("connections used", "Table 'orm_roundtrip' not found.")
-        put("connections named disconnect", "ran")
-        put("connections tertiary gone", "No connection named 'tertiary', and no connection has been created yet.")
-        // Transactions. `row1` is the row the first transaction committed and `row2` is `<none>` as long
-        // as nothing else survived, so one line says both that a commit worked and that a rollback did.
-        put("transaction commit", "")
-        put("transaction failed", "Table 'orm_transaction_missing' not found.")
-        put("transaction rows", "row1=committed row2=<none>")
-        put("transaction rollback", "")
-        put("transaction rollback rows", "row1=committed row2=<none>")
-        put(
-            "transaction timeout",
-            "The database transaction was open for longer than 2 seconds and was rolled back."
-        )
-        put("transaction timeout rows", "row1=committed row2=<none>")
-        put(
-            "transaction refuse",
-            "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
-        )
+        putAll(serverTestDatabaseChecks)
     }
+}
+
+// Every name the scripts under `server-test` report, taken from the sources rather than from what this
+// run copied: the database scripts are only copied when a database is configured, and a name they
+// report without an entry in the checks would otherwise be found by the one job that runs with a
+// database, a CI round trip away. Only the names no mode lists are handed to the check below.
+val serverTestDetailLine = Regex("""SKRIPTORM_SELFTEST detail:\s*(.+?)\s*->""")
+val serverTestUndeclaredChecks = providers.provider {
+    val declared = serverTestSource.asFile.walkTopDown()
+        .filter { it.isFile && it.extension == "sk" }
+        .flatMap { file ->
+            serverTestDetailLine.findAll(file.readText()).map { it.groupValues[1] }.asSequence()
+        }
+        .toSet()
+    declared - (serverTestChecks.keys + serverTestDatabaseChecks.keys)
 }
 
 val serverTest by tasks.registering(VerifySkriptServerTest::class) {
@@ -402,6 +423,7 @@ val serverTest by tasks.registering(VerifySkriptServerTest::class) {
     expectedPluginVersion.set(version.toString())
     expectedSkriptVersion.set(libs.versions.skript.get())
     expectedChecks.set(serverTestChecks)
+    undeclaredChecks.set(serverTestUndeclaredChecks)
 }
 
 /**
@@ -427,6 +449,14 @@ abstract class VerifySkriptServerTest : DefaultTask() {
     /** The elements the self-test has to report, mapped to the message it has to report with them. */
     @get:Input
     abstract val expectedChecks: MapProperty<String, String>
+
+    /**
+     * Names the scripts under `server-test` report that neither mode lists. Computed from the sources,
+     * so a name added to a script is reported in every mode rather than by the one job that copies that
+     * script.
+     */
+    @get:Input
+    abstract val undeclaredChecks: SetProperty<String>
 
     @TaskAction
     fun checkLog() {
@@ -482,6 +512,12 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
         (reported.keys - expectedChecks.get().keys).forEach { unexpected ->
             problems += "The self-test reported '$unexpected', which this check does not know about."
+        }
+
+        // The same mismatch, found before a run rather than in it: a script reports a name no mode
+        // lists, which only a mode that copies that script would otherwise have said.
+        undeclaredChecks.get().sorted().forEach { undeclared ->
+            problems += "A script under server-test reports '$undeclared', which no check lists."
         }
 
         // A statement Skript cannot match against any registered pattern is dropped, and the run
