@@ -1,5 +1,9 @@
 # skript-orm
 
+<!-- Absolute rather than relative: this page is also the wiki's home, where a relative path would
+     point at a file the wiki does not carry. -->
+![skript-orm:一个给 Skript 用的 ORM](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
+
 写给 Skript 的 ORM。表描述一次，往后读写行都照 Skript 的写法来，SQL 由插件代劳。
 
 **简体中文** | [English](README.md)

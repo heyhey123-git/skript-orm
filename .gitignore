@@ -18,6 +18,7 @@ build/
 !.idea/codeStyles/
 !.idea/dictionaries/
 !.idea/inspectionProfiles/
+!.idea/icon.png
 !.idea/kotlinc.xml
 !.idea/ktlint-plugin.xml
 !.idea/vcs.xml
@@ -55,3 +56,9 @@ bin/
 
 ### Mac OS ###
 .DS_Store
+
+### Asset script ###
+# Renders docs/assets from the colours the console banner uses. Deliberately not tracked: the images
+# are what get uploaded, and a script nobody runs again is only a copy of them that can disagree with
+# them. Remove this line if that judgement ever changes.
+scripts/make-icons.py

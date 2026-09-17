@@ -1,5 +1,7 @@
 # skript-orm
 
+![skript-orm: an ORM for Skript](docs/assets/banner.png)
+
 An ORM for Skript: describe a table once, then read and write rows with Skript syntax instead of
 writing SQL.
 
