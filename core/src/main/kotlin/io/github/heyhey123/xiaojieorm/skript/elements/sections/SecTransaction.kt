@@ -246,7 +246,7 @@ class SecTransaction : ScopedBodySection() {
                             SkriptDatabaseErrors.set(event, it)
                             ErrorPrinter.printErrorWithDetail(trigger, it)
                         }
-                        TriggerItem.walk(getNext(), event)
+                        TriggerItem.walk(next, event)
                     } else {
                         SkriptDatabaseErrors.clear(event)
                         ConnectionScope.push(

@@ -91,9 +91,9 @@ abstract class ScopedBodySection : Section(), SectionExitHandler {
         override fun run(event: Event): Boolean = throw UnsupportedOperationException()
 
         override fun walk(event: Event?): TriggerItem? {
-            if (event == null) return getNext()
+            if (event == null) return next
             debug(event, true)
-            return section.onBodyEnd(event, getNext())
+            return section.onBodyEnd(event, next)
         }
 
         override fun toString(event: Event?, debug: Boolean) = "end of ${section.javaClass.simpleName}"

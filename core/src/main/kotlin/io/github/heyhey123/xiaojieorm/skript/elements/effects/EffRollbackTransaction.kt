@@ -88,7 +88,7 @@ class EffRollbackTransaction : Effect() {
         val transaction = ConnectionScope.transaction(actualEvent)
         if (transaction == null) {
             report(actualEvent, trigger, "There is no database transaction to roll back.")
-            return target.getNext()
+            return target.next
         }
 
         // The frame goes first: the statements after the section must not resolve into a transaction
@@ -97,7 +97,7 @@ class EffRollbackTransaction : Effect() {
 
         return DatabaseWork.run(
             event = actualEvent,
-            continuation = target.getNext(),
+            continuation = target.next,
             wait = true,
             query = { transaction.rollback() },
             onFailure = { error ->
