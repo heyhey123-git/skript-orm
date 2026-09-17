@@ -12,16 +12,14 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Upsert Entity By ID")
 @Description("Updates the row with the given primary-key value or inserts it when absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support depends on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
 @Example(
-    """
-upsert one entity in table "users" by id {_id} and wait:
+    """upsert one entity in table "users" by id {_id} and wait:
     values:
         name: "Alice"
         age: 26
 """
 )
 @Example(
-    """
-upsert one entity {_user::*} in table "users" by id {_id}:
+    """upsert one entity {_user::*} in table "users" by id {_id}
 """
 )
 @Since("1.0.0")

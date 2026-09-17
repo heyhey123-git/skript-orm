@@ -23,8 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert Entity If Absent From A Variable Without A Colon")
 @Description("Inserts one row only when the database implementation considers it absent, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error.")
 @Example(
-    """
-insert entity {_user::*} if absent into table "users" and wait
+    """insert entity {_user::*} if absent into table "users" and wait
 """
 )
 @Since("1.0.0")

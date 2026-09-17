@@ -11,8 +11,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert One Entity")
 @Description("Inserts one row. The values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-insert one entity into table "users" and wait:
+    """insert one entity into table "users" and wait:
     values:
         name: "Alice"
         age: 25
@@ -21,11 +20,10 @@ if last database error is set:
 """
 )
 @Example(
-    """
-select one entity from table "users" and store the result in {_user::*}:
+    """select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = "Alice"
-insert one {_user::*} into table "archived_users":
+insert one {_user::*} into table "archived_users"
 """
 )
 @Since("1.0.0")

@@ -11,8 +11,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert Many Entities")
 @Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-insert many entities into table "users" and wait:
+    """insert many entities into table "users" and wait:
     values:
         first:
             name: "Alice"
@@ -23,11 +22,10 @@ insert many entities into table "users" and wait:
 """
 )
 @Example(
-    """
-select many entities from table "users" and store the results in {_rows::*}:
+    """select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
-insert many {_rows::*} into table "archived_users" and wait:
+insert many {_rows::*} into table "archived_users" and wait
 """
 )
 @Since("1.0.0")

@@ -24,8 +24,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Upsert One Entity By ID From A Variable Without A Colon")
 @Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. With and wait, failures are available as the last database error.")
 @Example(
-    """
-set {_user::id} to 1
+    """set {_user::id} to 1
 set {_user::name} to "Alice"
 upsert one entity {_user::*} in table "users" by id {_user::id} and wait
 """

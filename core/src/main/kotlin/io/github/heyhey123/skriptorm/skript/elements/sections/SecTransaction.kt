@@ -47,8 +47,7 @@ import java.time.Duration
 @Name("Database Transaction")
 @Description("Runs the code inside as one database transaction on the connection in effect, or on a named one. Reaching the end of the body commits; `exit`, `stop` and `return` roll back. A statement that fails makes the rest of the body's database statements do nothing, and the transaction is rolled back when the body ends. Everything inside waits, with or without `and wait`. The timeout defaults to 30 seconds and rolls the transaction back on its own if it is still open after that.")
 @Example(
-    """
-database transaction:
+    """database transaction:
     update one entity in table "accounts" by id {_from} and wait:
         values:
             balance: {_from::balance} - {_amount}
@@ -59,7 +58,11 @@ if last database error is set:
     send "The transfer was rolled back: %last database error%"
 """
 )
-@Example("database transaction on connection \"logs\" with timeout 2 minutes:")
+@Example(
+    """database transaction on connection "logs" with timeout 2 minutes:
+    delete entities from table "old_entries" with limit 500 and wait
+"""
+)
 @Since("1.0.0")
 class SecTransaction : ScopedBodySection() {
 

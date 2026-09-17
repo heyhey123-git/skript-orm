@@ -22,8 +22,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Delete One Entity By ID Without A Colon")
 @Description("Deletes one row by its registered primary-key value. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-delete one entity from table "users" by id {_id} and wait
+    """delete one entity from table "users" by id {_id} and wait
 """
 )
 @Since("1.0.0")

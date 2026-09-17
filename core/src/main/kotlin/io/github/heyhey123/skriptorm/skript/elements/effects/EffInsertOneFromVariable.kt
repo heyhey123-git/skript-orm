@@ -24,8 +24,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert One Entity From A Variable Without A Colon")
 @Description("Inserts one row, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-select one entity from table "users" and store the result in {_user::*}
+    """select one entity from table "users" and store the result in {_user::*}
 insert one {_user::*} into table "archived_users"
 """
 )

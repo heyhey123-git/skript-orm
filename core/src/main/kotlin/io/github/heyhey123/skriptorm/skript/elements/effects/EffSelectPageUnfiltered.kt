@@ -23,8 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Select Page Without A Filter")
 @Description("Selects a one-based page with positive size, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Results use page-local row-index and column-name keys, pagination requires a registered primary key, and selects always wait.")
 @Example(
-    """
-select page 2 with size 20 from table "users" and store the results in {_page::*}
+    """select page 2 with size 20 from table "users" and store the results in {_page::*}
 send "%{_page::1::name}%"
 """
 )

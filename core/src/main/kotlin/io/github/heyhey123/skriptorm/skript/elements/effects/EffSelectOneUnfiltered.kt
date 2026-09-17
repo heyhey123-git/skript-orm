@@ -26,8 +26,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Select One Entity Without A Filter")
 @Description("Selects at most one row and stores it by column name, such as {_user::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Selects always wait and expose failures as the last database error.")
 @Example(
-    """
-select one entity from table "users" and store the result in {_user::*}
+    """select one entity from table "users" and store the result in {_user::*}
 send "name: %{_user::name}%"
 """
 )

@@ -13,8 +13,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Last Database Error")
 @Description("Returns the most recent database error for the current event. Waiting operations expose execution failures after finishing; non-waiting writes only log asynchronous failures.")
 @Example(
-    """
-delete one entity from table "users" by id {_id} and wait:
+    """delete one entity from table "users" by id {_id} and wait
 if last database error is set:
     send "Delete failed: %last database error%"
 """

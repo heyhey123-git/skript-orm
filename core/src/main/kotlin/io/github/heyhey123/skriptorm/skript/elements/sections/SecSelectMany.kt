@@ -11,8 +11,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Select Many Entities")
 @Description("Selects matching rows using row-index and column-name keys such as {_users::1::name}. The one-based row index remains even for one result. Selects always wait and expose failures as the last database error.")
 @Example(
-    """
-select many entities from table "users" and store the results in {_users::*}:
+    """select many entities from table "users" and store the results in {_users::*}:
     where all:
         active = true
 send "%{_users::1::name}%"

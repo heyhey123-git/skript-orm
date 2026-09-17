@@ -34,8 +34,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Register Database Table")
 @Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Failures are exposed as the last database error.")
 @Example(
-    """
-register a database table "users":
+    """register a database table "users":
     id: bigint, primary key, auto increment, not null
     name: string(64), not null
     age: int, nullable

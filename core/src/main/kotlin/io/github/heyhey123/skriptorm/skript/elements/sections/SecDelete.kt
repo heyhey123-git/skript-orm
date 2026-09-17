@@ -12,8 +12,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Delete Entities")
 @Description("Deletes rows, optionally with a positive limit and nested where block. Omitting where deletes all rows allowed by the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
 @Example(
-    """
-delete entities from table "users" with limit 10 and wait:
+    """delete entities from table "users" with limit 10 and wait:
     where any:
         active = false
         age < 18

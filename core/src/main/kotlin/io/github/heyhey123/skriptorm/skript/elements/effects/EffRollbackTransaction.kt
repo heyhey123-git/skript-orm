@@ -31,8 +31,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Rollback Database Transaction")
 @Description("Rolls back the database transaction the script is inside and leaves its section, so the statements after the section run on the connection again. Can only be written inside a 'database transaction' section. Failures are logged and exposed as the last database error.")
 @Example(
-    """
-database transaction:
+    """database transaction:
     update one entity in table "accounts" by id {_from} and wait:
         values:
             balance: {_from::balance} - {_amount}

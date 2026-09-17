@@ -32,8 +32,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("In Database Connection")
 @Description("Runs the code inside against a named connection. The switch lasts only for the body; a 'use connection' written inside it is undone when the body ends. An unknown or disconnected name skips the body and is reported as the last database error. Switching away from the connection an open transaction is using is refused.")
 @Example(
-    """
-in connection "logs":
+    """in connection "logs":
     insert one entity into table "entries":
         values:
             message: "written to the logs database"

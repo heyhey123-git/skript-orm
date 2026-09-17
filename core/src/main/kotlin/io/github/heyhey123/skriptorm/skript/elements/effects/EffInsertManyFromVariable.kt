@@ -23,8 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert Many Entities From A Variable Without A Colon")
 @Description("Inserts multiple rows, taken from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-select many entities from table "users" and store the results in {_rows::*}
+    """select many entities from table "users" and store the results in {_rows::*}
 insert many {_rows::*} into table "archived_users" and wait
 """
 )

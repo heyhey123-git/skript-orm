@@ -11,16 +11,14 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Insert Entity If Absent")
 @Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
 @Example(
-    """
-insert entity if absent into table "users" and wait:
+    """insert entity if absent into table "users" and wait:
     values:
         id: {_id}
         name: "Alice"
 """
 )
 @Example(
-    """
-insert entity {_user::*} if absent into table "archived_users"
+    """insert entity {_user::*} if absent into table "archived_users"
 """
 )
 @Since("1.0.0")

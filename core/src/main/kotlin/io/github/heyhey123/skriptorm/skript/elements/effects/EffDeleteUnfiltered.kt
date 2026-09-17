@@ -22,8 +22,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Delete Entities Without A Colon")
 @Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
 @Example(
-    """
-delete entities from table "logs" with limit 500 and wait
+    """delete entities from table "logs" with limit 500 and wait
 """
 )
 @Since("1.0.0")

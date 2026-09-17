@@ -12,8 +12,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Select Entity By ID")
 @Description("Selects one row by its registered primary-key value and stores it by column name, such as {_user::name}. It does not accept where. Selects always wait and expose failures as the last database error.")
 @Example(
-    """
-select entity from table "users" by id {_id} and store the result in {_user::*}:
+    """select entity from table "users" by id {_id} and store the result in {_user::*}
 send "%{_user::name}%"
 """
 )

@@ -13,8 +13,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Select Page")
 @Description("Selects a one-based page with positive size. Results use page-local row-index and column-name keys, even for one result. Pagination requires a registered primary key. Selects always wait and expose failures as the last database error.")
 @Example(
-    """
-select page 2 with size 20 from table "users" and store the results in {_page::*}:
+    """select page 2 with size 20 from table "users" and store the results in {_page::*}:
     where all:
         active = true
 send "%{_page::1::name}%"

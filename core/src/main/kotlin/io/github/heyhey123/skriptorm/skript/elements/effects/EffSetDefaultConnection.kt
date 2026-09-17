@@ -28,8 +28,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Make Database Connection The Default")
 @Description("Makes a named connection the one statements use when neither a scope nor a 'use connection' effect names one. The first connection created is already the default, so this is only needed to choose a different one. An unknown or disconnected name changes nothing and is reported as the last database error.")
 @Example(
-    """
-make connection "logs" the default
+    """make connection "logs" the default
 """
 )
 @Since("1.0.0")

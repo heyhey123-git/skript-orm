@@ -24,8 +24,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 @Name("Update One Entity By ID From A Variable Without A Colon")
 @Description("Updates one row by its registered primary-key value, taking the new values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Only the columns the variable holds are touched. With and wait, failures are available as the last database error.")
 @Example(
-    """
-select one entity from table "users" and store the result in {_user::*}
+    """select one entity from table "users" and store the result in {_user::*}
 set {_user::age} to {_user::age} + 1
 update one entity {_user::*} in table "users" by id {_user::id} and wait
 """
