@@ -128,6 +128,19 @@ internal object DatabaseWork {
     }
 
     /**
+     * Clears the event's error slot for a statement that is about to run, except inside a transaction.
+     *
+     * A transaction keeps the failure that made it rollback-only. The statements after that failure are
+     * skipped without saying anything, which is deliberate, so clearing the slot here would leave the
+     * script reading nothing at all and the body looking as if it had simply not been reached.
+     */
+    fun clearErrorForStatement(event: Event) {
+        if (ConnectionScope.transaction(event) == null) {
+            SkriptDatabaseErrors.clear(event)
+        }
+    }
+
+    /**
      * Runs [block] on the connection a transaction pinned, or on one borrowed from the pool when the
      * statement runs on its own.
      *

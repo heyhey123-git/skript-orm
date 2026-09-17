@@ -8,6 +8,7 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
@@ -80,7 +81,7 @@ class EffSetDefaultConnection : Effect() {
         }
 
         Database.makeDefault(name)
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
     }
 
     private fun report(event: Event, trigger: Trigger, message: String) {

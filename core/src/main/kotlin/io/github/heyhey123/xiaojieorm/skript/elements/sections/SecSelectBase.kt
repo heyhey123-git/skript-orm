@@ -122,7 +122,7 @@ abstract class SecSelectBase : Section() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
         val trigger = this.trigger ?: return walk(event, false)
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
 
         val database = ConnectionScope.resolve(event) ?: run {
             DatabaseWork.report(actualEvent, trigger, ConnectionScope.noConnectionMessage())

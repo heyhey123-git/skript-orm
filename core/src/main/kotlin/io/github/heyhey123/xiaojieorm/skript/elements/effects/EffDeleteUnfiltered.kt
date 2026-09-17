@@ -8,7 +8,6 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
-import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
@@ -65,7 +64,7 @@ class EffDeleteUnfiltered : Effect() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
 
         val limit = limitExpr?.getSingle(actualEvent)
         if (limit != null && limit <= 0) {

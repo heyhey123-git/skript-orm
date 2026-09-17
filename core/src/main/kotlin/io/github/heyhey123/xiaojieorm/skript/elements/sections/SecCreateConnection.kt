@@ -104,7 +104,7 @@ class SecCreateConnection : Section() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
         val firstLine: Trigger = this.trigger ?: return walk(event, false)
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
 
         // Connecting can disconnect the connection it replaces, and a transaction on that connection
         // would be rolled back by it. A script that wants a new connection can finish first.

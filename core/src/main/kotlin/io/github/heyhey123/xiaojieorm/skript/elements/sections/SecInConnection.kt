@@ -7,6 +7,7 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
@@ -99,7 +100,7 @@ class SecInConnection : ScopedBodySection() {
             return walk(actualEvent, false)
         }
 
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
         ConnectionScope.push(actualEvent, connection, this)
         return walk(actualEvent, true)
     }

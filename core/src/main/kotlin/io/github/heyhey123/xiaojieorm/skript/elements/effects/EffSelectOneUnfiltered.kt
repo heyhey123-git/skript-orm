@@ -10,7 +10,6 @@ import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
-import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.xiaojieorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
@@ -74,7 +73,7 @@ class EffSelectOneUnfiltered : Effect() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
 
         val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
 

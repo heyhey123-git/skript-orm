@@ -235,7 +235,7 @@ abstract class SecWriteBase : Section() {
 
     override fun walk(event: Event?): TriggerItem? {
         val trigger = this.trigger ?: return walk(event, false)
-        if (event != null) SkriptDatabaseErrors.clear(event)
+        event?.let { DatabaseWork.clearErrorForStatement(it) }
 
         val database = ConnectionScope.resolve(event) ?: run {
             DatabaseWork.report(event, trigger, ConnectionScope.noConnectionMessage())

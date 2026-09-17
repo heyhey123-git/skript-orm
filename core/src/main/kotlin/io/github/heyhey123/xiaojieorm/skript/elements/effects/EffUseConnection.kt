@@ -8,6 +8,7 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptSyntax
@@ -109,7 +110,7 @@ class EffUseConnection : Effect() {
         // The frame carries no owner, so nothing pops it: the switch is meant to outlive this
         // statement and last until the event does.
         ConnectionScope.push(actualEvent, connection, owner = null)
-        SkriptDatabaseErrors.clear(actualEvent)
+        DatabaseWork.clearErrorForStatement(actualEvent)
     }
 
     private fun report(event: Event, trigger: Trigger, message: String) {
