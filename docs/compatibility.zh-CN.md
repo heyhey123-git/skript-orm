@@ -66,7 +66,7 @@ MySQL Connector/J 并让插件可见，所以不需要额外安装；`"JDBC"` �
 | MariaDB | 未测试。写 `"MySQL"`——语句形状是 MySQL 的（`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`）——很可能可用，但没有任何检查。 |
 | PostgreSQL | 本版本不支持。仓库里有实现，发布 jar 里没有。 |
 | MongoDB | 本版本不支持。实现只在仓库里，不在 jar 里。 |
-| SQLite 等 | 不支持。Paper 确实带 SQLite 的驱动，`"JDBC"` 方言写出的 SQL 本身 SQLite 也不反对，但那个驱动没有实现本实现绑定值用的那个 `setObject` 重载，所以凡是带值的语句都会以 `setObject not implemented` 失败。其它产品需要有服务端没带的驱动。 |
+| SQLite 等 | SQLite 能用，走的是 `"JDBC"` 和 Paper 已经带的那个驱动：方言写出的东西它全不反对，服务端测试在两种模式下都会对它跑一遍插入、读取、分页、更新和删除。那个方言拒绝的照旧拒绝——没有 auto increment、没有 `insert ... if absent`、没有 `upsert`、写操作不能加 limit——其它产品则需要有服务端没带的驱动。 |
 
 ## 依赖实现的行为
 

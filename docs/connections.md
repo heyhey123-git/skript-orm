@@ -58,16 +58,15 @@ create a connection to database "JDBC" with properties:
     password: "123456"
 ```
 
-Paper ships two drivers of its own, MySQL Connector/J and SQLite's. Neither is a way to use this type
-as things stand:
+Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
 
 - **MySQL.** The dialect writes `"double quoted"` identifiers, which MySQL reads as string literals
   unless its `ANSI_QUOTES` mode is on, so a MySQL connection written this way fails on the quoting
   before it reaches anything else. Write `"MySQL"` for MySQL.
-- **SQLite.** The dialect's SQL is nothing SQLite objects to — it takes `"double quoted"` identifiers
-  and `LIMIT ? OFFSET ?` — but the driver Paper ships (sqlite-jdbc 3.49.1.0) does not implement the
-  `setObject` overload this implementation binds its values with, so every statement carrying a value
-  fails with `setObject not implemented`. Registering a table works; reading or writing a row does not.
+- **SQLite.** This type is the way to reach it, and the driver is already there: nothing the dialect
+  writes is foreign to SQLite, so a connection to a file works for everything the type supports. What
+  the dialect refuses stays refused, which on SQLite means no auto increment, no `insert ... if absent`,
+  no `upsert` and no limit on a write, so a table's key is one the script supplies.
 
 So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"`,
 `"PostgreSQL"`, `"MongoDB"` and `"SQLite"`: those are products, not types. What a connection reaches is

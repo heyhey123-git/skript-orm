@@ -75,7 +75,7 @@ are the two under "The type names a script can write".
 | MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
 | PostgreSQL | Not supported in this release. The repository has an implementation; the released jar does not carry it. |
 | MongoDB | Not supported in this release. The implementation exists in the repository, not in the jar. |
-| SQLite and others | Not supported. Paper does ship SQLite's driver, and the `"JDBC"` dialect writes nothing SQLite objects to, but that driver does not implement the `setObject` overload this implementation binds its values with, so every statement carrying a value fails with `setObject not implemented`. The others need a driver the server does not carry. |
+| SQLite and others | SQLite works through `"JDBC"` and the driver Paper already carries: nothing the dialect writes is foreign to it, and the server test runs a round trip of inserts, reads, paging, an update and a delete against it in both of its modes. Everything that dialect refuses stays refused — no auto increment, no `insert ... if absent`, no `upsert`, no limit on a write — and the others need a driver the server does not carry. |
 
 ## Behaviours that depend on the implementation
 

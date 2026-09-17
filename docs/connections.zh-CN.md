@@ -50,14 +50,13 @@ create a connection to database "JDBC" with properties:
     password: "123456"
 ```
 
-Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）。就目前的状态而言，这两个都不是用这个类型的路子：
+Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）：
 
 - **MySQL。** 这个方言写 `"双引号"` 标识符，而 MySQL 在没开 `ANSI_QUOTES` 时会把它当成字符串字面量，
   所以这样连的 MySQL 先倒在标识符上，后面的问题都轮不到。连 MySQL 请写 `"MySQL"`。
-- **SQLite。** 这个方言写出来的 SQL 本身 SQLite 并不反对——它接受 `"双引号"` 标识符，也接受
-  `LIMIT ? OFFSET ?`——但 Paper 带的那个驱动（sqlite-jdbc 3.49.1.0）没有实现本实现绑定值用的那个
-  `setObject` 重载，所以凡是带值的语句都会以 `setObject not implemented` 失败。建表能成，读一行、
-  写一行都不行。
+- **SQLite。** 要连它就是靠这个类型，而且驱动已经在了：方言写出的东西 SQLite 全不反对，所以连一个文件
+  就能用上这个类型支持的全部操作。方言拒绝的那些在这里同样被拒绝——没有 auto increment、没有
+  `insert ... if absent`、没有 `upsert`、写操作不能加 limit——所以表的主键由脚本自己给。
 
 所以 `"mysql"` 会被拒绝，报 `Database 'mysql' is not supported.`；`"MariaDB"`、`"PostgreSQL"`、
 `"MongoDB"`、`"SQLite"` 同样会被拒绝——它们是产品，不是类型名。连接**底下**连的是什么产品是一回事，
