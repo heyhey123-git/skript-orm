@@ -47,6 +47,18 @@ every 5 seconds:
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL roundtrip insert: %last database error%"
 
+    # A literal id, which the section forms have to convert before they can read it: a `%object%` slot
+    # leaves a literal's type to the syntax that reads it, and reading one that was never converted
+    # reports "UnparsedLiterals must be converted before use" instead of reaching the database. No row
+    # carries this key, so the update changes nothing; what is checked is that it reports no failure.
+    # The value is the one the assertions below expect, in case this id ever does exist.
+    update one entity in table "orm_roundtrip" by id 999999999 and wait:
+        values:
+            age: 30
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL roundtrip update by a literal id: %last database error%"
+    log "SKRIPTORM_SELFTEST detail: roundtrip literal id -> %last database error%"
+
     # The filter is here to give the section a body. Skript warns about any section with nothing indented
     # under its colon, and that warning is Skript's, not this plugin's, with no switch to turn it off. The
     # setup script's own read is the one that covers the form with no `where` at all.

@@ -4,6 +4,7 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
@@ -40,9 +41,11 @@ class SecUpdateById : SecWriteBase() {
 
     override fun valuesExpressionIndex(matchedPattern: Int) = if (matchedPattern == 0) -1 else 0
 
-    @Suppress("UNCHECKED_CAST")
     override fun extractExtraParams(expressions: Array<out Expression<*>?>, matchedPattern: Int) {
-        idExpr = expressions[extraParamsIndex(matchedPattern)] as Expression<Any>
+        // `by id 1` reaches this section as a literal Skript has not given a type to, because a
+        // `%object%` slot leaves that decision to the syntax that reads it; passing it on unchanged
+        // makes the read throw at runtime instead of returning the number.
+        idExpr = ExpressionsHelper.withAnyType(expressions[extraParamsIndex(matchedPattern)]!!)
     }
 
     override fun resolveExtraArguments(event: Event?): Any =

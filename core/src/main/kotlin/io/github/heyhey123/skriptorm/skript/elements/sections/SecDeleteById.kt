@@ -4,6 +4,7 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
@@ -29,9 +30,9 @@ class SecDeleteById : SecWriteBase() {
     private lateinit var idExpr: Expression<Any>
     override val requiresValues = false
 
-    @Suppress("UNCHECKED_CAST")
     override fun extractExtraParams(expressions: Array<out Expression<*>?>, matchedPattern: Int) {
-        idExpr = expressions[extraParamsIndex(matchedPattern)] as Expression<Any>
+        // See SecUpdateById: a `by id 1` literal has to be given a type before it can be read.
+        idExpr = ExpressionsHelper.withAnyType(expressions[extraParamsIndex(matchedPattern)]!!)
     }
 
     override fun resolveExtraArguments(event: Event?): Any =

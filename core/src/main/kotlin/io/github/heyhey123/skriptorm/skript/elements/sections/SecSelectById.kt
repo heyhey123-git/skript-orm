@@ -4,6 +4,7 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
@@ -35,9 +36,10 @@ class SecSelectById : SecSelectBase() {
     override val resultVarIndex = 2
     override val supportsWhere = false
 
-    @Suppress("UNCHECKED_CAST")
     override fun extractExtraParams(expressions: Array<out Expression<*>?>) {
-        idExpr = expressions[1] as Expression<Any>
+        // A `by id 1` literal is handed over untyped, so it is given a type here rather than read
+        // straight from the pattern; see SecUpdateById for what happens otherwise.
+        idExpr = ExpressionsHelper.withAnyType(expressions[1]!!)
     }
 
     override fun resolveExtraArguments(event: Event?, trigger: ch.njol.skript.lang.Trigger): Any =
