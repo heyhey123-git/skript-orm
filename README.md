@@ -94,3 +94,8 @@ and hands results back as ordinary Skript variables and values.
 
 `./gradlew build` produces the shaded jar in `build/dist/`. `./gradlew serverTest` boots a real Paper
 server and runs the plugin against it. Both are described in [CONTRIBUTION.md](CONTRIBUTION.md).
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+

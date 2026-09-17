@@ -84,3 +84,8 @@ command /adduser <text> <integer>:
 ## 从源码构建
 
 `./gradlew build` 会在 `build/dist/` 生成 shaded jar，`./gradlew serverTest` 会拉起一个真实的 Paper 服务端跑插件自测。两者都写在 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md) 里。
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
+
