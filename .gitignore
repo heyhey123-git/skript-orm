@@ -57,8 +57,11 @@ bin/
 ### Mac OS ###
 .DS_Store
 
-### Asset script ###
-# Renders docs/assets from the colours the console banner uses. Deliberately not tracked: the images
-# are what get uploaded, and a script nobody runs again is only a copy of them that can disagree with
-# them. Remove this line if that judgement ever changes.
+### Local working files ###
+# Not repository content, and not meant to travel: the images are what gets uploaded, so the script
+# that renders them is only a copy that can disagree with them; the skill is what the agent reads from
+# this machine; the forum page text is pasted into skUnity rather than published from here. Remove a
+# line to start tracking that file.
 scripts/make-icons.py
+.dsh/
+docs/skunity-resource.bbcode.txt
