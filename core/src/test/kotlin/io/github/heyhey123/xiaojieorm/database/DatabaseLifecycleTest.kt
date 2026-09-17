@@ -20,12 +20,15 @@ import io.github.heyhey123.xiaojieorm.type.DataType
 import io.github.heyhey123.xiaojieorm.type.DataTypes
 import io.github.heyhey123.xiaojieorm.type.IntDataType
 import io.github.heyhey123.xiaojieorm.type.TypeId
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
+import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -698,6 +701,50 @@ class DatabaseLifecycleTest {
         assertNull(Database.current)
     }
 
+    // ---------------------------------------------------------------- draining
+
+    /**
+     * The wait for leases exists so the pool is not closed under a running statement, but a lease is
+     * released by that statement's own code finishing, and nothing here can interrupt a blocking JDBC
+     * call. Without a bound of its own, one stuck operation would hang disconnect, and with it the
+     * plugin's own disable, which is a server that cannot be stopped.
+     */
+    @Test
+    fun `a disconnect that cannot drain says so and closes anyway`() = runBlocking<Unit> {
+        val database = connectedDatabase()
+        val entered = CompletableDeferred<Unit>()
+        val released = CompletableDeferred<Unit>()
+        val stuck = async(Dispatchers.IO) {
+            runCatching {
+                database.withQueries { _ ->
+                    entered.complete(Unit)
+                    released.await()
+                }
+            }
+        }
+        entered.await()
+
+        val warnings = CopyOnWriteArrayList<String>()
+        Database.warn = { message -> warnings += message }
+        Database.drainTimeout = Duration.ofMillis(100)
+
+        withTimeout(GATE_TIMEOUT_SECONDS * 1000) { database.disconnect() }
+
+        assertFalse(database.isConnected)
+        assertEquals(1, warnings.size)
+        assertTrue(
+            "1 database operation(s) are still running" in warnings.single(),
+            "unexpected warning: ${warnings.single()}"
+        )
+
+        // The operation that was still running releases its lease afterwards. That has to be harmless:
+        // the state machine is already disconnected, and the late release only decrements a counter.
+        released.complete(Unit)
+        assertTrue(stuck.await().isSuccess)
+        assertEquals(Database.State.DISCONNECTED, database.state)
+        assertNull(Database.current)
+    }
+
     // ---------------------------------------------------------------- helpers
 
     private suspend fun connectedDatabase(
@@ -719,6 +766,9 @@ class DatabaseLifecycleTest {
         // does not mean nothing is registered.
         Database.shutdown()
         Database.beginLifecycle()
+        // Both are process-global, so a test that changes one has to put it back.
+        Database.drainTimeout = Duration.ofSeconds(30)
+        Database.warn = {}
     }
 }
 

@@ -46,6 +46,10 @@ class XiaojieOrm : JavaPlugin() {
         }
 
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        // The database layer cannot reach a plugin logger without depending on Bukkit, so it reports
+        // through this instead. What it reports is what it had to do to finish: a connection closed
+        // while operations were still running, or a transaction rolled back on its own.
+        Database.warn = { message -> logger.warning(message) }
         LogoPrinter.print(pluginMeta.version)
         registerElements(registerSkriptAddon())
         reportNbtSupport()

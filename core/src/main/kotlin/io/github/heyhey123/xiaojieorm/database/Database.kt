@@ -8,9 +8,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
@@ -39,6 +41,30 @@ abstract class Database {
          * stay free of Bukkit.
          */
         private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+        /**
+         * How long a disconnect waits for operations that already hold a lease before closing anyway.
+         *
+         * The wait is what keeps the pool from being closed under a statement that is still running, but
+         * it is a wait on someone else's code: a statement whose timeout the driver ignores, a `commit`
+         * waiting on a lock, or a `CREATE TABLE` waiting on a metadata lock, which MySQL bounds by
+         * `lock_wait_timeout` and whose default is a year. Without a bound of our own, one such operation
+         * is enough to hang `disconnect`, and with it server shutdown, since the plugin's own disable
+         * runs `shutdown` while the main thread waits for it.
+         *
+         * It should be longer than the slowest operation a script can legitimately start, and longer than
+         * a statement timeout once there is one; the value only costs anything when something is already
+         * stuck. Mutable so a test can shorten it.
+         */
+        internal var drainTimeout: Duration = Duration.ofSeconds(30)
+
+        /**
+         * Where the lifecycle says what it had to do to finish, installed by the plugin when it enables.
+         *
+         * The classes here stay free of Bukkit, so they cannot reach a plugin logger; a no-op default
+         * keeps them usable, and in tests, silent.
+         */
+        internal var warn: (String) -> Unit = {}
 
         /**
          * Mutex that protects the lifecycle state of the database: which connections are published,
@@ -475,7 +501,7 @@ abstract class Database {
             // script's `wait`, so waiting for them to finish on their own would wait forever. They are
             // ended first, which is what lets the rest of this method mean "no work is left".
             abortOpenTransactions()
-            operationWaiter?.await()
+            awaitOperations(operationWaiter)
             try {
                 doDisconnect()
             } catch (error: Throwable) {
@@ -491,6 +517,34 @@ abstract class Database {
             }
         }
         failure?.let { throw it }
+    }
+
+    /**
+     * Waits for the operations that already hold a lease, but not forever.
+     *
+     * A lease is released by the operation's own code finishing, and that code is a blocking JDBC call
+     * nothing here can interrupt. Waiting without a bound for it is waiting for something that may never
+     * come, and the cost of that is a server that cannot be stopped; closing the pool under a statement
+     * that never finishes costs one failed operation, and says so in the log.
+     */
+    private suspend fun awaitOperations(waiter: CompletableDeferred<Unit>?) {
+        if (waiter == null) return
+        val outstanding = lifecycleMutex.withLock { activeOperations }
+        try {
+            withTimeout(drainTimeout.toMillis()) {
+                waiter.await()
+            }
+        } catch (_: TimeoutCancellationException) {
+            // The next disconnect starts from a clean latch: this one belongs to the operations that
+            // are still running, and the state is going to DISCONNECTED either way.
+            lifecycleMutex.withLock {
+                operationsDrained = null
+            }
+            warn(
+                "Closing the database connection while $outstanding database operation(s) are still " +
+                    "running. They will fail, and the connection they hold is being closed underneath them."
+            )
+        }
     }
 
     /** Releases implementation-specific resources. */
