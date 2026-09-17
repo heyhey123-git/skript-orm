@@ -1,5 +1,6 @@
 package io.github.heyhey123.xiaojieorm.skript.utils
 
+import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataType
@@ -124,7 +125,7 @@ private class StubDatabase(private val label: String) : Database() {
 
     override val dataTypes: DataTypes = NoDataTypes
 
-    override fun doConnect(url: String, user: String, password: String) = Unit
+    override fun doConnect(settings: ConnectionSettings) = Unit
 
     override fun doDisconnect() = Unit
 

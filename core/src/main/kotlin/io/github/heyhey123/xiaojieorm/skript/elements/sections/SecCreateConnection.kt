@@ -11,6 +11,7 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
+import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionPropertiesParser
@@ -134,9 +135,11 @@ class SecCreateConnection : Section() {
             return walk(event, false)
         }
 
-        val url = connectionProperties.getValue("url")
-        val username = connectionProperties.getValue("username")
-        val password = connectionProperties.getValue("password")
+        val settings = ConnectionSettings(
+            url = connectionProperties.getValue("url"),
+            username = connectionProperties.getValue("username"),
+            password = connectionProperties.getValue("password")
+        )
         val implementationProperties = connectionProperties.filterKeys {
             it != "url" && it != "username" && it != "password"
         }
@@ -162,9 +165,9 @@ class SecCreateConnection : Section() {
             var failure: Throwable? = null
             try {
                 if (connectionName != null) {
-                    Database.createConnection(connectionName, database, url, username, password)
+                    Database.connectNamed(connectionName, database, settings)
                 } else {
-                    Database.replaceWith(database, url, username, password)
+                    Database.connectDefault(database, settings)
                 }
             } catch (_: CancellationException) {
                 return@launch

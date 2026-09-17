@@ -134,7 +134,7 @@ class MysqlNamedConnectionIntegrationTest : MysqlIntegrationTestBase() {
     private suspend fun connectNamed(name: String): JdbcDatabase {
         val endpoint = MysqlTestServer.requireEndpoint()
         val named = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-        Database.createConnection(name, named, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectNamed(name, named, endpoint.settings)
         return named
     }
 }

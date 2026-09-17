@@ -1,5 +1,6 @@
 package io.github.heyhey123.xiaojieorm.impl.jdbc.integration
 
+import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import org.junit.jupiter.api.Assumptions
 import org.testcontainers.DockerClientFactory
 import org.testcontainers.containers.MySQLContainer
@@ -46,7 +47,12 @@ object MysqlTestServer {
         val username: String,
         val password: String,
         val driverClassName: String
-    )
+    ) {
+
+        /** The same details as the value a connection is opened with. */
+        val settings: ConnectionSettings
+            get() = ConnectionSettings(jdbcUrl, username, password)
+    }
 
     private sealed interface Resolution {
         data class Available(val endpoint: Endpoint) : Resolution

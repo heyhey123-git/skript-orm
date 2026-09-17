@@ -84,7 +84,7 @@ abstract class MysqlIntegrationTestBase {
             Database.shutdown()
             Database.beginLifecycle()
             val opened = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-            Database.replaceWith(opened, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+            Database.connectDefault(opened, endpoint.settings)
             database = opened
         }
         dataSource = checkNotNull(database.dataSource) { "The JDBC database did not create a data source." }

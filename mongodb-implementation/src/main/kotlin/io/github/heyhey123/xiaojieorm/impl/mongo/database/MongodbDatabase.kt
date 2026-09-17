@@ -5,6 +5,7 @@ import com.mongodb.client.model.IndexOptions
 import com.mongodb.client.model.Indexes
 import com.mongodb.kotlin.client.coroutine.MongoClient
 import com.mongodb.kotlin.client.coroutine.MongoDatabase
+import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.impl.mongo.queries.MongoQueries
 import io.github.heyhey123.xiaojieorm.impl.mongo.type.MongoDataTypes
@@ -29,9 +30,9 @@ class MongodbDatabase : Database() {
 
     override val dataTypes: MongoDataTypes = MongoDataTypes
 
-    override fun doConnect(url: String, user: String, password: String) {
+    override fun doConnect(settings: ConnectionSettings) {
         client = MongoClient.create(
-            ConnectionString("mongodb://$user:$password@$url")
+            ConnectionString("mongodb://${settings.username}:${settings.password}@${settings.url}")
         )
         database = client!!.getDatabase("xiaojie-orm")
         queries = MongoQueries(database!!)

@@ -91,12 +91,15 @@ abstract class Database {
         }
 
         /**
-         * Replaces the default database connection. Concurrent replacement requests are serialized by
-         * the transition lock: each one waits for the previous transition, disconnects the active
-         * database, and then connects the requested instance.
+         * Connects [database] and makes it the default connection, which is what a statement uses when
+         * no scope or switch names another one.
+         *
+         * Whatever was the default before it is disconnected, unless a name keeps that connection
+         * reachable. Concurrent requests are serialized by the transition lock: each one waits for the
+         * previous transition, and then connects the requested instance.
          */
-        suspend fun replaceWith(database: Database, url: String, user: String, password: String) {
-            publish(null, database, url, user, password)
+        suspend fun connectDefault(database: Database, settings: ConnectionSettings) {
+            publish(null, database, settings)
         }
 
         /**
@@ -106,23 +109,11 @@ abstract class Database {
          * looks like. The first connection to succeed becomes the default, so a script with one
          * connection never has to name it.
          */
-        suspend fun createConnection(
-            name: String,
-            database: Database,
-            url: String,
-            user: String,
-            password: String
-        ) {
-            publish(name, database, url, user, password)
+        suspend fun connectNamed(name: String, database: Database, settings: ConnectionSettings) {
+            publish(name, database, settings)
         }
 
-        private suspend fun publish(
-            name: String?,
-            database: Database,
-            url: String,
-            user: String,
-            password: String
-        ) {
+        private suspend fun publish(name: String?, database: Database, settings: ConnectionSettings) {
             transitionMutex.withLock {
                 check(!isShuttingDown) { "Database lifecycle is shutting down." }
 
@@ -146,7 +137,7 @@ abstract class Database {
                 if (replaced != null && replaced !== database) replaced.disconnectInternal()
 
                 check(!isShuttingDown) { "Database lifecycle is shutting down." }
-                database.connectInternal(url, user, password, name)
+                database.connectInternal(name, settings)
             }
         }
 
@@ -231,7 +222,7 @@ abstract class Database {
     private var activeOperations: Int = 0
     private var operationsDrained: CompletableDeferred<Unit>? = null
 
-    private suspend fun connectInternal(url: String, user: String, password: String, name: String?) {
+    private suspend fun connectInternal(name: String?, settings: ConnectionSettings) {
         lifecycleMutex.withLock {
             check(!isShuttingDown) { "Database lifecycle is shutting down." }
             check(state == State.DISCONNECTED) { "Database is not disconnected: $state." }
@@ -250,7 +241,7 @@ abstract class Database {
         }
 
         try {
-            doConnect(url, user, password)
+            doConnect(settings)
             check(queries != null) { "Database implementation did not initialize queries during connection." }
 
             for (table in tables.values.toList()) {
@@ -298,8 +289,8 @@ abstract class Database {
         return defaultConnection === this@Database || (name != null && connections[name] === this)
     }
 
-    /** Initializes implementation-specific resources and [queries]. */
-    protected abstract fun doConnect(url: String, user: String, password: String)
+    /** Initializes implementation-specific resources and [queries] from [settings]. */
+    protected abstract fun doConnect(settings: ConnectionSettings)
 
     /**
      * Runs an operation while holding a lifecycle lease. Disconnect prevents new leases and waits

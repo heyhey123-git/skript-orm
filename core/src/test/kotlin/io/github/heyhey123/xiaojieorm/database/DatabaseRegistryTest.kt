@@ -60,7 +60,7 @@ class DatabaseRegistryTest {
             override val typesRegistry = mutableMapOf<TypeId, DataType<*>>()
         }
 
-        override fun doConnect(url: String, user: String, password: String) = Unit
+        override fun doConnect(settings: ConnectionSettings) = Unit
         override fun doDisconnect() = Unit
         override suspend fun doRegisterTable(table: Table) = Unit
     }

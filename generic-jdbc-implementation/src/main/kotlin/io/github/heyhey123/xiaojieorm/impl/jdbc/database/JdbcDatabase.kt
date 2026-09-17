@@ -2,6 +2,7 @@ package io.github.heyhey123.xiaojieorm.impl.jdbc.database
 
 import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
+import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
@@ -24,12 +25,12 @@ open class JdbcDatabase(
 
     override val dataTypes: DataTypes = JdbcDataTypes
 
-    override fun doConnect(url: String, user: String, password: String) {
+    override fun doConnect(settings: ConnectionSettings) {
         try {
             val config = HikariConfig().apply {
-                jdbcUrl = url
-                username = user
-                this.password = password
+                jdbcUrl = settings.url
+                username = settings.username
+                password = settings.password
                 driverClassName = driver
             }
             dataSource = HikariDataSource(config)
@@ -45,7 +46,7 @@ open class JdbcDatabase(
             }
             dataSource = null
             queries = null
-            throw IllegalStateException("Failed to connect to the database: $url", e)
+            throw IllegalStateException("Failed to connect to the database: ${settings.url}", e)
         }
     }
 

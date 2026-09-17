@@ -44,6 +44,7 @@ private const val GATE_TIMEOUT_SECONDS = 10L
 private val URL = "jdbc:test:lifecycle"
 private val USER = "tester"
 private val PASSWORD = "secret"
+private val SETTINGS = ConnectionSettings(URL, USER, PASSWORD)
 
 /**
  * Covers the process-global [Database] lifecycle: publishing, replacing, failing, disconnecting,
@@ -80,7 +81,7 @@ class DatabaseLifecycleTest {
     }
 
     @Test
-    fun `connect is not attempted until replaceWith runs`() = runBlocking<Unit> {
+    fun `connect is not attempted until connectDefault runs`() = runBlocking<Unit> {
         val database = ControllableDatabase("idle")
 
         assertEquals(0, database.connectCalls.get())
@@ -90,10 +91,10 @@ class DatabaseLifecycleTest {
     // ---------------------------------------------------------------- connecting
 
     @Test
-    fun `replaceWith connects and publishes the database`() = runBlocking<Unit> {
+    fun `connectDefault connects and publishes the database`() = runBlocking<Unit> {
         val database = ControllableDatabase("first")
 
-        Database.replaceWith(database, URL, USER, PASSWORD)
+        Database.connectDefault(database, SETTINGS)
 
         assertTrue(database.isConnected)
         assertEquals(Database.State.CONNECTED, database.state)
@@ -103,11 +104,11 @@ class DatabaseLifecycleTest {
     }
 
     @Test
-    fun `replaceWith disconnects the database it replaces`() = runBlocking<Unit> {
+    fun `connectDefault disconnects the database it replaces`() = runBlocking<Unit> {
         val first = connectedDatabase("first")
         val second = ControllableDatabase("second")
 
-        Database.replaceWith(second, URL, USER, PASSWORD)
+        Database.connectDefault(second, SETTINGS)
 
         assertEquals(1, first.disconnectCalls.get())
         assertFalse(first.isConnected)
@@ -122,7 +123,7 @@ class DatabaseLifecycleTest {
         database.connectFailure = IllegalStateException("connect refused")
 
         val thrown = assertFailsWith<IllegalStateException> {
-            Database.replaceWith(database, URL, USER, PASSWORD)
+            Database.connectDefault(database, SETTINGS)
         }
 
         assertEquals("connect refused", thrown.message)
@@ -139,7 +140,7 @@ class DatabaseLifecycleTest {
         database.disconnectFailure = IllegalArgumentException("cleanup refused")
 
         val thrown = assertFailsWith<IllegalStateException> {
-            Database.replaceWith(database, URL, USER, PASSWORD)
+            Database.connectDefault(database, SETTINGS)
         }
 
         assertEquals("connect refused", thrown.message)
@@ -156,7 +157,7 @@ class DatabaseLifecycleTest {
         database.publishQueries = false
 
         val thrown = assertFailsWith<IllegalStateException> {
-            Database.replaceWith(database, URL, USER, PASSWORD)
+            Database.connectDefault(database, SETTINGS)
         }
 
         assertTrue(
@@ -236,7 +237,7 @@ class DatabaseLifecycleTest {
         database.disconnect()
         database.registeredTables.clear()
 
-        Database.replaceWith(database, URL, USER, PASSWORD)
+        Database.connectDefault(database, SETTINGS)
 
         assertEquals(listOf("users"), database.registeredTables)
     }
@@ -397,12 +398,12 @@ class DatabaseLifecycleTest {
     }
 
     @Test
-    fun `replaceWith is rejected while the lifecycle is shutting down`() = runBlocking<Unit> {
+    fun `connectDefault is rejected while the lifecycle is shutting down`() = runBlocking<Unit> {
         val rejected = ControllableDatabase("rejected")
         Database.shutdown()
 
         assertFailsWith<IllegalStateException> {
-            Database.replaceWith(rejected, URL, USER, PASSWORD)
+            Database.connectDefault(rejected, SETTINGS)
         }
 
         assertNull(Database.current)
@@ -435,13 +436,13 @@ class DatabaseLifecycleTest {
         database.connectGate = connectGate
 
         val connecting = async(Dispatchers.IO) {
-            runCatching { Database.replaceWith(database, URL, USER, PASSWORD) }
+            runCatching { Database.connectDefault(database, SETTINGS) }
         }
         database.connectEntered.awaitOpened()
 
         val shuttingDown = async(Dispatchers.IO) { Database.shutdown() }
         // Once the flag is observable the outcome is fixed: the connect can no longer publish,
-        // because shutdown already holds the transition lock that replaceWith is waiting on.
+        // because shutdown already holds the transition lock that connectDefault is waiting on.
         awaitUntil("the lifecycle starts shutting down") { Database.isShuttingDown }
 
         connectGate.countDown()
@@ -463,11 +464,11 @@ class DatabaseLifecycleTest {
     // ---------------------------------------------------------------- concurrency
 
     @Test
-    fun `concurrent replaceWith calls leave exactly one published database`() = runBlocking<Unit> {
+    fun `concurrent connectDefault calls leave exactly one published database`() = runBlocking<Unit> {
         val databases = List(4) { ControllableDatabase("concurrent-$it") }
 
         databases.map { database ->
-            async(Dispatchers.IO) { Database.replaceWith(database, URL, USER, PASSWORD) }
+            async(Dispatchers.IO) { Database.connectDefault(database, SETTINGS) }
         }.awaitAll()
 
         val published = Database.current
@@ -535,12 +536,12 @@ class DatabaseLifecycleTest {
     }
 
     @Test
-    fun `concurrent replaceWith and shutdown never corrupt the lifecycle`() = runBlocking<Unit> {
+    fun `concurrent connectDefault and shutdown never corrupt the lifecycle`() = runBlocking<Unit> {
         val databases = List(3) { ControllableDatabase("race-$it") }
 
         val replacements = databases.map { database ->
             async(Dispatchers.IO) {
-                runCatching { Database.replaceWith(database, URL, USER, PASSWORD) }
+                runCatching { Database.connectDefault(database, SETTINGS) }
             }
         }
         val shutdowns = List(3) { async(Dispatchers.IO) { Database.shutdown() } }
@@ -689,7 +690,7 @@ class DatabaseLifecycleTest {
         database.connectFailure = IllegalStateException("refused")
 
         assertFailsWith<IllegalStateException> {
-            Database.createConnection("logs", database, URL, USER, PASSWORD)
+            Database.connectNamed("logs", database, SETTINGS)
         }
 
         assertNull(Database.connection("logs"))
@@ -705,9 +706,9 @@ class DatabaseLifecycleTest {
     ): ControllableDatabase {
         val database = ControllableDatabase(label)
         if (named == null) {
-            Database.replaceWith(database, URL, USER, PASSWORD)
+            Database.connectDefault(database, SETTINGS)
         } else {
-            Database.createConnection(named, database, URL, USER, PASSWORD)
+            Database.connectNamed(named, database, SETTINGS)
         }
         return database
     }
@@ -776,7 +777,7 @@ private class ControllableDatabase(private val label: String) : Database() {
     val disconnectCalls = AtomicInteger()
     val registeredTables = CopyOnWriteArrayList<String>()
 
-    override fun doConnect(url: String, user: String, password: String) {
+    override fun doConnect(settings: ConnectionSettings) {
         connectCalls.incrementAndGet()
         connectEntered.countDown()
         connectGate?.awaitOpened()

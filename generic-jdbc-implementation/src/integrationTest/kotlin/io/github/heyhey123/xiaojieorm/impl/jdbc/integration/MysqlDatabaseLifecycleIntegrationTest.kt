@@ -59,10 +59,10 @@ class MysqlDatabaseLifecycleIntegrationTest {
     }
 
     @Test
-    fun `replaceWith connects and publishes the database`() = runBlocking<Unit> {
+    fun `connectDefault connects and publishes the database`() = runBlocking<Unit> {
         val database = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
 
-        Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(database, endpoint.settings)
 
         assertTrue(database.isConnected)
         assertEquals(Database.State.CONNECTED, database.state)
@@ -83,7 +83,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
         val database = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
 
         assertFailsWith<IllegalStateException> {
-            Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, "definitely-not-the-password")
+            Database.connectDefault(database, endpoint.settings.copy(password = "definitely-not-the-password"))
         }
 
         assertNull(Database.current)
@@ -98,7 +98,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
         val unreachable = "jdbc:mysql://127.0.0.1:1/xiaojie_orm_test?connectTimeout=1000&socketTimeout=1000"
 
         assertFailsWith<IllegalStateException> {
-            Database.replaceWith(database, unreachable, endpoint.username, endpoint.password)
+            Database.connectDefault(database, endpoint.settings.copy(url = unreachable))
         }
 
         assertNull(Database.current)
@@ -108,7 +108,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
     @Test
     fun `a database can be disconnected and connected again`() = runBlocking<Unit> {
         val database = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-        Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(database, endpoint.settings)
         database.registerTable(probeTable)
 
         database.disconnect()
@@ -117,7 +117,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
         assertEquals(Database.State.DISCONNECTED, database.state)
         assertNull(Database.current)
 
-        Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(database, endpoint.settings)
 
         assertTrue(database.isConnected)
         // Tables registered before the disconnect are registered again during the reconnect.
@@ -129,7 +129,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
     @Test
     fun `shutdown closes the pool and blocks further work`() = runBlocking<Unit> {
         val database = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-        Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(database, endpoint.settings)
         val pool = checkNotNull(database.dataSource)
 
         Database.shutdown()
@@ -144,11 +144,11 @@ class MysqlDatabaseLifecycleIntegrationTest {
     @Test
     fun `replacing the current database closes the previous pool`() = runBlocking<Unit> {
         val first = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-        Database.replaceWith(first, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(first, endpoint.settings)
         val firstPool = checkNotNull(first.dataSource)
 
         val second = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
-        Database.replaceWith(second, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(second, endpoint.settings)
 
         assertTrue(firstPool.isClosed, "the replaced pool must be closed")
         assertFalse(first.isConnected)
@@ -194,7 +194,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
     fun `the mysql factory can connect and register a table`() = runBlocking<Unit> {
         val database = MysqlDatabaseFactory.create(emptyMap())
 
-        Database.replaceWith(database, endpoint.jdbcUrl, endpoint.username, endpoint.password)
+        Database.connectDefault(database, endpoint.settings)
         database.registerTable(probeTable)
 
         val written = database.queries!!.insertOne(mapOf<String, Any?>("name" to "factory"))
