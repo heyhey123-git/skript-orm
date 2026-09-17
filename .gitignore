@@ -28,9 +28,6 @@ out/
 !**/src/main/**/out/
 !**/src/test/**/out/
 
-### Skript Hub Docs ###
-docs/skripthub/skript-orm.json
-
 ### Kotlin ###
 .kotlin
 
