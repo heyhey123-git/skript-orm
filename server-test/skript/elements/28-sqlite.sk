@@ -1,0 +1,176 @@
+# The generic `"JDBC"` type, on the SQLite driver a Paper server already carries.
+#
+# The other elements drive one type name or stop at the database lookup, so this is the only script
+# that covers the half of `"JDBC"` a script supplies itself (the driver class and the url), and the
+# only one whose values reach a driver the project does not test against anywhere else. It runs in
+# both modes, because it needs nothing from the runner: the driver is Paper's own, and the database is
+# a file under Skript's directory, which `prepareServerTest` deletes before every run, so the table
+# below is always created fresh.
+#
+# Every statement is scoped to the connection this script made. In database mode the default is the
+# MySQL connection `00-setup.sk` owns, and an unqualified statement would resolve to that one.
+#
+# The detail line it reports is the word `ok` or the word `failed`, and a FAIL line above it names what
+# did not hold, so the build can require that word instead of accepting whatever arrived.
+every 5 seconds:
+    if {skriptorm::selftest::done::sqlite} is set:
+        stop trigger
+    if {skriptorm::selftest::started::sqlite} is set:
+        stop trigger
+    set {skriptorm::selftest::started::sqlite} to true
+
+    # Every other element reports on the first tick, and a connection made before that would be the
+    # default their unqualified statements resolve to. This one starts after they are all done.
+    wait 6 seconds
+
+    create a connection named "sqlite" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        url: "jdbc:sqlite:plugins/Skript/sqlite-probe.db"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite connect: %last database error%"
+
+    # No auto increment: the generic dialect refuses it, so the key is written out. That it refuses is
+    # checked at the end of this script. The names avoid a `sqlite_` prefix, which SQLite reserves for
+    # its own objects and refuses to create a table under.
+    in connection "sqlite":
+        register a database table "orm_sqlite_probe":
+            id: bigint, primary key, not null
+            name: string(64), not null
+            age: int, nullable
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite register table: %last database error%"
+
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and wait:
+            values:
+                id: 1
+                name: "Alice"
+                age: 30
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite insert one: %last database error%"
+
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and wait:
+            values:
+                id: 2
+                name: "Bob"
+                age: 40
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite insert two: %last database error%"
+
+    # A literal id, which is the form a `%object%` slot has to give a type before it can read it.
+    in connection "sqlite":
+        select one entity from table "orm_sqlite_probe" by id 1 and store the result in {sqlite::by-id::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select by id: %last database error%"
+
+    in connection "sqlite":
+        select many entities from table "orm_sqlite_probe" and store the results in {sqlite::many::*}:
+            where all:
+                age >= 20
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select many: %last database error%"
+
+    # Page two of one row per page: the only statement here that binds a limit and an offset, and the
+    # ordering pagination uses is the primary key.
+    in connection "sqlite":
+        select page 2 with size 1 from table "orm_sqlite_probe" and store the results in {sqlite::page::*}:
+            where all:
+                id >= 1
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select page: %last database error%"
+
+    in connection "sqlite":
+        update one entity in table "orm_sqlite_probe" by id 2 and wait:
+            values:
+                name: "Carol"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite update: %last database error%"
+
+    in connection "sqlite":
+        select one entity from table "orm_sqlite_probe" by id 2 and store the result in {sqlite::updated::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select after update: %last database error%"
+
+    in connection "sqlite":
+        delete one entity from table "orm_sqlite_probe" by id 2 and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite delete: %last database error%"
+
+    in connection "sqlite":
+        select many entities from table "orm_sqlite_probe" and store the results in {sqlite::left::*}:
+            where all:
+                id >= 1
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select after delete: %last database error%"
+
+    # The dialect refuses these wherever it does not know the database, and SQLite is one of those. A
+    # statement that stopped being refused would be a silent change of what the type name promises, so
+    # the message is checked rather than only the failure.
+    in connection "sqlite":
+        upsert one entity in table "orm_sqlite_probe" by id 1 and wait:
+            values:
+                name: "Alice"
+    if last database error does not contain "Upsert is not supported by this JDBC dialect.":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite upsert was not refused: %last database error%"
+
+    in connection "sqlite":
+        insert one entity if absent into table "orm_sqlite_probe" and wait:
+            values:
+                id: 3
+                name: "Dave"
+    if last database error does not contain "Insert-if-absent is not supported by this JDBC dialect.":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite insert if absent was not refused: %last database error%"
+
+    in connection "sqlite":
+        delete entities from table "orm_sqlite_probe" with limit 10 and wait:
+            where all:
+                name = "nobody"
+    if last database error does not contain "Limited delete is not supported by this JDBC dialect.":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite limited delete was not refused: %last database error%"
+
+    in connection "sqlite":
+        register a database table "orm_sqlite_auto":
+            id: bigint, primary key, auto increment, not null
+            name: string(64), not null
+    if last database error does not contain "Auto increment is not supported by this JDBC dialect.":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite auto increment was not refused: %last database error%"
+
+    # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
+    # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
+    set {sqlite::failed} to false
+
+    if {sqlite::by-id::id} is not 1:
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select by id read id '%{sqlite::by-id::id}%'"
+    if {sqlite::by-id::name} is not "Alice":
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select by id read name '%{sqlite::by-id::name}%'"
+    if {sqlite::by-id::age} is not 30:
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select by id read age '%{sqlite::by-id::age}%'"
+    if {sqlite::many::1::name} is not "Alice":
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select many read first row '%{sqlite::many::1::name}%'"
+    if {sqlite::many::2::name} is not "Bob":
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite select many read second row '%{sqlite::many::2::name}%'"
+    if {sqlite::page::1::id} is not 2:
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite page two read id '%{sqlite::page::1::id}%'"
+    if {sqlite::updated::name} is not "Carol":
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite update read back '%{sqlite::updated::name}%'"
+    if {sqlite::left::1::name} is not "Alice":
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite delete left '%{sqlite::left::1::name}%'"
+    if {sqlite::left::2::id} is set:
+        set {sqlite::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL sqlite delete left a second row"
+
+    if {sqlite::failed} is true:
+        log "SKRIPTORM_SELFTEST detail: sqlite round trip -> failed"
+    else:
+        log "SKRIPTORM_SELFTEST detail: sqlite round trip -> ok"
+
+    set {skriptorm::selftest::done::sqlite} to true

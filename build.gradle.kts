@@ -337,6 +337,10 @@ val serverTestChecks = buildMap {
     put("upsert by id", serverTestExpectedMessage)
     // Disconnecting has no error channel: it proves it ran by the trigger reaching the end.
     put("disconnect", "ran")
+    // The generic `"JDBC"` type on the SQLite driver Paper carries. It reports its verdict as a word
+    // rather than an error message, because it asserts what it read back and says `failed` when any of
+    // it does not hold, in both modes.
+    put("sqlite round trip", "ok")
     if (serverTestUsesDatabase) {
         // The all-form, driven by the disconnect element once nothing else needs a connection.
         put("disconnect all", "ran")
