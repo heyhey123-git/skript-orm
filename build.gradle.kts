@@ -1,11 +1,17 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import groovy.json.JsonSlurper
+import java.net.URI
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.RegularFileProperty
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.Property
 import org.gradle.api.tasks.Input
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Internal
+import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 import xyz.jpenilla.runpaper.task.RunServer
 
@@ -541,5 +547,252 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
     private fun indent(lines: List<String>): String =
         lines.joinToString(separator = "\n") { line -> "      $line" }
+}
+
+// ---------------------------------------------------------------------------------------------
+// The SkriptHub documentation JSON
+//
+// SkriptHub reads an addon's syntax from a JSON file that SkriptHubDocsTool generates on a running
+// server, and its dashboard imports that file with a paste. `./gradlew gendocs` does the whole thing
+// locally: it builds the jar, boots a disposable Paper server carrying Skript, this plugin and the
+// tool, has that server generate the documentation, and writes the result where the repository keeps
+// it. None of it belongs in CI — the upload is a person pasting text — so the tool's version is
+// pinned here rather than tracked.
+// ---------------------------------------------------------------------------------------------
+
+// SkriptHubDocsTool 1.17 wants Skript 2.15 or newer, and the server below carries the Skript this
+// plugin is built against, so the two cannot drift apart unnoticed.
+val skriptHubDocsToolVersion = "1.17"
+
+val skriptHubDocsToolFile = layout.buildDirectory.file(
+    "tools/skripthubdocstool-$skriptHubDocsToolVersion.jar"
+)
+val skriptHubDocsDirectory = layout.buildDirectory.dir("skript-hub")
+
+/**
+ * Downloads one file to a fixed place.
+ *
+ * The documentation tool is a server plugin published as a GitHub release asset, so it has no Maven
+ * coordinates to ask a repository for. Naming the url is the whole task; the declared output is what
+ * stops a second run from downloading it again.
+ */
+abstract class DownloadFile : DefaultTask() {
+
+    @get:Input
+    abstract val url: Property<String>
+
+    @get:OutputFile
+    abstract val target: RegularFileProperty
+
+    @TaskAction
+    fun download() {
+        val file = target.get().asFile
+        file.parentFile.mkdirs()
+        // Downloaded beside the real name and then moved onto it, so an interrupted transfer is never
+        // taken for the complete file by the next run.
+        val partial = file.resolveSibling(file.name + ".part")
+        URI(url.get()).toURL().openStream().use { input ->
+            partial.outputStream().use { output -> input.copyTo(output) }
+        }
+        // Replacing is what makes a second download work: the file it moves onto is usually already
+        // there, and a plain rename refuses to overwrite on Windows.
+        Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+    }
+}
+
+/**
+ * Checks the JSON the documentation tool wrote, and copies it into the repository.
+ *
+ * The file is generated from the annotations, so it is checked rather than trusted: an element that
+ * lost a pattern, an example that would show an empty first line, or a version that disagrees with
+ * `gradle.properties` would otherwise reach SkriptHub unnoticed. It is the server test's log check one
+ * layer up.
+ */
+abstract class CollectGendocs : DefaultTask() {
+
+    /** What the tool wrote on the server that just ran. */
+    @get:InputFile
+    abstract val generated: RegularFileProperty
+
+    /** Where the repository keeps the file that is pasted into SkriptHub. */
+    @get:OutputFile
+    abstract val destination: RegularFileProperty
+
+    /** The version the documentation has to report, which is the one in `gradle.properties`. */
+    @get:Input
+    abstract val expectedVersion: Property<String>
+
+    @TaskAction
+    fun collect() {
+        val source = generated.get().asFile
+        if (!source.isFile) {
+            throw GradleException(
+                "The documentation tool wrote no ${source.name}, so either the server never ran it or " +
+                    "it failed to; its log is beside the run directory, at logs/latest.log."
+            )
+        }
+
+        @Suppress("UNCHECKED_CAST")
+        val document = JsonSlurper().parse(source) as Map<String, Any?>
+        // Every kind Skript documents, so that one this addon does not use is noticed rather than
+        // quietly skipped. It has none of the kinds named before effects.
+        val kinds = listOf(
+            "events", "conditions", "effects", "expressions", "types", "functions", "sections", "structures"
+        )
+        val entries = kinds.flatMap { kind ->
+            val ofKind = document[kind] as? List<*> ?: emptyList<Any?>()
+            ofKind.filterIsInstance<Map<*, *>>().map { kind to it }
+        }
+
+        val problems = mutableListOf<String>()
+
+        val metadata = document["metadata"] as? Map<*, *>
+        val reportedVersion = metadata?.get("version")?.toString().orEmpty()
+        if (reportedVersion != expectedVersion.get()) {
+            problems += "The documentation reports version '$reportedVersion' where this build is " +
+                "${expectedVersion.get()}."
+        }
+        if (entries.isEmpty()) {
+            problems += "The file lists no syntax at all."
+        }
+
+        entries.forEach { (kind, entry) ->
+            val name = entry["name"]?.toString().orEmpty()
+            val label = if (name.isBlank()) "a ${kind.dropLast(1)}" else "'$name'"
+            if (name.isBlank()) problems += "A ${kind.dropLast(1)} has no name."
+
+            val patterns = (entry["patterns"] as? List<*>)?.map { it.toString() }.orEmpty()
+            if (patterns.none { it.isNotBlank() }) problems += "$label lists no pattern."
+
+            val description = (entry["description"] as? List<*>)?.map { it.toString() }.orEmpty()
+            if (description.none { it.isNotBlank() }) problems += "$label has no description."
+
+            val examples = (entry["examples"] as? List<*>)?.map { it.toString() }.orEmpty()
+            if (examples.isEmpty()) {
+                problems += "$label has no example."
+            } else if (examples.any { it.startsWith("\n") || it.startsWith("\r") }) {
+                problems += "$label has an example that starts on a blank line, which SkriptHub shows as " +
+                    "an empty first line: start the raw string on the same line as the first line of Skript."
+            }
+        }
+
+        val duplicates = entries.groupBy { it.second["id"]?.toString() }.filterValues { it.size > 1 }.keys
+        if (duplicates.isNotEmpty()) {
+            problems += "Two entries share an id, which SkriptHub refuses: ${duplicates.joinToString()}."
+        }
+
+        if (problems.isNotEmpty()) {
+            throw GradleException(
+                buildString {
+                    appendLine("The generated documentation cannot be uploaded as it is:")
+                    problems.forEach { appendLine("  - $it") }
+                    appendLine("What the tool wrote is left at ${source.absolutePath}.")
+                }
+            )
+        }
+
+        val target = destination.get().asFile
+        target.parentFile.mkdirs()
+        target.writeText(source.readText())
+        logger.lifecycle(
+            "{} entries written to {}, ready for SkriptHub's JSON import.",
+            entries.size,
+            target.relativeTo(project.projectDir)
+        )
+    }
+}
+
+val downloadSkriptHubDocsTool by tasks.registering(DownloadFile::class) {
+    description = "Downloads the tool that generates the SkriptHub documentation."
+    group = "documentation"
+    url.set(
+        "https://github.com/SkriptHub/SkriptHubDocsTool/releases/download/" +
+            "$skriptHubDocsToolVersion/skripthubdocstool-$skriptHubDocsToolVersion.jar"
+    )
+    target.set(skriptHubDocsToolFile)
+}
+
+// The documentation server gets a run directory of its own rather than sharing the test one: the test's
+// scripts stop the server as soon as they have all reported, which is the opposite of what this run
+// wants. Its first run also downloads and extracts Paper there.
+val prepareGendocs by tasks.registering {
+    description = "Writes the run directory the documentation server starts from."
+    group = "documentation"
+    val runDirectory = skriptHubDocsDirectory
+    doLast {
+        val run = runDirectory.get().asFile
+        run.mkdirs()
+        // The run directory outlives a run, and any script left in it is parsed and executed next time:
+        // this is where a check script once ran a connection example while the documentation was being
+        // generated. Skript writes its config back when it next starts, so the whole directory goes.
+        run.resolve("plugins/Skript").deleteRecursively()
+        // As in the server test: this records acceptance of the Minecraft EULA, and only ever for a
+        // disposable server this build creates.
+        run.resolve("eula.txt").writeText("eula=true\n")
+        // A server that never accepts a player. The port differs from the test server's so both can be
+        // up at once, and the pause is off because an empty server would otherwise stop ticking, and
+        // the script below would then never run.
+        run.resolve("server.properties").writeText(
+            """
+            online-mode=false
+            server-port=25600
+            level-type=minecraft:flat
+            generator-settings={"layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}],"biome":"minecraft:plains"}
+            level-name=world
+            spawn-protection=0
+            max-players=1
+            view-distance=2
+            simulation-distance=2
+            difficulty=peaceful
+            enable-command-block=false
+            enable-status=false
+            pause-when-empty-seconds=-1
+            sync-chunk-writes=false
+            """.trimIndent() + "\n"
+        )
+        // The tool generates from a command, and a server started by Gradle has no console to type into,
+        // so a script runs it and then stops the server this task is waiting on.
+        val script = run.resolve("plugins/Skript/scripts/gendocs.sk")
+        script.parentFile.mkdirs()
+        script.writeText(
+            """
+            # Written by the prepareGendocs task. Not part of the server test.
+            on load:
+                wait 1 second
+                execute console command "/gendocs"
+                wait 2 seconds
+                execute console command "/stop"
+            """.trimIndent() + "\n"
+        )
+    }
+}
+
+val runGendocs by tasks.registering(RunServer::class) {
+    description = "Boots the server the documentation is generated on."
+    group = "documentation"
+    dependsOn(prepareGendocs, downloadSkriptHubDocsTool)
+    minecraftVersion(paperMinecraftVersion)
+    build(paperBuild)
+    runDirectory.set(skriptHubDocsDirectory)
+    pluginJars(tasks.shadowJar, serverTestPlugins, files(skriptHubDocsToolFile))
+    // SkBee comes along because the NBT column type is the one whose implementation lives in another
+    // plugin, and the documentation is generated from what the server actually has.
+    downloadPlugins {
+        modrinth("skbee", "bTBlzhGZ")
+    }
+}
+
+val gendocs by tasks.registering(CollectGendocs::class) {
+    description = "Generates the SkriptHub documentation JSON from the annotations in the code."
+    group = "documentation"
+    dependsOn(runGendocs)
+    // The file is named after the plugin, which is the name SkriptHub knows the addon by.
+    generated.set(
+        skriptHubDocsDirectory.map { directory ->
+            directory.file("plugins/SkriptHubDocsTool/documentation/skript-orm.json")
+        }
+    )
+    destination.set(layout.projectDirectory.file("docs/skripthub/skript-orm.json"))
+    expectedVersion.set(version.toString())
 }
 
