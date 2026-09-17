@@ -83,7 +83,7 @@ command /adduser <text> <integer>:
 | [类型](docs/types.zh-CN.md) | 每种列类型接受什么、怎么存。 |
 | [排雷](docs/troubleshooting.zh-CN.md) | 会踩的坑：静默的改表、看不见的 NULL、没有 SkBee 时的 NBT。 |
 | [菜谱](docs/cookbook.zh-CN.md) | 脚本里最常用的几种写法，整段可抄。 |
-| [兼容性](docs/compatibility.zh-CN.md) | 版本、jar 里打包了什么、不支持什么。 |
+| [兼容性](docs/compatibility.zh-CN.md) | 版本、脚本能写的类型名、jar 里打包了什么、不支持什么。 |
 
 ## 从源码构建
 

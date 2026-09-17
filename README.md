@@ -90,7 +90,7 @@ and hands results back as ordinary Skript variables and values.
 | [Types](docs/types.md) | What each column type accepts and how it is stored. |
 | [Troubleshooting](docs/troubleshooting.md) | The traps: silent schema changes, invisible NULLs, NBT without SkBee. |
 | [Cookbook](docs/cookbook.md) | Recipes for the things scripts usually need. |
-| [Compatibility](docs/compatibility.md) | Versions, what ships in the jar, and what is not supported. |
+| [Compatibility](docs/compatibility.md) | Versions, the type names a script can write, what ships in the jar, and what is not supported. |
 
 ## Building from source
 

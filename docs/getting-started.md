@@ -23,8 +23,9 @@ on load:
         stop
 ```
 
-- `"MySQL"` is the name of the implementation, and it is the only one this jar ships; see
-  [Compatibility](compatibility.md).
+- `"MySQL"` is the type name of an implementation. The jar registers two, `"MySQL"` and `"JDBC"`, and
+  the name is matched exactly, so a database *product* name is not one of them; see
+  [Connections](connections.md#the-implementation-name).
 - `url` is required. `username` and `password` may be empty strings, for a server that does not ask for
   them.
 - The section always waits, so anything after it in the same trigger runs against the live connection.

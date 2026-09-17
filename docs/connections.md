@@ -14,8 +14,8 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` names the implementation. It is the only one this jar ships; see
-  [Compatibility](compatibility.md).
+- `"MySQL"` names the implementation. The jar registers `"MySQL"` and `"JDBC"`; see
+  [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
 - Any other literal property in the block is handed to the implementation untouched, so a future
   implementation can ask for more without new syntax.
@@ -35,6 +35,44 @@ if last database error is set:
 This connection has no name. It becomes the **default** connection, which is the one a statement uses
 when nothing else says otherwise, so a script with a single database never has to think about any of
 this.
+
+## The implementation name
+
+The quoted word is a **type name**, not the name of a database product: it selects the code that builds
+the SQL and reads the rows back, and it is matched exactly, case-sensitively. The jar registers two:
+
+| Type name | What it brings |
+| --- | --- |
+| `"MySQL"` | MySQL's dialect — backtick identifiers, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
+| `"JDBC"` | A driver *you* name in a `driver` property, plus a dialect that writes portable SQL: `"double quoted"` identifiers, `LIMIT 1` to take a single row, and `LIMIT ? OFFSET ?` to page — row limiting in the one form MySQL, MariaDB, SQLite, PostgreSQL and H2 all take. Whatever has no portable form — `insert ... if absent`, `upsert ... by id`, a limit on a write, `auto increment` — is refused rather than guessed at. |
+
+The driver is a class name, and it has to be on the server's classpath before the plugin can use it: this
+jar bundles no driver at all. For a database whose SQL is standard-shaped — PostgreSQL, say — that is the
+whole connection:
+
+```sk
+create a connection to database "JDBC" with properties:
+    driver: "org.postgresql.Driver"
+    url: "jdbc:postgresql://localhost:5432/mydb"
+    username: "root"
+    password: "123456"
+```
+
+Paper ships two drivers of its own, MySQL Connector/J and SQLite's. Neither is a way to use this type
+as things stand:
+
+- **MySQL.** The dialect writes `"double quoted"` identifiers, which MySQL reads as string literals
+  unless its `ANSI_QUOTES` mode is on, so a MySQL connection written this way fails on the quoting
+  before it reaches anything else. Write `"MySQL"` for MySQL.
+- **SQLite.** The dialect's SQL is nothing SQLite objects to — it takes `"double quoted"` identifiers
+  and `LIMIT ? OFFSET ?` — but the driver Paper ships (sqlite-jdbc 3.49.1.0) does not implement the
+  `setObject` overload this implementation binds its values with, so every statement carrying a value
+  fails with `setObject not implemented`. Registering a table works; reading or writing a row does not.
+
+So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"`,
+`"PostgreSQL"`, `"MongoDB"` and `"SQLite"`: those are products, not types. What a connection reaches is
+a product; what a script names is one of the two types above, and [Compatibility](compatibility.md)
+keeps the two lists apart.
 
 ## Naming one
 

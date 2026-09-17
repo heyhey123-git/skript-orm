@@ -27,7 +27,7 @@
 | --- | --- |
 | [排雷](troubleshooting.zh-CN.md) | 那些看似成功的沉默：被忽略的改表、读不到的 NULL 列、没有 SkBee 时的 NBT。 |
 | [菜谱](cookbook.zh-CN.md) | 整段可抄的写法：upsert、分页、批量插入、存物品 NBT、读改写。 |
-| [兼容性](compatibility.zh-CN.md) | 版本、jar 里打包了什么、不支持什么。 |
+| [兼容性](compatibility.zh-CN.md) | 版本、脚本能写的类型名、jar 里打包了什么、不支持什么。 |
 
 ## GitHub wiki
 

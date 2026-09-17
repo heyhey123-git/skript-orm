@@ -13,7 +13,7 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` 是实现的名称，本 jar 只打包了这一个，见 [兼容性](compatibility.zh-CN.md)。
+- `"MySQL"` 是实现的名称。jar 里注册了两个：`"MySQL"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
 - 块里其它字面量属性会原样交给实现。日后有实现需要更多参数，也不必新添语法。
 - 这个 section 必定等待：下一行执行时，连接要么可用，要么已经失败。这里既不需要 `and wait`，也不接受它。
@@ -29,6 +29,39 @@ if last database error is set:
 ```
 
 这条连接没有名字。它会成为**默认连接**，也就是没有任何别的东西指定时语句所使用的那一条。所以只有一个库的脚本，完全不必关心下面这些。
+
+## 实现名称
+
+引号里那个词是**类型名**，不是数据库产品的名字：它决定用哪套代码拼 SQL、读结果，而且是**大小写敏感的精确匹配**。jar 里注册了两个：
+
+| 类型名 | 它带来什么 |
+| --- | --- |
+| `"MySQL"` | MySQL 方言——反引号标识符、`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`、`AUTO_INCREMENT`、`LIMIT` 分页——以及由插件自动找到的 MySQL 驱动（`com.mysql.cj.jdbc.Driver`，或更老的 `com.mysql.jdbc.Driver`）。脚本要用的几乎总是这一个。 |
+| `"JDBC"` | 由**你自己**在 `driver` 属性里指定驱动，配一个写通用 SQL 的方言：`"双引号"` 标识符、取一行用 `LIMIT 1`、分页用 `LIMIT ? OFFSET ?`——这正是 MySQL、MariaDB、SQLite、PostgreSQL、H2 都接受的写法。凡是通用写法表达不了的——`insert ... if absent`、`upsert ... by id`、写操作加 limit、`auto increment`——它宁可拒绝也不猜。 |
+
+驱动写的是**类名**，而且它必须已经在服务端的 classpath 上，插件才用得上：本 jar 一个驱动都不带。
+如果某个库的 SQL 就是标准形状——比如 PostgreSQL——那么一条连接整个长这样：
+
+```sk
+create a connection to database "JDBC" with properties:
+    driver: "org.postgresql.Driver"
+    url: "jdbc:postgresql://localhost:5432/mydb"
+    username: "root"
+    password: "123456"
+```
+
+Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）。就目前的状态而言，这两个都不是用这个类型的路子：
+
+- **MySQL。** 这个方言写 `"双引号"` 标识符，而 MySQL 在没开 `ANSI_QUOTES` 时会把它当成字符串字面量，
+  所以这样连的 MySQL 先倒在标识符上，后面的问题都轮不到。连 MySQL 请写 `"MySQL"`。
+- **SQLite。** 这个方言写出来的 SQL 本身 SQLite 并不反对——它接受 `"双引号"` 标识符，也接受
+  `LIMIT ? OFFSET ?`——但 Paper 带的那个驱动（sqlite-jdbc 3.49.1.0）没有实现本实现绑定值用的那个
+  `setObject` 重载，所以凡是带值的语句都会以 `setObject not implemented` 失败。建表能成，读一行、
+  写一行都不行。
+
+所以 `"mysql"` 会被拒绝，报 `Database 'mysql' is not supported.`；`"MariaDB"`、`"PostgreSQL"`、
+`"MongoDB"`、`"SQLite"` 同样会被拒绝——它们是产品，不是类型名。连接**底下**连的是什么产品是一回事，
+脚本**写**的是上面两个类型名之一，这是另一回事。[兼容性](compatibility.zh-CN.md) 里那份产品清单说的是前者。
 
 ## 给连接起名
 

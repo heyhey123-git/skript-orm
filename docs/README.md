@@ -29,7 +29,7 @@ back, and everything after that is reference for the parts you did not need yet.
 | --- | --- |
 | [Troubleshooting](troubleshooting.md) | Silence that is not success: schema changes that are ignored, NULL columns that vanish, NBT without SkBee. |
 | [Cookbook](cookbook.md) | Whole recipes: upsert, paging, bulk insert, storing an item's NBT, read-modify-write. |
-| [Compatibility](compatibility.md) | Versions, what ships inside the jar, and what is not supported. |
+| [Compatibility](compatibility.md) | Versions, the type names a script can write, what ships inside the jar, and what is not supported. |
 
 ## For the wiki on GitHub
 

@@ -12,16 +12,33 @@
 | **MySQL** | The shipped implementation targets MySQL, and is tested against MySQL 8 in CI. MariaDB and other MySQL-compatible servers have not been tested. |
 | **SkBee** | Optional. Only `nbtcompound` columns need it. |
 
+## The type names a script can write
+
+`create a connection to database "..."` takes the type name of an implementation, matched exactly and
+case-sensitively, and the released jar registers two:
+
+| Type name | What it is |
+| --- | --- |
+| `"MySQL"` | MySQL's dialect, with the MySQL driver found for the server. The product and the type name happen to be the same word here, which is the only reason the two lists on this page can be confused. |
+| `"JDBC"` | A driver you name yourself in a `driver` property, and a dialect that writes portable SQL (`"double quoted"` identifiers, `LIMIT 1` for one row, `LIMIT ? OFFSET ?` for paging), refusing whatever has no portable form. |
+
+Any other name is refused when the section runs, with `Database '<name>' is not supported.` There is no
+type called `"MariaDB"`, `"PostgreSQL"`, `"MongoDB"` or `"SQLite"`; those are products, and the table
+under "Database products" is about them.
+
 ## What is inside the jar
 
-The released jar bundles the plugin, its Kotlin runtime, the connection pool, and **one** database
-implementation: the JDBC one, configured for MySQL. It does **not** bundle a JDBC driver, because the
-server already has one: Paper ships MySQL Connector/J and makes it visible to plugins, so there is
-nothing to install alongside.
+The released jar bundles the plugin, its Kotlin runtime, the connection pool, and those two type names —
+both of which are the same JDBC implementation, one adding MySQL's dialect and one taking a driver from
+the script. It does **not** bundle a JDBC driver for MySQL, because the server already has one: Paper
+ships MySQL Connector/J and makes it visible to plugins, so there is nothing to install alongside.
+`"JDBC"` uses whatever driver the server carries for the database it points at, which is the only reason
+to reach for it.
 
 The repository also contains a PostgreSQL implementation and a MongoDB implementation. They are not part
 of a default build, are not covered by CI, and are not documented here; a build can include them with
-`-PbundleModules=`, which is a developer concern rather than a supported configuration.
+`-PbundleModules=`, which is a developer concern rather than a supported configuration — and they are
+why this repository mentions more database types than the released jar registers.
 
 ## NBT compounds and SkBee
 
@@ -47,15 +64,18 @@ classes up by name when the first NBT value is handled and links them, which is 
 `softdepend: [SkBee]` in the plugin description makes SkBee load first. It is a load-order hint, not a
 requirement: the plugin enables with or without it.
 
-## Databases
+## Database products
+
+None of these names is a type name: this table is about what a connection can reach, and the type names
+are the two under "The type names a script can write".
 
 | | |
 | --- | --- |
-| MySQL | Supported, and the only implementation in the released jar. |
-| MariaDB | Untested. The statement shapes are MySQL's (`INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes), so it may work, but nothing checks it. |
-| PostgreSQL | Not supported in this release. |
-| MongoDB | Not supported in this release. |
-| SQLite and others | Not supported. |
+| MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
+| MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
+| PostgreSQL | Not supported in this release. The repository has an implementation; the released jar does not carry it. |
+| MongoDB | Not supported in this release. The implementation exists in the repository, not in the jar. |
+| SQLite and others | Not supported. Paper does ship SQLite's driver, and the `"JDBC"` dialect writes nothing SQLite objects to, but that driver does not implement the `setObject` overload this implementation binds its values with, so every statement carrying a value fails with `setObject not implemented`. The others need a driver the server does not carry. |
 
 ## Behaviours that depend on the implementation
 
