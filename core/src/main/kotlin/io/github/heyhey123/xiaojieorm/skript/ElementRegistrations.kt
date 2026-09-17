@@ -6,6 +6,7 @@ import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffDisconnect
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertIfAbsentFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertManyFromVariable
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffInsertOneFromVariable
+import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffRollbackTransaction
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectById
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectManyUnfiltered
 import io.github.heyhey123.xiaojieorm.skript.elements.effects.EffSelectOneUnfiltered
@@ -27,6 +28,7 @@ import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecSelectById
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecSelectMany
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecSelectOne
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecSelectPage
+import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecTransaction
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecUpdate
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecUpdateById
 import io.github.heyhey123.xiaojieorm.skript.elements.sections.SecUpsertById
@@ -48,6 +50,7 @@ internal fun registerElements(addon: SkriptAddon) {
     EffInsertIfAbsentFromVariable.register(addon)
     EffInsertManyFromVariable.register(addon)
     EffInsertOneFromVariable.register(addon)
+    EffRollbackTransaction.register(addon)
     EffSelectById.register(addon)
     EffSelectManyUnfiltered.register(addon)
     EffSelectOneUnfiltered.register(addon)
@@ -70,6 +73,7 @@ internal fun registerElements(addon: SkriptAddon) {
     SecSelectMany.register(addon)
     SecSelectOne.register(addon)
     SecSelectPage.register(addon)
+    SecTransaction.register(addon)
     SecUpdate.register(addon)
     SecUpdateById.register(addon)
     SecUpsertById.register(addon)

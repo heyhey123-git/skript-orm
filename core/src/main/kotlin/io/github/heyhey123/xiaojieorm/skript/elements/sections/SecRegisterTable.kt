@@ -13,6 +13,7 @@ import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
@@ -152,6 +153,15 @@ class SecRegisterTable : Section() {
 
         val database = ConnectionScope.resolve(actualEvent)
             ?: return fail(actualEvent, trigger, ConnectionScope.noConnectionMessage())
+        // MySQL and its relatives commit the open transaction when they see DDL, so a table registered
+        // inside one would silently end it. Refusing keeps "all of it or none of it" true.
+        if (ConnectionScope.transaction(actualEvent) != null) {
+            return fail(
+                actualEvent,
+                trigger,
+                "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
+            )
+        }
         val tableName = tableNameExpr.getSingle(actualEvent)
             ?: return fail(actualEvent, trigger, "Table name is null.")
         if (database.tables.containsKey(tableName)) {
@@ -224,8 +234,7 @@ class SecRegisterTable : Section() {
     )
 
     private fun fail(event: Event, trigger: Trigger, message: String): TriggerItem? {
-        SkriptDatabaseErrors.set(event, message)
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        DatabaseWork.report(event, trigger, message)
         return walk(event, false)
     }
 

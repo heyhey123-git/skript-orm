@@ -58,6 +58,7 @@ if last database error is set:
 
 - **想要几条连接就有几条。** `create a connection` 让那个库成为默认连接，`named "logs"` 再留住一条，`in connection "logs":` 或 `use connection "logs"` 决定一条语句用哪一条。
 - **碰数据的操作都是 section。** 写入、读取、更新、删除各有各的语法和主体，读取必定等结果。
+- **一个事务就是一个 section。** `database transaction:` 在主体结束时提交，主体里有语句失败时回滚，运行期间独占一条连接。
 - **失败是一个值。** 写了 `and wait` 的操作结束之后，`last database error` 里就是出错原因。一切顺利时它保持为空。
 
 ## 文档
@@ -71,6 +72,7 @@ if last database error is set:
 | [读取行](docs/reading.zh-CN.md) | 查一行、多行、分页、按 id，`where` 块，以及结果的形状。 |
 | [更新与删除](docs/updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |
 | [错误与等待](docs/errors-and-waiting.zh-CN.md) | `and wait`、`last database error`，以及哪些部分在后台跑。 |
+| [事务](docs/transactions.zh-CN.md) | 全做或全不做的一组语句，以及它怎样结束。 |
 | [类型](docs/types.zh-CN.md) | 每种列类型接受什么、怎么存。 |
 | [排雷](docs/troubleshooting.zh-CN.md) | 会踩的坑：静默的改表、看不见的 NULL、没有 SkBee 时的 NBT。 |
 | [菜谱](docs/cookbook.zh-CN.md) | 脚本里最常用的几种写法，整段可抄。 |

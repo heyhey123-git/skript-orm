@@ -82,9 +82,9 @@ class EffInsertOneFromVariable : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = waitFlag,
+            wait = waitFlag || target.mustWait,
             query = {
-                target.database.withQueries { queries -> queries.insertOne(row).execute(target.table) }
+                target.withQueries { queries -> queries.insertOne(row).execute(target.table) }
             },
             onFailure = { error ->
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")

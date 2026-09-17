@@ -364,6 +364,22 @@ val serverTestChecks = buildMap {
         put("connections used", "Table 'orm_roundtrip' not found.")
         put("connections named disconnect", "ran")
         put("connections tertiary gone", "No connection named 'tertiary', and no connection has been created yet.")
+        // Transactions. `row1` is the row the first transaction committed and `row2` is `<none>` as long
+        // as nothing else survived, so one line says both that a commit worked and that a rollback did.
+        put("transaction commit", "")
+        put("transaction failed", "Table 'orm_transaction_missing' not found.")
+        put("transaction rows", "row1=committed row2=<none>")
+        put("transaction rollback", "")
+        put("transaction rollback rows", "row1=committed row2=<none>")
+        put(
+            "transaction timeout",
+            "The database transaction was open for longer than 2 seconds and was rolled back."
+        )
+        put("transaction timeout rows", "row1=committed row2=<none>")
+        put(
+            "transaction refuse",
+            "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
+        )
     }
 }
 
@@ -464,6 +480,15 @@ abstract class VerifySkriptServerTest : DefaultTask() {
             problems += "Skript could not parse part of a test script:\n" + indent(unparsed) +
                 "\n      A line from `docs/examples` here means a page shows syntax the plugin does " +
                 "not have."
+        }
+
+        // A pattern Skript refuses to register, or one it cannot build an expression for, is reported as
+        // a severe error and the line that used it is dropped: the file then loads with a piece missing
+        // and every check above still passes. The first transaction pattern was written as
+        // `[on connection %string%]`, which Skript rejects, and only this line would have said so.
+        val severe = lines.filter { line -> line.contains("[Skript] Severe Error") }
+        if (severe.isNotEmpty()) {
+            problems += "Skript reported a severe error while loading a test script:\n" + indent(severe)
         }
 
         if (problems.isNotEmpty()) {

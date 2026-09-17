@@ -80,7 +80,7 @@ class EffSelectManyUnfiltered : Effect() {
             continuation = next,
             wait = true,
             query = {
-                target.database.withQueries { queries ->
+                target.withQueries { queries ->
                     val rows = linkedMapOf<String, Any?>()
                     queries.selectMany(null).execute(target.table).cursor.use { cursor ->
                         var rowIndex = 1

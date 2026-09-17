@@ -8,6 +8,7 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.database.Transaction
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
 import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
@@ -80,6 +81,20 @@ class EffDisconnect : Effect() {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
 
+        // Closing a connection rolls back whatever transaction is open on it, and doing that behind the
+        // script's back would turn a half-finished transaction into a silent rollback. Lifecycle paths
+        // (shutdown, replacing a connection) still abort transactions, because there the connection is
+        // going away whether the script is ready or not.
+        val open = ConnectionScope.transaction(actualEvent)
+        if (open != null && targets(actualEvent, open)) {
+            report(
+                actualEvent,
+                trigger,
+                "A database transaction is open on this connection. Roll it back before disconnecting it."
+            )
+            return next
+        }
+
         val disconnect = when (matchedPattern) {
             0 -> everyConnection()
             1 -> namedConnection(actualEvent, trigger)
@@ -95,6 +110,13 @@ class EffDisconnect : Effect() {
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Disconnect failed: ${error.message}")
             }
         )
+    }
+
+    /** Whether the form the script wrote would close the connection [open] is running on. */
+    private fun targets(event: Event, open: Transaction): Boolean = when (matchedPattern) {
+        0 -> true
+        1 -> nameExpr?.getSingle(event)?.let { Database.connection(it) } === open.database
+        else -> ConnectionScope.resolve(event) === open.database
     }
 
     /** Every connection, or nothing to do when none was ever created. */

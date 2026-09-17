@@ -39,16 +39,16 @@ class JdbcConcreteQueriesTest {
         val fixture = cursorFixture()
         val where = WhereClause.All(false, listOf(Condition.Equals("age", 18), Condition.Equals("name", null)))
 
-        JdbcSelectMany(where, fixture.dataSource, GenericJdbcDialect).execute(table).cursor.close()
+        JdbcSelectMany(where, fixture.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { fixture.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"age\" = ? AND \"name\" IS NULL") }
         verify { fixture.statement.setObject(1, 18, JDBCType.INTEGER) }
 
         val one = cursorFixture()
-        JdbcSelectOne(null, one.dataSource, GenericJdbcDialect).execute(table).cursor.close()
+        JdbcSelectOne(null, one.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { one.connection.prepareStatement("SELECT * FROM \"users\" FETCH FIRST 1 ROW ONLY") }
 
         val byId = cursorFixture()
-        JdbcSelectById(7, byId.dataSource, GenericJdbcDialect).execute(table).cursor.close()
+        JdbcSelectById(7, byId.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { byId.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"id\" = ? FETCH FIRST 1 ROW ONLY") }
         verify { byId.statement.setObject(1, 7, JDBCType.INTEGER) }
     }
@@ -56,7 +56,7 @@ class JdbcConcreteQueriesTest {
     @Test
     fun `insert variants bind sparse maps in key order including null`() = runBlocking {
         val insert = updateFixture()
-        JdbcInsertOne(linkedMapOf("name" to "A", "age" to null), insert.dataSource, GenericJdbcDialect).execute(table)
+        JdbcInsertOne(linkedMapOf("name" to "A", "age" to null), insert.connectionSource, GenericJdbcDialect).execute(table)
         verify { insert.connection.prepareStatement("INSERT INTO \"users\" (\"name\", \"age\") VALUES (?, ?)") }
         verifyOrder {
             insert.statement.setObject(1, "A", JDBCType.VARCHAR)
@@ -64,7 +64,7 @@ class JdbcConcreteQueriesTest {
         }
 
         val absent = updateFixture()
-        JdbcInsertIfAbsent(mapOf("name" to "A"), absent.dataSource, MysqlJdbcDialect).execute(table)
+        JdbcInsertIfAbsent(mapOf("name" to "A"), absent.connectionSource, MysqlJdbcDialect).execute(table)
         verify { absent.connection.prepareStatement("INSERT IGNORE INTO `users` (`name`) VALUES (?)") }
     }
 
@@ -73,7 +73,7 @@ class JdbcConcreteQueriesTest {
         val fixture = updateFixture()
         val where = WhereClause.All(false, listOf(Condition.Equals("age", 18)))
 
-        JdbcUpdate(linkedMapOf("name" to "B"), 2, where, fixture.dataSource, MysqlJdbcDialect).execute(table)
+        JdbcUpdate(linkedMapOf("name" to "B"), 2, where, fixture.connectionSource, MysqlJdbcDialect).execute(table)
 
         verify { fixture.connection.prepareStatement("UPDATE `users` SET `name` = ? WHERE `age` = ? LIMIT 2") }
         verifyOrder {
@@ -86,7 +86,7 @@ class JdbcConcreteQueriesTest {
     @Test
     fun `id writes bind values and primary key at their specified positions`() = runBlocking {
         val update = updateFixture()
-        JdbcUpdateById(5, linkedMapOf("name" to "C", "age" to 20), update.dataSource, GenericJdbcDialect).execute(table)
+        JdbcUpdateById(5, linkedMapOf("name" to "C", "age" to 20), update.connectionSource, GenericJdbcDialect).execute(table)
         verifyOrder {
             update.statement.setObject(1, "C", JDBCType.VARCHAR)
             update.statement.setObject(2, 20, JDBCType.INTEGER)
@@ -94,14 +94,14 @@ class JdbcConcreteQueriesTest {
         }
 
         val upsert = updateFixture()
-        JdbcUpsertById(5, mapOf("name" to "C"), upsert.dataSource, MysqlJdbcDialect).execute(table)
+        JdbcUpsertById(5, mapOf("name" to "C"), upsert.connectionSource, MysqlJdbcDialect).execute(table)
         verifyOrder {
             upsert.statement.setObject(1, 5, JDBCType.INTEGER)
             upsert.statement.setObject(2, "C", JDBCType.VARCHAR)
         }
 
         val delete = updateFixture()
-        JdbcDeleteById(5, delete.dataSource, GenericJdbcDialect).execute(table)
+        JdbcDeleteById(5, delete.connectionSource, GenericJdbcDialect).execute(table)
         verify { delete.connection.prepareStatement("DELETE FROM \"users\" WHERE \"id\" = ?") }
         verify { delete.statement.setObject(1, 5, JDBCType.INTEGER) }
     }
@@ -111,7 +111,7 @@ class JdbcConcreteQueriesTest {
         val fixture = updateFixture()
         val where = WhereClause.Any(false, listOf(Condition.Equals("name", null), Condition.GreaterThan("age", 10)))
 
-        JdbcDelete(1, where, fixture.dataSource, MysqlJdbcDialect).execute(table)
+        JdbcDelete(1, where, fixture.connectionSource, MysqlJdbcDialect).execute(table)
 
         verify { fixture.connection.prepareStatement("DELETE FROM `users` WHERE `name` IS NULL OR `age` > ? LIMIT 1") }
         verify { fixture.statement.setObject(1, 10, JDBCType.INTEGER) }
@@ -120,14 +120,14 @@ class JdbcConcreteQueriesTest {
     @Test
     fun `pagination binds dialect order and computes long offset`() = runBlocking {
         val mysql = cursorFixture()
-        JdbcSelectPage(25, 3, null, mysql.dataSource, MysqlJdbcDialect).execute(table).cursor.close()
+        JdbcSelectPage(25, 3, null, mysql.connectionSource, MysqlJdbcDialect).execute(table).cursor.close()
         verifyOrder {
             mysql.statement.setObject(1, 25, JDBCType.INTEGER)
             mysql.statement.setObject(2, 50L, JDBCType.BIGINT)
         }
 
         val generic = cursorFixture()
-        JdbcSelectPage(25, 3, null, generic.dataSource, GenericJdbcDialect).execute(table).cursor.close()
+        JdbcSelectPage(25, 3, null, generic.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verifyOrder {
             generic.statement.setObject(1, 50L, JDBCType.BIGINT)
             generic.statement.setObject(2, 25, JDBCType.INTEGER)
@@ -136,7 +136,7 @@ class JdbcConcreteQueriesTest {
 
     @Test
     fun `concrete queries reject missing keys empty values and invalid columns`() {
-        val source = mockk<DataSource>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
         assertFailsWith<IllegalArgumentException> { runBlocking { JdbcSelectById(1, source, GenericJdbcDialect).execute(noPrimaryKey) } }
         assertFailsWith<IllegalArgumentException> { runBlocking { JdbcSelectPage(1, 1, null, source, GenericJdbcDialect).execute(noPrimaryKey) } }
         assertFailsWith<IllegalArgumentException> { runBlocking { JdbcInsertOne(emptyMap(), source, GenericJdbcDialect).execute(table) } }
@@ -151,7 +151,7 @@ class JdbcConcreteQueriesTest {
 
     @Test
     fun `query factory returns every concrete implementation`() {
-        val source = mockk<DataSource>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
         val queries = JdbcQueries(source, MysqlJdbcDialect)
         assertIs<JdbcSelectById>(queries.selectById(1))
         assertIs<JdbcSelectOne>(queries.selectOne(null))
@@ -174,7 +174,7 @@ class JdbcConcreteQueriesTest {
         every { dataSource.connection } returns connection
         every { connection.prepareStatement(any()) } returns statement
         every { statement.executeLargeUpdate() } returns 1
-        return Fixture(dataSource, connection, statement)
+        return Fixture(PooledConnectionSource(dataSource), connection, statement)
     }
 
     private fun cursorFixture(): Fixture {
@@ -184,7 +184,7 @@ class JdbcConcreteQueriesTest {
     }
 
     private data class Fixture(
-        val dataSource: DataSource,
+        val connectionSource: JdbcConnectionSource,
         val connection: Connection,
         val statement: PreparedStatement
     )

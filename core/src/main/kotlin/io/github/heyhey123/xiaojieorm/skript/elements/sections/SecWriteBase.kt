@@ -14,6 +14,7 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawValues
 import io.github.heyhey123.xiaojieorm.skript.utils.RawValuesList
@@ -237,33 +238,25 @@ abstract class SecWriteBase : Section() {
         if (event != null) SkriptDatabaseErrors.clear(event)
 
         val database = ConnectionScope.resolve(event) ?: run {
-            if (event != null) SkriptDatabaseErrors.set(event, ConnectionScope.noConnectionMessage())
-            ErrorPrinter.printErrorMessageWithDetail(trigger, ConnectionScope.noConnectionMessage())
+            DatabaseWork.report(event, trigger, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            if (event != null) SkriptDatabaseErrors.set(event, "Table name is null.")
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "Table name is null.")
+            DatabaseWork.report(event, trigger, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
             val message = "Table '$tableName' not found."
-            if (event != null) SkriptDatabaseErrors.set(event, message)
-            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+            DatabaseWork.report(event, trigger, message)
             return walk(event, false)
         }
 
         val whereClause = try {
             where?.bind(table)?.resolve(event)
         } catch (error: Exception) {
-            val message = "Failed to parse where clause: ${error.message}"
-            if (event != null) SkriptDatabaseErrors.set(event, message)
-            ErrorPrinter.printErrorMessageWithDetail(
-                trigger,
-                message
-            )
+            DatabaseWork.report(event, trigger, "Failed to parse where clause: ${error.message}")
             return walk(event, false)
         }
 
@@ -293,12 +286,7 @@ abstract class SecWriteBase : Section() {
                 resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
             }
         } catch (error: Exception) {
-            val message = "Failed to parse write values: ${error.message}"
-            if (event != null) SkriptDatabaseErrors.set(event, message)
-            ErrorPrinter.printErrorMessageWithDetail(
-                trigger,
-                message
-            )
+            DatabaseWork.report(event, trigger, "Failed to parse write values: ${error.message}")
             return walk(event, false)
         }
 
@@ -306,31 +294,38 @@ abstract class SecWriteBase : Section() {
             resolveExtraArguments(event)
         } catch (error: Exception) {
             val message = "Failed to parse write arguments: ${error.message}"
-            if (event != null) SkriptDatabaseErrors.set(event, message)
-            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+            DatabaseWork.report(event, trigger, message)
             return walk(event, false)
         }
 
         if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
-            if (event != null) SkriptDatabaseErrors.set(event, "Database lifecycle is shutting down.")
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
+            DatabaseWork.report(event, trigger, "Database lifecycle is shutting down.")
             return walk(event, false)
         }
 
-        val continuation = if (waitFlag) next else null
-        val localVariables = if (waitFlag && event != null) {
+        if (event != null && DatabaseWork.skipInactiveTransaction(event, trigger)) {
+            return walk(event, false)
+        }
+        val transaction = ConnectionScope.transaction(event)
+        // Everything inside a transaction waits, whether or not the statement was written with
+        // `and wait`: two statements running at once on one pinned connection is not something a script
+        // should be able to ask for, and the transaction cannot commit before the rest of them are done.
+        val waiting = waitFlag || transaction != null
+
+        val continuation = if (waiting) next else null
+        val localVariables = if (waiting && event != null) {
             SkriptLocalVariables.remove(event)
         } else {
             null
         }
-        if (waitFlag && event != null) {
+        if (waiting && event != null) {
             Delay.addDelayedEvent(event)
         }
 
         XiaojieOrm.ioScope.launch {
             var failure: Throwable? = null
             try {
-                database.withQueries { queries ->
+                DatabaseWork.withQueries(database, transaction) { queries ->
                     executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, extraArguments)
                 }
             } catch (_: CancellationException) {
@@ -342,7 +337,7 @@ abstract class SecWriteBase : Section() {
             withContext(NonCancellable + SyncDispatcher) {
                 if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
 
-                if (waitFlag && event != null) {
+                if (waiting && event != null) {
                     if (failure != null) {
                         SkriptDatabaseErrors.set(event, failure)
                     } else {
@@ -352,7 +347,7 @@ abstract class SecWriteBase : Section() {
                 failure?.let {
                     ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
                 }
-                if (waitFlag) {
+                if (waiting) {
                     try {
                         if (event != null && localVariables != null) {
                             SkriptLocalVariables.restore(event, localVariables)
@@ -367,7 +362,7 @@ abstract class SecWriteBase : Section() {
             }
         }
 
-        return if (waitFlag) null else walk(event, false)
+        return if (waiting) null else walk(event, false)
     }
 
     protected abstract suspend fun executeWrite(

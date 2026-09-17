@@ -20,6 +20,7 @@ back, and everything after that is reference for the parts you did not need yet.
 | [Reading rows](reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
 | [Updating and deleting](updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
 | [Errors and waiting](errors-and-waiting.md) | `and wait`, `last database error`, and what runs in the background. |
+| [Transactions](transactions.md) | All-or-nothing groups: how a transaction ends, what a failure does, timeouts. |
 | [Types](types.md) | What each column type accepts and how it is stored. |
 
 ## When something goes wrong

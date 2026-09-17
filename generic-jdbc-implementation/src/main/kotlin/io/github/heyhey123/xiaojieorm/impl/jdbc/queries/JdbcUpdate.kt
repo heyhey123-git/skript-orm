@@ -6,13 +6,12 @@ import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.Update
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
-import javax.sql.DataSource
 
 open class JdbcUpdate(
     values: Map<String, Any?>,
     limit: Int?,
     where: WhereClause?,
-    override val dataSource: DataSource,
+    override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
 ) : Update(values, limit, where), JdbcQuery {
 

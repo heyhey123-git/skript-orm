@@ -12,7 +12,8 @@
 # itself keeps this element's own check, that a live connection can be closed, without racing it.
 # The connection element is waited for as well: it reads the default connection's table registry
 # while its named connection is open, and it would see the same missing-database message if this
-# element closed the default connection first.
+# element closed the default connection first. The transaction element is waited for for the same
+# reason, and because its own timeout test parks the trigger for five seconds at a time.
 #
 # Offline there is no shared connection to protect, so the element runs on its own schedule there.
 every 5 seconds:
@@ -21,6 +22,8 @@ every 5 seconds:
     if {xiaojie::selftest::done::roundtrip} is not set:
         stop trigger
     if {xiaojie::selftest::done::connections} is not set:
+        stop trigger
+    if {xiaojie::selftest::done::transaction} is not set:
         stop trigger
 
     disconnect from the current database

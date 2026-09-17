@@ -1,0 +1,40 @@
+# The script from docs/transactions.md, kept here so the server test parses it.
+#
+# A syntax error in the documentation then fails a build instead of reaching a reader. Nothing in this
+# file is ever run: the examples only have to parse. That is why the tables it mentions are never
+# registered here, and why the commands are never invoked.
+
+command /example-transfer <number> <text> <text>:
+    trigger:
+        database transaction:
+            update one entity in table "accounts" by id arg-2 and wait:
+                values:
+                    balance: {_from::balance} - arg-1
+            update one entity in table "accounts" by id arg-3 and wait:
+                values:
+                    balance: {_to::balance} + arg-1
+        if last database error is set:
+            send "The transfer was rolled back: %last database error%" to sender
+
+command /example-transfer-with-a-deadline:
+    trigger:
+        database transaction with timeout 5 seconds:
+            insert one entity into table "accounts" and wait:
+                values:
+                    name: "opened by hand"
+
+command /example-give-up <text>:
+    trigger:
+        database transaction:
+            insert one entity into table "entries" and wait:
+                values:
+                    message: arg-1
+            if arg-1 is "nothing":
+                rollback database transaction
+
+command /example-named-transaction:
+    trigger:
+        database transaction on connection "logs" with timeout 2 minutes:
+            insert one entity into table "entries" and wait:
+                values:
+                    message: "in a transaction on the named connection"

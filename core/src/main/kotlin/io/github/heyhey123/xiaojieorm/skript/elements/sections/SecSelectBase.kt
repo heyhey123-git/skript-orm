@@ -15,6 +15,7 @@ import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.RawWhereClause
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
@@ -124,21 +125,18 @@ abstract class SecSelectBase : Section() {
         SkriptDatabaseErrors.clear(actualEvent)
 
         val database = ConnectionScope.resolve(event) ?: run {
-            SkriptDatabaseErrors.set(actualEvent, ConnectionScope.noConnectionMessage())
-            ErrorPrinter.printErrorMessageWithDetail(trigger, ConnectionScope.noConnectionMessage())
+            DatabaseWork.report(actualEvent, trigger, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            SkriptDatabaseErrors.set(actualEvent, "Table name is null.")
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "Table name is null.")
+            DatabaseWork.report(actualEvent, trigger, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
             val message = "Table '$tableName' not found."
-            SkriptDatabaseErrors.set(actualEvent, message)
-            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+            DatabaseWork.report(actualEvent, trigger, message)
             return walk(event, false)
         }
 
@@ -147,8 +145,7 @@ abstract class SecSelectBase : Section() {
                 raw.bind(table).resolve(event)
             } catch (e: Exception) {
                 val message = "Failed to parse where clause: ${e.message}"
-                SkriptDatabaseErrors.set(actualEvent, message)
-                ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+                DatabaseWork.report(actualEvent, trigger, message)
                 return walk(event, false)
             }
         }
@@ -157,16 +154,19 @@ abstract class SecSelectBase : Section() {
             resolveExtraArguments(event, trigger)
         } catch (e: Exception) {
             val message = "Failed to parse query arguments: ${e.message}"
-            SkriptDatabaseErrors.set(actualEvent, message)
-            ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+            DatabaseWork.report(actualEvent, trigger, message)
             return walk(event, false)
         }
 
         if (!XiaojieOrm.instance.isEnabled || Database.isShuttingDown) {
-            SkriptDatabaseErrors.set(actualEvent, "Database lifecycle is shutting down.")
-            ErrorPrinter.printErrorMessageWithDetail(trigger, "Database lifecycle is shutting down.")
+            DatabaseWork.report(actualEvent, trigger, "Database lifecycle is shutting down.")
             return walk(actualEvent, false)
         }
+
+        if (DatabaseWork.skipInactiveTransaction(actualEvent, trigger)) {
+            return walk(actualEvent, false)
+        }
+        val transaction = ConnectionScope.transaction(actualEvent)
 
         val continuation = next
         // Store the continuation in order to resume after the query is complete
@@ -178,7 +178,7 @@ abstract class SecSelectBase : Section() {
             var queryResult: Map<String, Any?>? = null
             var failure: Throwable? = null
             try {
-                queryResult = database.withQueries { queries ->
+                queryResult = DatabaseWork.withQueries(database, transaction) { queries ->
                     executeQuery(queries, table, whereClause, extraArguments)
                 }
             } catch (_: CancellationException) {

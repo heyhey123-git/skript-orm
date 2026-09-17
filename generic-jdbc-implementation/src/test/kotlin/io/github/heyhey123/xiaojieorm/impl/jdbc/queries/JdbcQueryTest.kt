@@ -27,7 +27,7 @@ class JdbcQueryTest {
 
     @Test
     fun `bind where starts at requested offset skips null and returns next index`() {
-        val query = TestJdbcQuery(mockk(relaxed = true))
+        val query = TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true))
         val statement = mockk<PreparedStatement>(relaxed = true)
         val where = WhereClause.All(
             false,
@@ -43,7 +43,7 @@ class JdbcQueryTest {
 
     @Test
     fun `bind where rejects an unknown column before binding`() {
-        val query = TestJdbcQuery(mockk(relaxed = true))
+        val query = TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true))
         val statement = mockk<PreparedStatement>(relaxed = true)
 
         assertFailsWith<IllegalArgumentException> {
@@ -55,15 +55,36 @@ class JdbcQueryTest {
     @Test
     fun `statement timeout validates and applies only positive values`() {
         val statement = mockk<PreparedStatement>(relaxed = true)
-        TestJdbcQuery(mockk(relaxed = true), queryTimeoutSeconds = 0).configureStatement(statement)
+        TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = 0).configureStatement(statement)
         verify(exactly = 0) { statement.queryTimeout = any() }
 
-        TestJdbcQuery(mockk(relaxed = true), queryTimeoutSeconds = 9).configureStatement(statement)
+        TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = 9).configureStatement(statement)
         verify(exactly = 1) { statement.queryTimeout = 9 }
 
         assertFailsWith<IllegalArgumentException> {
-            TestJdbcQuery(mockk(relaxed = true), queryTimeoutSeconds = -1).configureStatement(statement)
+            TestJdbcQuery(mockk<JdbcConnectionSource>(relaxed = true), queryTimeoutSeconds = -1)
+                .configureStatement(statement)
         }
+    }
+
+    @Test
+    fun `the connection source can impose a shorter statement timeout than the query asks for`() {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val source = PooledConnectionSource(mockk(relaxed = true), statementTimeoutSeconds = 4)
+
+        TestJdbcQuery(source, queryTimeoutSeconds = 30).configureStatement(statement)
+
+        verify { statement.queryTimeout = 4 }
+    }
+
+    @Test
+    fun `a query without a timeout takes the one its source imposes`() {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val source = PooledConnectionSource(mockk(relaxed = true), statementTimeoutSeconds = 4)
+
+        TestJdbcQuery(source).configureStatement(statement)
+
+        verify { statement.queryTimeout = 4 }
     }
 
     @Test
@@ -74,7 +95,7 @@ class JdbcQueryTest {
         every { dataSource.connection } returns connection
         every { connection.prepareStatement("UPDATE") } returns statement
         every { statement.executeLargeUpdate() } returns 7
-        val query = TestJdbcQuery(dataSource)
+        val query = TestJdbcQuery(PooledConnectionSource(dataSource))
 
         val result = query.executeUpdate("UPDATE") { it.setObject(1, 1, JDBCType.INTEGER) }
 
@@ -94,7 +115,7 @@ class JdbcQueryTest {
 
         val thrown = assertFailsWith<IllegalStateException> {
             runBlocking {
-                TestJdbcQuery(dataSource).executeUpdate("UPDATE") { throw bindFailure }
+                TestJdbcQuery(PooledConnectionSource(dataSource)).executeUpdate("UPDATE") { throw bindFailure }
             }
         }
 
@@ -112,7 +133,7 @@ class JdbcQueryTest {
         every { connection.prepareStatement(any()) } throws prepareFailure
 
         val thrown = assertFailsWith<IllegalStateException> {
-            runBlocking { TestJdbcQuery(dataSource).executeCursor("SELECT") {} }
+            runBlocking { TestJdbcQuery(PooledConnectionSource(dataSource)).executeCursor("SELECT") {} }
         }
 
         assertSame(prepareFailure, thrown)
@@ -128,7 +149,7 @@ class JdbcQueryTest {
         every { dataSource.connection } returns connection
         every { connection.prepareStatement("SELECT") } returns statement
         every { statement.executeQuery() } returns resultSet
-        val result = TestJdbcQuery(dataSource).executeCursor("SELECT") {}
+        val result = TestJdbcQuery(PooledConnectionSource(dataSource)).executeCursor("SELECT") {}
 
         verify(exactly = 0) { resultSet.close() }
         verify(exactly = 0) { statement.close() }
@@ -154,7 +175,7 @@ class JdbcQueryTest {
         every { statement.close() } throws closeFailure
 
         val thrown = assertFailsWith<IllegalStateException> {
-            runBlocking { TestJdbcQuery(dataSource).executeCursor("SELECT") {} }
+            runBlocking { TestJdbcQuery(PooledConnectionSource(dataSource)).executeCursor("SELECT") {} }
         }
 
         assertSame(resultSetFailure, thrown)
@@ -162,8 +183,42 @@ class JdbcQueryTest {
         verify { connection.close() }
     }
 
+    /**
+     * The other half of the same contract: a cursor inside a transaction closes its own resources and
+     * leaves the connection, because that connection outlives it.
+     */
+    @Test
+    fun `a pinned source hands back the same connection and a cursor close leaves it open`() = runBlocking {
+        val resultSet = mockk<ResultSet>(relaxed = true)
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        every { connection.prepareStatement("SELECT") } returns statement
+        every { statement.executeQuery() } returns resultSet
+        val source = PinnedConnectionSource(connection)
+        val query = TestJdbcQuery(source)
+
+        assertSame(connection, source.borrow())
+
+        val result = query.executeCursor("SELECT") {}
+        result.cursor.close()
+
+        verify { resultSet.close() }
+        verify { statement.close() }
+        verify(exactly = 0) { connection.close() }
+    }
+
+    @Test
+    fun `a pinned source releases a borrowed connection without closing it`() {
+        val connection = mockk<Connection>(relaxed = true)
+        val source = PinnedConnectionSource(connection)
+
+        source.release(connection)
+
+        verify(exactly = 0) { connection.close() }
+    }
+
     private class TestJdbcQuery(
-        override val dataSource: DataSource,
+        override val connectionSource: JdbcConnectionSource,
         override val queryTimeoutSeconds: Int = 0,
         override val dialect: JdbcDialect = GenericJdbcDialect
     ) : JdbcQuery

@@ -93,6 +93,19 @@ class EffUseConnection : Effect() {
             return
         }
 
+        // Switching inside a transaction would send the statements after this one to a connection the
+        // transaction knows nothing about, which is a silent way to lose the atomicity the script asked
+        // for. Naming the connection the transaction already uses is a no-op and stays allowed.
+        val open = ConnectionScope.transaction(actualEvent)
+        if (open != null && open.database !== connection) {
+            report(
+                actualEvent,
+                trigger,
+                "A database transaction is open on another connection. Roll it back before switching."
+            )
+            return
+        }
+
         // The frame carries no owner, so nothing pops it: the switch is meant to outlive this
         // statement and last until the event does.
         ConnectionScope.push(actualEvent, connection, owner = null)

@@ -4,11 +4,16 @@ import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataTypes
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * Represents a generic database connection and operations.
@@ -16,6 +21,24 @@ import java.util.concurrent.ConcurrentHashMap
 abstract class Database {
 
     companion object {
+
+        /**
+         * How long a transaction may stay open before the watchdog rolls it back.
+         *
+         * Long enough that no honest transaction meets it, short enough that a script which errored
+         * inside one does not pin a pooled connection for the life of the server. A script that needs
+         * longer says so on its own `database transaction` section.
+         */
+        val DEFAULT_TRANSACTION_TIMEOUT: Duration = Duration.ofSeconds(30)
+
+        /**
+         * Scope the transaction watchdogs run on.
+         *
+         * It belongs to the database layer rather than to the plugin, so that a transaction opened
+         * through this API is protected even when no plugin is driving it, and so that the classes here
+         * stay free of Bukkit.
+         */
+        private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         /**
          * Mutex that protects the lifecycle state of the database: which connections are published,
@@ -192,6 +215,70 @@ abstract class Database {
 
     /** Tables successfully registered for this database instance. */
     val tables: MutableMap<String, Table> = ConcurrentHashMap()
+
+    /**
+     * Transactions still open on this connection.
+     *
+     * They are tracked so that closing the connection can end them first. Disconnect waits for the
+     * operations that hold a lease, and a transaction holds one for its whole life, so a transaction a
+     * script left parked at a `wait` would otherwise block the close forever.
+     */
+    private val openTransactions = CopyOnWriteArrayList<Transaction>()
+
+    /** Whether this implementation can pin one connection for a transaction. */
+    open val supportsTransactions: Boolean
+        get() = false
+
+    /**
+     * Opens a transaction, which pins one connection for its whole life and holds a lifecycle lease
+     * until it ends.
+     *
+     * @param timeout how long the transaction may stay open; the watchdog rolls it back after that.
+     * @throws IllegalStateException when this database is not connected, or its implementation cannot
+     * open transactions at all.
+     */
+    suspend fun beginTransaction(timeout: Duration = DEFAULT_TRANSACTION_TIMEOUT): Transaction {
+        check(supportsTransactions) { "This database implementation does not support transactions." }
+        acquireOperation()
+        try {
+            val transaction = doBeginTransaction(timeout)
+            openTransactions.add(transaction)
+            transaction.startWatchdog(watchdogScope)
+            return transaction
+        } catch (error: Throwable) {
+            withContext(NonCancellable) {
+                releaseOperation()
+            }
+            throw error
+        }
+    }
+
+    /**
+     * Initializes implementation-specific resources for a transaction: a pinned connection with
+     * automatic commits turned off.
+     */
+    protected open fun doBeginTransaction(timeout: Duration): Transaction =
+        throw UnsupportedOperationException("This database implementation does not support transactions.")
+
+    /** Called by a [Transaction] once it has handed its connection back. */
+    internal suspend fun transactionFinished(transaction: Transaction) {
+        openTransactions.remove(transaction)
+        withContext(NonCancellable) {
+            releaseOperation()
+        }
+    }
+
+    /**
+     * Rolls back every transaction still open here, so that whatever is closing the connection does not
+     * have to wait for a script that may never resume.
+     */
+    private suspend fun abortOpenTransactions() {
+        for (transaction in openTransactions) {
+            transaction.abort(
+                TransactionAbortedException("The database connection was closed while this transaction was open.")
+            )
+        }
+    }
 
     @Volatile
     var state: State = State.DISCONNECTED
@@ -384,6 +471,10 @@ abstract class Database {
 
         var failure: Throwable? = null
         withContext(NonCancellable) {
+            // Transactions hold a lease for their whole life, and one of them may be parked at a
+            // script's `wait`, so waiting for them to finish on their own would wait forever. They are
+            // ended first, which is what lets the rest of this method mean "no work is left".
+            abortOpenTransactions()
             operationWaiter?.await()
             try {
                 doDisconnect()

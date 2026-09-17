@@ -5,7 +5,6 @@ import io.github.heyhey123.xiaojieorm.queries.InsertMany
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.Statement
-import javax.sql.DataSource
 
 /**
  * JDBC batch insert. Every row must have the same column set; the first row's key order determines
@@ -14,7 +13,7 @@ import javax.sql.DataSource
  */
 open class JdbcInsertMany(
     valuesList: List<Map<String, Any?>>,
-    override val dataSource: DataSource,
+    override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
 ) : InsertMany(valuesList), JdbcQuery {
 
@@ -30,8 +29,9 @@ open class JdbcInsertMany(
         }
 
         val sql = dialect.insert(table.name, columns)
-        return dataSource.connection.use { connection ->
-            connection.prepareStatement(sql).use { statement ->
+        val connection = connectionSource.borrow()
+        try {
+            return connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
                     valuesList.forEach { row ->
                         columns.forEachIndexed { index, key ->
@@ -61,6 +61,8 @@ open class JdbcInsertMany(
                     WriteResult(affected, countExact)
                 }
             }
+        } finally {
+            connectionSource.release(connection)
         }
     }
 }

@@ -1,6 +1,7 @@
 package io.github.heyhey123.xiaojieorm.skript.utils
 
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.database.Transaction
 import org.bukkit.event.Event
 import java.util.Collections
 import java.util.WeakHashMap
@@ -29,8 +30,20 @@ import java.util.WeakHashMap
  */
 object ConnectionScope {
 
-    /** One decision about which connection is in effect, and what put it there. */
-    private class Frame(val connection: Database, val owner: Any?)
+    /**
+     * One decision about which connection is in effect, what put it there, and whether a transaction
+     * is riding on it.
+     *
+     * A transaction is not a second kind of frame: it *is* a connection, one that was pinned, so
+     * carrying it here means one stack, one pop path, and no way for the two to disagree about what is
+     * in effect.
+     */
+    private class Frame(
+        val connection: Database,
+        val owner: Any?,
+        val transaction: Transaction? = null,
+        val ownsTransaction: Boolean = false
+    )
 
     /**
      * Event keys are weak so a finished event is not retained by the scope it happened to use.
@@ -52,27 +65,41 @@ object ConnectionScope {
         return framed ?: Database.current
     }
 
+    /** The transaction statements inside [event] belong to, or null when they run on their own. */
+    fun transaction(event: Event?): Transaction? = event?.let { current(it)?.transaction }
+
     /** Pushes a connection in effect. [owner] is the section that will pop it, or null for an effect. */
-    fun push(event: Event, connection: Database, owner: Any?) {
+    fun push(
+        event: Event,
+        connection: Database,
+        owner: Any?,
+        transaction: Transaction? = null,
+        ownsTransaction: Boolean = false
+    ) {
         val stack = stackOf(event)
         synchronized(stack) {
-            stack.add(Frame(connection, owner))
+            stack.add(Frame(connection, owner, transaction, ownsTransaction))
         }
     }
 
     /**
-     * Pops the frame [owner] pushed, together with every frame pushed after it.
+     * Pops the frame [owner] pushed, together with every frame pushed after it, and reports whether the
+     * frame that was popped had started the transaction it carried.
      *
      * Truncating rather than removing one frame is what makes `use connection` inside an
      * `in connection` section behave: the effect's frame is above the section's, so leaving the
-     * section takes the effect's switch with it instead of leaking it into the rest of the event.
+     * section takes the effect's switch with it instead of leaking it into the rest of the event. The
+     * answer tells a transaction section whether it is still the one that has to commit: a transaction
+     * section opened inside another one joins it instead of starting a second.
      */
-    fun popOwned(event: Event, owner: Any) {
-        val stack = frames[event] ?: return
+    fun popOwned(event: Event, owner: Any): Boolean {
+        val stack = frames[event] ?: return false
         var emptied = false
+        var owned = false
         synchronized(stack) {
             val index = stack.indexOfLast { it.owner === owner }
             if (index >= 0) {
+                owned = stack[index].ownsTransaction
                 while (stack.size > index) {
                     stack.removeAt(stack.size - 1)
                 }
@@ -80,6 +107,7 @@ object ConnectionScope {
             emptied = stack.isEmpty()
         }
         if (emptied) frames.remove(event, stack)
+        return owned
     }
 
     /** Forgets every frame of [event], used when nothing about it can be trusted any more. */

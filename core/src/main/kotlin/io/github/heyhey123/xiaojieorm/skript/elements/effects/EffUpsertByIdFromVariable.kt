@@ -95,9 +95,9 @@ class EffUpsertByIdFromVariable : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = waitFlag,
+            wait = waitFlag || target.mustWait,
             query = {
-                target.database.withQueries { queries ->
+                target.withQueries { queries ->
                     queries.upsertById(id, row).execute(target.table)
                 }
             },

@@ -83,11 +83,11 @@ class JdbcDataCursorTest {
         val events = mutableListOf<String>()
         val resultSet = mockk<ResultSet>()
         val statement = mockk<Statement>()
-        val connection = mockk<Connection>()
         every { resultSet.close() } answers { events += "resultSet" }
         every { statement.close() } answers { events += "statement" }
-        every { connection.close() } answers { events += "connection" }
-        val cursor = JdbcDataCursor(resultSet, statement, connection) { events += "bound" }
+        val cursor = JdbcDataCursor(resultSet, statement, releaseConnection = { events += "connection" }) {
+            events += "bound"
+        }
 
         cursor.close()
         cursor.close()
@@ -95,22 +95,21 @@ class JdbcDataCursorTest {
         assertEquals(listOf("bound", "resultSet", "statement", "connection"), events)
         verify(exactly = 1) { resultSet.close() }
         verify(exactly = 1) { statement.close() }
-        verify(exactly = 1) { connection.close() }
     }
 
     @Test
     fun `close attempts all resources and suppresses later failures`() {
         val resultSet = mockk<ResultSet>()
         val statement = mockk<Statement>()
-        val connection = mockk<Connection>()
         val boundFailure = IllegalStateException("bound")
         val resultFailure = IllegalStateException("result")
         val statementFailure = IllegalStateException("statement")
         val connectionFailure = IllegalStateException("connection")
         every { resultSet.close() } throws resultFailure
         every { statement.close() } throws statementFailure
-        every { connection.close() } throws connectionFailure
-        val cursor = JdbcDataCursor(resultSet, statement, connection) { throw boundFailure }
+        val cursor = JdbcDataCursor(resultSet, statement, releaseConnection = { throw connectionFailure }) {
+            throw boundFailure
+        }
 
         val thrown = assertFailsWith<IllegalStateException> { cursor.close() }
 
@@ -118,7 +117,6 @@ class JdbcDataCursorTest {
         assertEquals(listOf(resultFailure, statementFailure, connectionFailure), thrown.suppressed.toList())
         verify { resultSet.close() }
         verify { statement.close() }
-        verify { connection.close() }
     }
 
     private fun blobType(): DataType<Any> = object : DataType<Any> {
@@ -143,5 +141,5 @@ class JdbcDataCursorTest {
         resultSet: ResultSet = mockk(relaxed = true),
         statement: Statement = mockk(relaxed = true),
         connection: Connection = mockk(relaxed = true)
-    ) = JdbcDataCursor(resultSet, statement, connection)
+    ) = JdbcDataCursor(resultSet, statement, releaseConnection = { connection.close() })
 }

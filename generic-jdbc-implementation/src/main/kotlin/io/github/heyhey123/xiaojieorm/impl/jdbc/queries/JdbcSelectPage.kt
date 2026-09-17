@@ -1,4 +1,4 @@
-﻿package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
+package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.condition.WhereClause
 import io.github.heyhey123.xiaojieorm.impl.jdbc.condition.JdbcConditionTranslator
@@ -8,13 +8,12 @@ import io.github.heyhey123.xiaojieorm.queries.SelectPage
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.JDBCType
-import javax.sql.DataSource
 
 open class JdbcSelectPage(
     pageSize: Int,
     pageIndex: Int,
     where: WhereClause?,
-    override val dataSource: DataSource,
+    override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
 ) : SelectPage(pageSize, pageIndex, where), JdbcQuery {
 

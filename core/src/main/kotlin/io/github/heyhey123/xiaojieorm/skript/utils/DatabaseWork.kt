@@ -6,6 +6,8 @@ import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import io.github.heyhey123.xiaojieorm.XiaojieOrm
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.database.Transaction
+import io.github.heyhey123.xiaojieorm.queries.Queries
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
@@ -24,8 +26,36 @@ import org.bukkit.event.Event
  */
 internal object DatabaseWork {
 
-    /** The connection and the table a resolved statement works against. */
-    class Target(val database: Database, val table: Table)
+    /**
+     * The connection and the table a resolved statement works against, and the transaction it belongs to
+     * when there is one.
+     *
+     * The transaction travels with the target rather than being looked up again later because the scope
+     * it lives in belongs to the server thread: by the time a query runs, the frames may have moved on.
+     */
+    class Target(
+        val database: Database,
+        val table: Table,
+        val transaction: Transaction?
+    ) {
+
+        /**
+         * Runs [block] on the connection the transaction pinned, or on one borrowed from the pool when
+         * the statement runs on its own.
+         */
+        suspend fun <T> withQueries(block: suspend (Queries) -> T): T =
+            DatabaseWork.withQueries(database, transaction, block)
+
+        /**
+         * Whether the statement has to wait for its work.
+         *
+         * Inside a transaction it always does. Two statements running at once on one pinned connection is
+         * not something a script should be able to ask for, and a transaction cannot commit before the
+         * statements it is made of have finished.
+         */
+        val mustWait: Boolean
+            get() = transaction != null
+    }
 
     /**
      * Resolves the table [tableNameExpr] names, reporting a failure the way the sections do.
@@ -34,6 +64,8 @@ internal object DatabaseWork {
      * for `last database error` has already been stored at that point.
      */
     fun resolveTable(event: Event, trigger: Trigger, tableNameExpr: Expression<String>): Target? {
+        if (skipInactiveTransaction(event, trigger)) return null
+
         val database = ConnectionScope.resolve(event) ?: run {
             report(event, trigger, ConnectionScope.noConnectionMessage())
             return null
@@ -54,14 +86,59 @@ internal object DatabaseWork {
             return null
         }
 
-        return Target(database, table)
+        return Target(database, table, ConnectionScope.transaction(event))
     }
 
-    /** Reports [message] the way a section does: as the last database error, and in the console. */
-    fun report(event: Event, trigger: Trigger, message: String) {
-        SkriptDatabaseErrors.set(event, message)
+    /**
+     * Whether a statement has to be skipped because the transaction it belongs to can no longer take it.
+     *
+     * A transaction that failed a statement leaves `last database error` as it is: the cause is already
+     * in there, and replacing it with "the transaction is rollback-only" would lose the only thing worth
+     * reading. One that was aborted from outside (its timeout, a disconnect) never had the chance to say
+     * anything, so it says it now.
+     */
+    fun skipInactiveTransaction(event: Event, trigger: Trigger): Boolean {
+        val transaction = ConnectionScope.transaction(event) ?: return false
+        if (transaction.isActive) return false
+        if (transaction.state != Transaction.State.ROLLBACK_ONLY) {
+            report(
+                event,
+                trigger,
+                transaction.failure?.message
+                    ?: "The database transaction is ${transaction.state} and cannot run this statement."
+            )
+        }
+        return true
+    }
+
+    /**
+     * Reports [message] the way a section does: as the last database error, and in the console.
+     *
+     * It also marks the transaction in effect as rollback-only, which is what makes a statement that
+     * never reached the database count the same as one that failed there. A table that was not found is
+     * still a statement of the body that did not run, and committing the rest of them would be exactly
+     * the half-finished transaction the section exists to prevent.
+     */
+    fun report(event: Event?, trigger: Trigger, message: String) {
+        event?.let {
+            ConnectionScope.transaction(it)?.markFailed(IllegalStateException(message))
+            SkriptDatabaseErrors.set(it, message)
+        }
         ErrorPrinter.printErrorMessageWithDetail(trigger, message)
     }
+
+    /**
+     * Runs [block] on the connection a transaction pinned, or on one borrowed from the pool when the
+     * statement runs on its own.
+     *
+     * The transaction is passed rather than looked up, because the scope it came from belongs to the
+     * server thread while this runs on another one.
+     */
+    suspend fun <T> withQueries(
+        database: Database,
+        transaction: Transaction?,
+        block: suspend (Queries) -> T
+    ): T = transaction?.withQueries(block) ?: database.withQueries(block)
 
     /**
      * Runs [query] on the plugin's scope, then [deliver] on the server thread.
@@ -72,6 +149,10 @@ internal object DatabaseWork {
      * which is what a write promises when `and wait` is left out: a failure is then only logged, and
      * `last database error` stays as it was.
      *
+     * [clearErrorOnSuccess] is false for the work that undoes something the script already knows failed:
+     * rolling a failed transaction back succeeds, and clearing the slot on the way out would throw away
+     * the only account of why the transaction was rolled back.
+     *
      * The return value is what the caller should return from its walk: null when the trigger has been
      * parked, [continuation] when it should carry on by itself.
      */
@@ -81,7 +162,8 @@ internal object DatabaseWork {
         wait: Boolean,
         query: suspend () -> T,
         deliver: (T) -> Unit = {},
-        onFailure: (Throwable) -> Unit = {}
+        onFailure: (Throwable) -> Unit = {},
+        clearErrorOnSuccess: Boolean = true
     ): TriggerItem? {
         if (!wait) {
             XiaojieOrm.ioScope.launch {
@@ -121,7 +203,7 @@ internal object DatabaseWork {
                         SkriptDatabaseErrors.set(event, error)
                         onFailure(error)
                     } else {
-                        SkriptDatabaseErrors.clear(event)
+                        if (clearErrorOnSuccess) SkriptDatabaseErrors.clear(event)
                         deliver(checkNotNull(result))
                     }
 

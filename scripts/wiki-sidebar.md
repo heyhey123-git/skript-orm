@@ -11,6 +11,7 @@
 - [读取行](Reading-Rows)
 - [更新与删除](Updating-And-Deleting)
 - [错误与等待](Errors-And-Waiting)
+- [事务](Transactions)
 - [类型](Types)
 
 **出了问题**

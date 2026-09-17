@@ -14,7 +14,6 @@ import java.sql.Connection
 import java.sql.JDBCType
 import java.sql.PreparedStatement
 import java.sql.Statement
-import javax.sql.DataSource
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -32,20 +31,20 @@ class JdbcInsertManyTest {
 
     @Test
     fun `empty batch succeeds without borrowing connection`() = runBlocking {
-        val dataSource = mockk<DataSource>()
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
 
-        val result = JdbcInsertMany(emptyList(), dataSource, GenericJdbcDialect).execute(table)
+        val result = JdbcInsertMany(emptyList(), source, GenericJdbcDialect).execute(table)
 
         assertEquals(WriteResult(0), result)
-        verify(exactly = 0) { dataSource.connection }
+        verify(exactly = 0) { source.borrow() }
     }
 
     @Test
     fun `rows bind in first row column order and successful counts are summed`() = runBlocking {
         val statement = mockk<PreparedStatement>(relaxed = true)
         val connection = mockk<Connection>(relaxed = true)
-        val dataSource = mockk<DataSource>()
-        every { dataSource.connection } returns connection
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } returns connection
         every { connection.prepareStatement("INSERT INTO \"items\" (\"value\", \"id\") VALUES (?, ?)") } returns statement
         every { statement.executeLargeBatch() } returns longArrayOf(1, 2)
 
@@ -54,7 +53,7 @@ class JdbcInsertManyTest {
                 linkedMapOf("value" to 10, "id" to 1),
                 linkedMapOf("id" to 2, "value" to 20)
             ),
-            dataSource,
+            source,
             GenericJdbcDialect
         ).execute(table)
 
@@ -69,7 +68,7 @@ class JdbcInsertManyTest {
             statement.executeLargeBatch()
         }
         verify { statement.close() }
-        verify { connection.close() }
+        verify { source.release(connection) }
     }
 
     @Test
@@ -93,29 +92,29 @@ class JdbcInsertManyTest {
 
     @Test
     fun `batch rejects empty rows and inconsistent column sets before prepare`() {
-        val dataSource = mockk<DataSource>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
         assertFailsWith<IllegalArgumentException> {
-            runBlocking { JdbcInsertMany(listOf(emptyMap()), dataSource, GenericJdbcDialect).execute(table) }
+            runBlocking { JdbcInsertMany(listOf(emptyMap()), source, GenericJdbcDialect).execute(table) }
         }
         assertFailsWith<IllegalArgumentException> {
             runBlocking {
                 JdbcInsertMany(
                     listOf(mapOf("id" to 1), mapOf("value" to 2)),
-                    dataSource,
+                    source,
                     GenericJdbcDialect
                 ).execute(table)
             }
         }
-        verify(exactly = 0) { dataSource.connection }
+        verify(exactly = 0) { source.borrow() }
     }
 
     private fun queryWithCounts(counts: LongArray): Pair<JdbcInsertMany, PreparedStatement> {
         val statement = mockk<PreparedStatement>(relaxed = true)
         val connection = mockk<Connection>(relaxed = true)
-        val dataSource = mockk<DataSource>()
-        every { dataSource.connection } returns connection
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } returns connection
         every { connection.prepareStatement(any()) } returns statement
         every { statement.executeLargeBatch() } returns counts
-        return JdbcInsertMany(listOf(mapOf("id" to 1)), dataSource, GenericJdbcDialect) to statement
+        return JdbcInsertMany(listOf(mapOf("id" to 1)), source, GenericJdbcDialect) to statement
     }
 }

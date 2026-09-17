@@ -65,6 +65,8 @@ and hands results back as ordinary Skript variables and values.
   `use connection "logs"` says which one a statement uses.
 - **Everything that touches rows is a section.** Writing, reading, updating and deleting are separate
   syntaxes with their own bodies, and a read always waits for its result.
+- **A transaction is one section.** `database transaction:` commits when its body ends, rolls back when
+  a statement in it fails, and holds one connection for as long as it runs.
 - **A failure is a value.** After an operation written with `and wait`, `last database error` holds
   what went wrong, and an operation that worked leaves it unset.
 
@@ -79,6 +81,7 @@ and hands results back as ordinary Skript variables and values.
 | [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
 | [Updating and deleting](docs/updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
 | [Errors and waiting](docs/errors-and-waiting.md) | `and wait`, `last database error`, and what runs in the background. |
+| [Transactions](docs/transactions.md) | All-or-nothing groups of statements, and what ends them. |
 | [Types](docs/types.md) | What each column type accepts and how it is stored. |
 | [Troubleshooting](docs/troubleshooting.md) | The traps: silent schema changes, invisible NULLs, NBT without SkBee. |
 | [Cookbook](docs/cookbook.md) | Recipes for the things scripts usually need. |

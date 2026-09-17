@@ -4,12 +4,16 @@ import io.github.heyhey123.xiaojieorm.result.DataCursor
 import io.github.heyhey123.xiaojieorm.type.DataType
 import io.github.heyhey123.xiaojieorm.type.ValueConverter
 import java.sql.Blob
-import java.sql.Connection
 import java.sql.ResultSet
 import java.sql.Statement
 
 /**
- * JDBC cursor that owns its bound parameter resources, result set, statement, and connection.
+ * JDBC cursor that owns its bound parameter resources, its result set, and its statement, and that
+ * hands its connection back through [releaseConnection].
+ *
+ * The connection is not the cursor's to close. Outside a transaction [releaseConnection] returns it to
+ * the pool; inside one it does nothing, because the transaction owns that connection and closing it
+ * here would end the transaction from underneath the script.
  *
  * [close] is idempotent and releases those resources in ownership order. If cleanup steps fail,
  * the first failure is thrown and later failures are attached as suppressed exceptions. Values are
@@ -19,7 +23,7 @@ import java.sql.Statement
 class JdbcDataCursor(
     private val resultSet: ResultSet,
     private val statement: Statement,
-    private val connection: Connection,
+    private val releaseConnection: () -> Unit,
     private val releaseBoundResources: (() -> Unit)? = null
 ) : DataCursor {
 
@@ -89,7 +93,7 @@ class JdbcDataCursor(
             if (failure == null) failure = error else failure.addSuppressed(error)
         }
         try {
-            connection.close()
+            releaseConnection()
         } catch (error: Throwable) {
             if (failure == null) failure = error else failure.addSuppressed(error)
         }

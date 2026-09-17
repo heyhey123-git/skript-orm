@@ -1,14 +1,13 @@
-﻿package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
+package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.InsertIfAbsent
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
-import javax.sql.DataSource
 
 open class JdbcInsertIfAbsent(
     values: Map<String, Any?>,
-    override val dataSource: DataSource,
+    override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
 ) : InsertIfAbsent(values), JdbcQuery {
 

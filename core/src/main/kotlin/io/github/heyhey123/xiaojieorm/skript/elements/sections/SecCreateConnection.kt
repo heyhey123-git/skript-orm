@@ -15,6 +15,8 @@ import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
 import io.github.heyhey123.xiaojieorm.database.DatabaseRegistry
 import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionPropertiesParser
+import io.github.heyhey123.xiaojieorm.skript.utils.ConnectionScope
+import io.github.heyhey123.xiaojieorm.skript.utils.DatabaseWork
 import io.github.heyhey123.xiaojieorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.xiaojieorm.skript.utils.SkriptLocalVariables
@@ -103,6 +105,18 @@ class SecCreateConnection : Section() {
         val actualEvent = event ?: return walk(event, false)
         val firstLine: Trigger = this.trigger ?: return walk(event, false)
         SkriptDatabaseErrors.clear(actualEvent)
+
+        // Connecting can disconnect the connection it replaces, and a transaction on that connection
+        // would be rolled back by it. A script that wants a new connection can finish first.
+        if (ConnectionScope.transaction(actualEvent) != null) {
+            DatabaseWork.report(
+                actualEvent,
+                firstLine,
+                "A connection cannot be created inside a database transaction. Roll it back first."
+            )
+            return walk(actualEvent, false)
+        }
+
         val databaseName = databaseNameExpr.getSingle(actualEvent)
 
         if (databaseName == null) {

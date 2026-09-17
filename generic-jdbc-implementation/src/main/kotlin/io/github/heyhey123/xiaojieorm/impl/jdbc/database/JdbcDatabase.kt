@@ -4,10 +4,13 @@ import com.zaxxer.hikari.HikariConfig
 import com.zaxxer.hikari.HikariDataSource
 import io.github.heyhey123.xiaojieorm.database.ConnectionSettings
 import io.github.heyhey123.xiaojieorm.database.Database
+import io.github.heyhey123.xiaojieorm.database.Transaction
 import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.JdbcQueries
+import io.github.heyhey123.xiaojieorm.impl.jdbc.queries.PooledConnectionSource
 import io.github.heyhey123.xiaojieorm.impl.jdbc.type.JdbcDataTypes
 import io.github.heyhey123.xiaojieorm.table.Table
 import io.github.heyhey123.xiaojieorm.type.DataTypes
+import java.time.Duration
 
 /**
  * Hikari-backed JDBC database configured with a driver class and [dialect].
@@ -35,7 +38,7 @@ open class JdbcDatabase(
             }
             dataSource = HikariDataSource(config)
 
-            queries = JdbcQueries(dataSource!!, dialect)
+            queries = JdbcQueries(PooledConnectionSource(dataSource!!), dialect)
         } catch (e: ClassNotFoundException) {
             throw ClassNotFoundException("JDBC Driver class not found: $driver", e)
         } catch (e: Exception) {
@@ -53,6 +56,35 @@ open class JdbcDatabase(
     override fun doDisconnect() {
         dataSource?.close()
         dataSource = null
+    }
+
+    override val supportsTransactions: Boolean = true
+
+    /**
+     * Borrows one connection and turns automatic commits off on it.
+     *
+     * The connection stays out of the pool until the transaction ends, which is the whole point: the
+     * statements inside it have to run on the same one to see each other's work.
+     *
+     * A connection that cannot be taken out of automatic-commit mode is given straight back, so that a
+     * driver which refuses does not cost the pool a connection for the life of the server.
+     */
+    override fun doBeginTransaction(timeout: Duration): Transaction {
+        val source = checkNotNull(dataSource) {
+            "Database is not connected. Please connect before opening a transaction."
+        }
+        val connection = source.connection
+        try {
+            connection.autoCommit = false
+        } catch (error: Throwable) {
+            try {
+                connection.close()
+            } catch (cleanupError: Throwable) {
+                error.addSuppressed(cleanupError)
+            }
+            throw error
+        }
+        return JdbcTransaction(this, dialect, connection, timeout)
     }
 
     override suspend fun doRegisterTable(table: Table) {

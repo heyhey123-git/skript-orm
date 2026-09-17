@@ -8,23 +8,24 @@ import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.result.WriteResult
 import io.github.heyhey123.xiaojieorm.table.Table
 import java.sql.PreparedStatement
-import javax.sql.DataSource
 
 /**
  * Shared blocking JDBC execution boundary; `suspend` methods do not switch dispatchers.
  *
- * Each execution borrows a connection. Update executions close all JDBC resources before returning.
- * Cursor executions transfer the result set, statement, connection, and bound-resource cleanup to
- * the returned [JdbcDataCursor], which the caller must close.
+ * Every execution borrows a connection from its [connectionSource] and gives it back the way that
+ * source decides, which is what lets the same query objects run inside a transaction without knowing
+ * that they are. Update executions close all JDBC resources before returning. Cursor executions
+ * transfer the result set, the statement, and the returning of the connection to the returned
+ * [JdbcDataCursor], which the caller must close.
  */
 interface JdbcQuery {
 
-    val dataSource: DataSource
+    val connectionSource: JdbcConnectionSource
     val dialect: JdbcDialect
 
     /**
-     * Statement timeout in seconds. Zero leaves the driver's default unchanged; negative values
-     * are rejected when a statement is configured.
+     * Statement timeout in seconds for the statements this query builds. Zero leaves the driver's
+     * default unchanged; negative values are rejected when a statement is configured.
      */
     val queryTimeoutSeconds: Int
         get() = 0
@@ -44,24 +45,46 @@ interface JdbcQuery {
         return index
     }
 
-    fun configureStatement(statement: PreparedStatement) {
-        require(queryTimeoutSeconds >= 0) { "JDBC query timeout must not be negative." }
-        if (queryTimeoutSeconds > 0) statement.queryTimeout = queryTimeoutSeconds
+    /**
+     * The timeout actually applied: the shorter of what the query asks for and what the connection
+     * source imposes.
+     *
+     * A transaction uses the second to bound statements it cannot otherwise interrupt, because rolling
+     * a transaction back waits for the statement running on its connection.
+     */
+    fun effectiveTimeoutSeconds(): Int {
+        val own = queryTimeoutSeconds
+        val imposed = connectionSource.statementTimeoutSeconds
+        require(own >= 0 && imposed >= 0) { "JDBC query timeout must not be negative." }
+        return when {
+            own == 0 -> imposed
+            imposed == 0 -> own
+            else -> minOf(own, imposed)
+        }
     }
 
-    suspend fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult =
-        dataSource.connection.use { connection ->
-            connection.prepareStatement(sql).use { statement ->
+    fun configureStatement(statement: PreparedStatement) {
+        val seconds = effectiveTimeoutSeconds()
+        if (seconds > 0) statement.queryTimeout = seconds
+    }
+
+    suspend fun executeUpdate(sql: String, bind: (PreparedStatement) -> Unit): WriteResult {
+        val connection = connectionSource.borrow()
+        try {
+            return connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
                     configureStatement(statement)
                     bind(statement)
                     WriteResult(statement.executeLargeUpdate())
                 }
             }
+        } finally {
+            connectionSource.release(connection)
         }
+    }
 
     suspend fun executeCursor(sql: String, bind: (PreparedStatement) -> Unit): CursorResult {
-        val connection = dataSource.connection
+        val connection = connectionSource.borrow()
         try {
             val statement = connection.prepareStatement(sql)
             try {
@@ -69,9 +92,12 @@ interface JdbcQuery {
                 bind(statement)
                 val resultSet = statement.executeQuery()
                 return CursorResult(
-                    JdbcDataCursor(resultSet, statement, connection) {
-                        statement.releaseBoundResources()
-                    }
+                    JdbcDataCursor(
+                        resultSet = resultSet,
+                        statement = statement,
+                        releaseConnection = { connectionSource.release(connection) },
+                        releaseBoundResources = { statement.releaseBoundResources() }
+                    )
                 )
             } catch (error: Throwable) {
                 try {
@@ -88,7 +114,7 @@ interface JdbcQuery {
             }
         } catch (error: Throwable) {
             try {
-                connection.close()
+                connectionSource.release(connection)
             } catch (cleanupError: Throwable) {
                 error.addSuppressed(cleanupError)
             }

@@ -1,14 +1,13 @@
-﻿package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
+package io.github.heyhey123.xiaojieorm.impl.jdbc.queries
 
 import io.github.heyhey123.xiaojieorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.xiaojieorm.queries.SelectById
 import io.github.heyhey123.xiaojieorm.result.CursorResult
 import io.github.heyhey123.xiaojieorm.table.Table
-import javax.sql.DataSource
 
 open class JdbcSelectById(
     id: Any,
-    override val dataSource: DataSource,
+    override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
 ) : SelectById(id), JdbcQuery {
 
