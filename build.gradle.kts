@@ -331,6 +331,8 @@ val serverTestChecks = buildMap {
     // Disconnecting has no error channel: it proves it ran by the trigger reaching the end.
     put("disconnect", "ran")
     if (serverTestUsesDatabase) {
+        // The all-form, driven by the disconnect element once nothing else needs a connection.
+        put("disconnect all", "ran")
         put("setup", "")
         // What the setup's own read reported: empty means the table it registered is known to the
         // connection, and "Table ... not found." would mean registration did not take effect.
@@ -356,9 +358,12 @@ val serverTestChecks = buildMap {
         put("connections default after", "")
         put("connections gone", "No connection named 'secondary', and no connection has been created yet.")
         // `use connection` switches for the rest of the event, and the connection it names has no table
-        // of its own: the lookup failing is what shows the switch reached it.
+        // of its own: the lookup failing is what shows the switch reached it. The named disconnect then
+        // closes that same connection, whatever the switch says.
         put("connections create tertiary", "")
         put("connections used", "Table 'orm_roundtrip' not found.")
+        put("connections named disconnect", "ran")
+        put("connections tertiary gone", "No connection named 'tertiary', and no connection has been created yet.")
     }
 }
 

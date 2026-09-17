@@ -7,11 +7,14 @@
 #
 # The unqualified `disconnect` is checked in the middle of that, because it is the one statement that
 # would otherwise act on a connection the script is not using: with a scope in effect it has to close
-# the connection the scope names, and the default has to still answer afterwards.
+# the connection the scope names, and the default has to still answer afterwards. The named form is
+# checked at the end, on a connection this script made.
 #
-# `elements/16-disconnect` waits for this script to finish before it closes the default connection,
-# because an unscoped statement with no default connection would report "No database connected."
-# instead of the table lookups this script is about.
+# Every connection opened here is closed here, and only by name or by scope. Closing the default
+# connection is the disconnect element's job, and it waits for this script before it does anything:
+# an unscoped statement with no default connection would report "No database connected." instead of
+# the table lookups this script is about, and the round trip would look like a write that stored
+# nothing.
 every 5 seconds:
     if {xiaojie::selftest::done::connections} is set:
         stop trigger
@@ -82,5 +85,16 @@ every 5 seconds:
     select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
     log "XIAOJIE_SELFTEST detail: connections used -> %last database error%"
 
-    disconnect from all connections
+    # The named form closes the connection it names, whatever a scope or a switch says.
+    disconnect from connection "tertiary"
+    log "XIAOJIE_SELFTEST detail: connections named disconnect -> ran"
+    in connection "tertiary":
+        select one entity from table "orm_roundtrip" and store the result in {_connections::check::*}
+    log "XIAOJIE_SELFTEST detail: connections tertiary gone -> %last database error%"
+
+    # Nothing here may close a connection this script did not create. `disconnect from all connections`
+    # belongs to the disconnect element, which runs after this script for exactly that reason: the
+    # default connection is the one `00-setup.sk` made, `17-roundtrip.sk` holds it across a five second
+    # wait, and closing it in between makes that script's reads report "No database connected." and look
+    # like a write that stored nothing.
     set {xiaojie::selftest::done::connections} to true
