@@ -12,9 +12,9 @@ import kotlin.test.assertFailsWith
 class JdbcDialectTest {
 
     @Test
-    fun `generic dialect renders quoted ansi sql`() {
+    fun `generic dialect renders quoted sql`() {
         assertEquals("SELECT * FROM \"users\"", GenericJdbcDialect.select("users"))
-        assertEquals("SELECT * FROM \"users\" WHERE \"id\" = ? FETCH FIRST 1 ROW ONLY", GenericJdbcDialect.selectOne("users", "WHERE \"id\" = ?"))
+        assertEquals("SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 1", GenericJdbcDialect.selectOne("users", "WHERE \"id\" = ?"))
         assertEquals("INSERT INTO \"users\" (\"id\", \"name\") VALUES (?, ?)", GenericJdbcDialect.insert("users", listOf("id", "name")))
         assertEquals("UPDATE \"users\" SET \"name\" = ? WHERE \"id\" = ?", GenericJdbcDialect.update("users", listOf("name"), "WHERE \"id\" = ?", null))
         assertEquals("DELETE FROM \"users\" WHERE \"id\" = ?", GenericJdbcDialect.delete("users", "WHERE \"id\" = ?", null))
@@ -23,9 +23,10 @@ class JdbcDialectTest {
     @Test
     fun `pagination declares exact placeholder order`() {
         val generic = GenericJdbcDialect.selectPage("users", "id")
-        assertEquals("SELECT * FROM \"users\" ORDER BY \"id\" OFFSET ? ROWS FETCH NEXT ? ROWS ONLY", generic.sql)
-        assertEquals(listOf(JdbcPageParameter.OFFSET, JdbcPageParameter.LIMIT), generic.parameterOrder)
+        assertEquals("SELECT * FROM \"users\" ORDER BY \"id\" LIMIT ? OFFSET ?", generic.sql)
+        assertEquals(listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET), generic.parameterOrder)
 
+        // MySQL pages the same way, which is why it inherits this instead of overriding it.
         val mysql = MysqlJdbcDialect.selectPage("users", "id")
         assertEquals("SELECT * FROM `users` ORDER BY `id` LIMIT ? OFFSET ?", mysql.sql)
         assertEquals(listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET), mysql.parameterOrder)

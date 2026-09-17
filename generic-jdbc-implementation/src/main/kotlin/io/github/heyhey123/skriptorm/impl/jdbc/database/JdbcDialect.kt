@@ -33,13 +33,22 @@ interface JdbcDialect {
         whereClause?.let { append(" $it") }
     }
 
+    /**
+     * Takes one row with `LIMIT 1`.
+     *
+     * `LIMIT` and not the standard's `FETCH FIRST`, because `FETCH FIRST` is the one form the two
+     * drivers a Paper server already carries — MySQL's and SQLite's — do not accept. Every database a
+     * plugin can reach here takes `LIMIT`, so that is what a dialect inherits unless its server knows
+     * better.
+     */
     fun selectOne(table: String, whereClause: String? = null): String =
-        "${select(table, whereClause)} FETCH FIRST 1 ROW ONLY"
+        "${select(table, whereClause)} LIMIT 1"
 
+    /** Pages with `LIMIT ? OFFSET ?`, for the reason [selectOne] gives. */
     fun selectPage(table: String, orderBy: String, whereClause: String? = null): JdbcPageSql =
         JdbcPageSql(
-            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} OFFSET ? ROWS FETCH NEXT ? ROWS ONLY",
-            parameterOrder = listOf(JdbcPageParameter.OFFSET, JdbcPageParameter.LIMIT)
+            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} LIMIT ? OFFSET ?",
+            parameterOrder = listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET)
         )
 
     fun insert(table: String, columns: List<String>): String {
@@ -161,8 +170,9 @@ data class JdbcPageSql(
 }
 
 /**
- * ANSI-oriented default dialect. Insert-if-absent, upsert, limited writes, and auto-increment
- * deliberately throw [UnsupportedOperationException].
+ * The dialect for a database this implementation knows nothing else about: standard-shaped SQL with
+ * `"double quoted"` identifiers, and the row limiting every server here accepts. Insert-if-absent,
+ * upsert, limited writes and auto-increment deliberately throw [UnsupportedOperationException].
  */
 object GenericJdbcDialect : JdbcDialect {
 
@@ -178,15 +188,6 @@ object MysqlJdbcDialect : JdbcDialect {
 
     override fun renderIdentifier(identifier: String): String =
         "`${identifier.replace("`", "``")}`"
-
-    override fun selectOne(table: String, whereClause: String?): String =
-        "${select(table, whereClause)} LIMIT 1"
-
-    override fun selectPage(table: String, orderBy: String, whereClause: String?): JdbcPageSql =
-        JdbcPageSql(
-            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} LIMIT ? OFFSET ?",
-            parameterOrder = listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET)
-        )
 
     override fun insertIfAbsent(table: String, columns: List<String>): String {
         require(columns.isNotEmpty()) { "Insert columns cannot be empty." }

@@ -45,11 +45,11 @@ class JdbcConcreteQueriesTest {
 
         val one = cursorFixture()
         JdbcSelectOne(null, one.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
-        verify { one.connection.prepareStatement("SELECT * FROM \"users\" FETCH FIRST 1 ROW ONLY") }
+        verify { one.connection.prepareStatement("SELECT * FROM \"users\" LIMIT 1") }
 
         val byId = cursorFixture()
         JdbcSelectById(7, byId.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
-        verify { byId.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"id\" = ? FETCH FIRST 1 ROW ONLY") }
+        verify { byId.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 1") }
         verify { byId.statement.setObject(1, 7, JDBCType.INTEGER) }
     }
 
@@ -118,7 +118,9 @@ class JdbcConcreteQueriesTest {
     }
 
     @Test
-    fun `pagination binds dialect order and computes long offset`() = runBlocking {
+    fun `pagination binds limit before offset and computes long offset`() = runBlocking {
+        // Both dialects render `LIMIT ? OFFSET ?`, so the placeholder order is the same for both; the
+        // generic dialect is checked as well to keep the inherited rendering honest.
         val mysql = cursorFixture()
         JdbcSelectPage(25, 3, null, mysql.connectionSource, MysqlJdbcDialect).execute(table).cursor.close()
         verifyOrder {
@@ -129,8 +131,8 @@ class JdbcConcreteQueriesTest {
         val generic = cursorFixture()
         JdbcSelectPage(25, 3, null, generic.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verifyOrder {
-            generic.statement.setObject(1, 50L, JDBCType.BIGINT)
-            generic.statement.setObject(2, 25, JDBCType.INTEGER)
+            generic.statement.setObject(1, 25, JDBCType.INTEGER)
+            generic.statement.setObject(2, 50L, JDBCType.BIGINT)
         }
     }
 
