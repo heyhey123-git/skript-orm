@@ -23,7 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * @see EffInsertOneFromVariable for why this form exists beside its section.
  */
 @Name("Upsert One Entity By ID From A Variable Without A Colon")
-@Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. With and wait, failures are available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """set {_user::id} to 1
 set {_user::name} to "Alice"
@@ -46,7 +46,6 @@ class EffUpsertByIdFromVariable : Effect() {
     private lateinit var tableNameExpr: Expression<String>
     private lateinit var idExpr: Expression<Any>
     private lateinit var valuesVariable: Variable<*>
-    private var waitFlag: Boolean = false
 
     /** The variable the affected row count is stored in, or null when the statement did not ask for one. */
     private var affectedRowsVariable: Variable<*>? = null
@@ -66,7 +65,6 @@ class EffUpsertByIdFromVariable : Effect() {
         valuesVariable = valuesExpression
         tableNameExpr = expressions[1] as Expression<String>
         idExpr = ExpressionsHelper.withAnyType(expressions[2]!!)
-        waitFlag = parseResult.hasTag("wait")
         // The count clause is the last expression of the pattern, so it is the last slot.
         affectedRowsVariable = try {
             AffectedRows.target(expressions.lastOrNull())
@@ -105,7 +103,6 @@ class EffUpsertByIdFromVariable : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = waitFlag || target.mustWait,
             query = {
                 target.withQueries { queries ->
                     queries.upsertById(id, row).execute(target.table)

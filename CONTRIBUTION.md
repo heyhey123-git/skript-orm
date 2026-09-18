@@ -211,9 +211,9 @@ section!` in the log and runs the section anyway. Those notes are expected, not 
   also what puts the section into the parser's current sections, which is how `exit` and `stop`
   reaching it are noticed. A `TriggerItem` of its own closes the body, because Skript has no
   end-of-body callback and whether that node is wired in decides whether the scope leaks.
-- Writes are asynchronous. The `and wait` tag decides whether the continuation waits: a waiting write
-  preserves the event continuation and exposes failures through `last database error`, while a
-  fire-and-forget write continues immediately and can only log a later failure.
+- Every statement that touches the database waits: `DatabaseWork.run` parks the trigger, preserves the
+  event continuation and puts failures in `last database error`. `and wait` is still accepted by every
+  pattern and read by nobody, because writes once needed it to ask for that.
 - All values are resolved on the main thread, before dispatch, while local variables are still
   attached to the event.
 - Report user-facing parse problems with `Skript.error(...)` during `init`, and runtime problems
@@ -503,7 +503,7 @@ release that is already published runs the same task:
 
 ```bash
 ./gradlew releaseNotes
-gh release edit v1.1.0 --notes-file build/release-notes.md
+gh release edit v1.2.0 --notes-file build/release-notes.md
 ```
 
 A release is therefore four repository changes first: the version in `gradle.properties`, the changelog

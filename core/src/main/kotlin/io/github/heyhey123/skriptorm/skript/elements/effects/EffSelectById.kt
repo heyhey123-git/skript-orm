@@ -91,7 +91,6 @@ class EffSelectById : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = true,
             query = {
                 target.withQueries { queries ->
                     val row = linkedMapOf<String, Any?>()

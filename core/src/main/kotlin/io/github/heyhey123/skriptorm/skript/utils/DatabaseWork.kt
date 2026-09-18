@@ -45,16 +45,6 @@ internal object DatabaseWork {
          */
         suspend fun <T> withQueries(block: suspend (Queries) -> T): T =
             DatabaseWork.withQueries(database, transaction, block)
-
-        /**
-         * Whether the statement has to wait for its work.
-         *
-         * Inside a transaction it always does. Two statements running at once on one pinned connection is
-         * not something a script should be able to ask for, and a transaction cannot commit before the
-         * statements it is made of have finished.
-         */
-        val mustWait: Boolean
-            get() = transaction != null
     }
 
     /**
@@ -154,42 +144,30 @@ internal object DatabaseWork {
     ): T = transaction?.withQueries(block) ?: database.withQueries(block)
 
     /**
-     * Runs [query] on the plugin's scope, then [deliver] on the server thread.
+     * Runs [query] on the plugin's scope, then [deliver] on the server thread, and walks [continuation]
+     * from there.
      *
-     * With [wait], the trigger is parked and walked on from [continuation] once the work is done, and the
-     * event's local variables are taken away and put back around the query so that the script cannot tell
-     * the difference. Without it the work is left to the background and the trigger carries on at once,
-     * which is what a write promises when `and wait` is left out: a failure is then only logged, and
-     * `last database error` stays as it was.
+     * The caller's `walk` returns null after calling this: the trigger is parked, its local variables are
+     * taken away and put back around the query so that the script cannot tell the difference, and the
+     * lines after the statement run once the work is done. Every statement in this addon waits, which is
+     * what makes the order of a script the order of its statements and puts every failure in
+     * `last database error` rather than only in the console.
+     *
+     * That is also why the return type is `Nothing?`: the value is always null, and it exists so that a
+     * caller says what happens to the trigger in one line, `return DatabaseWork.run(...)`.
      *
      * [clearErrorOnSuccess] is false for the work that undoes something the script already knows failed:
      * rolling a failed transaction back succeeds, and clearing the slot on the way out would throw away
      * the only account of why the transaction was rolled back.
-     *
-     * The return value is what the caller should return from its walk: null when the trigger has been
-     * parked, [continuation] when it should carry on by itself.
      */
     fun <T : Any> run(
         event: Event,
         continuation: TriggerItem?,
-        wait: Boolean,
         query: suspend () -> T,
         deliver: (T) -> Unit = {},
         onFailure: (Throwable) -> Unit = {},
         clearErrorOnSuccess: Boolean = true
-    ): TriggerItem? {
-        if (!wait) {
-            SkriptOrm.ioScope.launch {
-                try {
-                    query()
-                } catch (_: CancellationException) {
-                } catch (error: Throwable) {
-                    onFailure(error)
-                }
-            }
-            return continuation
-        }
-
+    ): Nothing? {
         val localVariables = SkriptLocalVariables.remove(event)
         Delay.addDelayedEvent(event)
 
@@ -227,6 +205,7 @@ internal object DatabaseWork {
             }
         }
 
+        // The work is in the coroutine above: this returns to park the trigger, always.
         return null
     }
 }

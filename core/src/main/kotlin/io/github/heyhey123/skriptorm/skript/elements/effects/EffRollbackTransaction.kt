@@ -97,7 +97,6 @@ class EffRollbackTransaction : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = target.next,
-            wait = true,
             query = { transaction.rollback() },
             onFailure = { error ->
                 report(actualEvent, trigger, "The database transaction could not be rolled back: ${error.message}")

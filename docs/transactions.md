@@ -76,12 +76,13 @@ silence of the statements that were skipped. A `store affected rows` variable is
 is cleared per statement, in a transaction too, so that no number is left over from a statement that
 never answered. See [Affected rows](affected-rows.md).
 
-## Waiting inside one
+## One connection at a time
 
-Everything written inside a transaction waits, whether or not it says `and wait`. Two statements running
-at once on one connection is not something a script should be able to ask for, and the transaction
-cannot commit before the statements it is made of have finished. Leaving `and wait` out inside a
-transaction is allowed and does nothing.
+Every statement inside runs on the connection the transaction pinned, so two of them cannot be in flight
+at once and cannot overtake each other: a second statement would be writing into a transaction that is
+still being built, and the transaction cannot commit before the statements it is made of have finished.
+Nothing has to be written for that, because every statement waits anyway, and `and wait` inside a
+transaction is accepted and does nothing.
 
 ## The timeout
 

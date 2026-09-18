@@ -6,7 +6,7 @@ A write can report how many rows it touched, and a script can act on that number
 conditional write possible without a transaction:
 
 ```sk
-update entities in table "accounts" with limit 1 and store affected rows in {_rows} and wait:
+update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
     values:
         balance: {_balance} - {_amount}
     where all:
@@ -21,14 +21,14 @@ if {_rows} is 0:
 
 `store affected rows in {_rows}` is optional and belongs to every statement that writes: `insert one`,
 `insert many`, `insert ... if absent`, `update`, `upsert` and `delete`, in the section form and in the
-colon-free form alike. It is written with `and`, the same conjunction `and wait` uses, after the
-statement's own arguments and before `and wait`: that conjunction is what tells Skript where the argument
-in front of the clause ends.
+colon-free form alike. It is written with `and`, after the statement's own arguments: that conjunction is
+what tells Skript where the argument in front of the clause ends. An `and wait` after it is accepted and
+changes nothing.
 
 ```sk
-delete entities from table "logs" with limit 500 and store affected rows in {_deleted} and wait
-insert one {_user::*} into table "archived_users" and store affected rows in {_rows} and wait
-upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
+delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
+insert one {_user::*} into table "archived_users" and store affected rows in {_rows}
+upsert one entity in table "users" by id {_id} and store affected rows in {_rows}:
     values:
         name: "Alice"
 ```
@@ -53,7 +53,7 @@ once the statement has finished and could count exactly:
 | The variable holds | It means |
 | --- | --- |
 | a number | the statement ran and affected that many rows |
-| nothing | no statement answered: it was refused or skipped, it failed, the backend could not count, or it was written without `and wait` |
+| nothing | no statement answered: it was refused or skipped, it failed, or the backend could not count |
 
 **Zero is a real answer**, not a missing one: the statement ran and matched nothing. That is the useful
 case, and `is set` is what tells the two apart:
@@ -65,15 +65,14 @@ else if {_rows} is 0:
     send "No row matched." to console
 ```
 
-Clearing the variable first is what stops an older number from being read as this statement's answer.
-Written without `and wait`, the statement clears it and never writes it, so the variable reads as no
-answer even after the work has finished: the script had already moved on by the time there was a number
-to give. See [Errors and waiting](errors-and-waiting.md).
+Clearing the variable first is what stops an older number from being read as this statement's answer. The
+count is there when the next line runs: a write waits for its work, so nothing extra has to be written for
+the clause to be readable. See [Errors and waiting](errors-and-waiting.md).
 
-Inside a [transaction](transactions.md) every statement waits, so the clause works there too. The variable
-is still cleared statement by statement, including there: a statement the transaction skipped has not
-answered, and a number left over from the statement before it would say otherwise. `last database error`
-is the one that is kept instead, so that the cause of a rollback can still be read.
+Inside a [transaction](transactions.md) it works the same way, and the variable is still cleared statement
+by statement there: a statement the transaction skipped has not answered, and a number left over from the
+statement before it would say otherwise. `last database error` is the one that is kept instead, so that
+the cause of a rollback can still be read.
 
 ## A safe conditional write
 
@@ -87,7 +86,7 @@ select one entity from table "accounts" and store the result in {_account::*}:
 set {_balance} to {_account::balance}
 
 loop 3 times:
-    update entities in table "accounts" with limit 1 and store affected rows in {_rows} and wait:
+    update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
         values:
             balance: {_balance} - {_amount}
         where all:

@@ -13,17 +13,41 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-09-19
+
+A release about what a script can see. A write hands back the number of rows it affected, which is what a
+conditional write needs, and every statement now waits for its work, so a failure can no longer reach the
+console while `last database error` stays silent.
+
 ### Added
 
 - **`store affected rows in {_rows}`**, on every statement that writes: `insert one`, `insert many`,
   `insert ... if absent`, `update`, `upsert` and `delete`, in the section form and the colon-free one
-  alike. The clause is written before `and wait`, as in
-  `update entities in table "accounts" and store affected rows in {_rows} and wait`, and it keeps the
-  number of rows the statement affected. A count of `0` is a real answer — the statement ran and matched
-  nothing — while a variable left unset means no statement answered, because the statement was refused,
-  failed, could not be counted exactly, or was written without `and wait`. That is what makes a
-  conditional write possible without a transaction. See
-  [Affected rows](docs/affected-rows.md) for the three states and a safe read-modify-write recipe.
+  alike. It keeps the number of rows the statement affected, which is how a script tells "it was already
+  there" from "it was written", and how a read-modify-write becomes safe without a transaction: the count
+  of a statement whose `where` repeats the value it read is `1` only while nobody else got there first. A
+  count of `0` is a real answer, while a variable left unset means no statement answered — the statement
+  was refused or skipped, it failed, or the backend could not count it exactly. See
+  [Affected rows](docs/affected-rows.md) for the three states, what the number means on each backend, and
+  a bounded retry recipe.
+
+### Changed
+
+- **Every statement waits.** A write used to continue immediately unless it said `and wait`: the next line
+  ran while it was still in flight, so a read could see the row as it was, and a failure only the database
+  could judge went to the console instead of into `last database error`. Writes now behave the way reads
+  always have — the lines after a statement run once its work is done, which makes the order of a script
+  the order of its statements. **Upgrade note:** a script that relied on carrying on before a write had
+  finished will now wait for it, and a write that failed is now reported in `last database error` where it
+  used to be logged only. `and wait` is still accepted on every statement and does nothing, so no script
+  has to change; it can simply be left out from here on.
+
+### Documentation
+
+- A bilingual page for the row count, and the waiting material rewritten around it: the two troubleshooting
+  entries about silent write failures are gone, along with the behaviour they described.
+
+**Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.1.0...v1.2.0
 
 ## [1.1.0] - 2026-09-18
 

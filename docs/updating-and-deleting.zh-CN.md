@@ -40,7 +40,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 ```
 
-删除没有 values 块，能写的只有可选的 `where`、可选的 limit，以及 `and wait`。
+删除没有 values 块，能写的只有可选的 `where` 与可选的 limit。
 
 ## 按 id 删除
 
@@ -73,13 +73,12 @@ limit 是保险，不是分页手段：留下哪几行由数据库决定，所�
 
 ## 等待
 
-两个 section 都接受 `and wait`。带上它，后续语句在改动结束后执行、失败可在 `last database error` 里读到；不带它，
-工作交给后台，数据库层面的失败只会写日志。同步检查（没有连接、表不存在、值放不下、limit 为零）无论哪种情况都会出现在
-`last database error` 里。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+两个 section 都会等自己的活儿干完：后续语句在改动结束后执行，失败可在 `last database error` 里读到。等待停住的是这条
+trigger，不是服务器主线程。`and wait` 仍然照收、不起作用，因为现在每条语句都会等。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 改动了多少行
 
-两个 section 也都接受 `and store affected rows in {_rows}`，写在 `and wait` 之前，它会留下语句动过的行数：
+两个 section 也都接受 `and store affected rows in {_rows}`，它会留下语句动过的行数：
 
 ```sk
 delete entities from table "sessions" and store affected rows in {_deleted} and wait:

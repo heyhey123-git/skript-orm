@@ -104,7 +104,6 @@ class EffDisconnect : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = true,
             query = { disconnect() },
             onFailure = { error ->
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Disconnect failed: ${error.message}")

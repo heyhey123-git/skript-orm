@@ -76,7 +76,6 @@ class EffSelectManyUnfiltered : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = true,
             query = {
                 target.withQueries { queries ->
                     val rows = linkedMapOf<String, Any?>()

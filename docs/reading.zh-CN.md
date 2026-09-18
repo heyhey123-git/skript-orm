@@ -93,5 +93,5 @@ if {_user::age} is not set:
 
 ## 失败
 
-读取一定会等，也一定会暴露失败，所以紧跟其后的 `last database error` 就是出错原因；给读取加 `and wait` 没有任何
-区别。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+读取一定会等，也一定会暴露失败，所以紧跟其后的 `last database error` 就是出错原因；给读取加 `and wait` 照收，但没有
+任何区别，因为它本来就会等。见 [错误与等待](errors-and-waiting.zh-CN.md)。

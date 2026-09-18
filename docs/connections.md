@@ -223,9 +223,8 @@ from then on, because the connection they resolve to is closed.
 ## Operations without a connection
 
 Every section checks the connection first. With no connection in effect, an operation does nothing and
-reports `No database connected.`; with `and wait` that lands in `last database error`, and without it
-the failure is only logged. Once named connections exist but none is the default, the message says so
-and lists the names. See [Errors and waiting](errors-and-waiting.md).
+reports `No database connected.` in `last database error`. Once named connections exist but none is the
+default, the message says so and lists the names. See [Errors and waiting](errors-and-waiting.md).
 
 ## Credentials
 
@@ -274,7 +273,8 @@ Inside a transaction, a statement gets what is left of the transaction's own tim
 
 A connection keeps a small pool of database connections, so operations do not have to queue behind each
 other. That is also why a write is visible to a read only after it has finished: two operations may run
-on different pooled connections. `and wait` is what orders them from a script's point of view.
+on different pooled connections. What orders them from a script's point of view is the wait every
+statement performs.
 
 Each connection has a pool of its own, so the number of connections a script keeps open is the number
 of pools the server runs.

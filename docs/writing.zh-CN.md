@@ -99,16 +99,13 @@ insert entity if absent into table "users" and wait:
 
 ## 等待
 
-`insert`、`update`、`upsert`、`if absent` 都接受 `and wait`：
+写入会等自己的活儿干完：它之后的语句在改动被数据库接收后才执行，失败能在 `last database error` 里读到。等待停住的是这条 trigger，不是服务器主线程，所以语句在飞的时候别的玩家、别的脚本照常运行。
 
-- **带上它**：trigger 的后续语句等这条写入结束之后才执行，失败能在 `last database error` 里读到。
-- **不带它**：写入交给后台，下一行立刻执行。同步检查仍会通过 `last database error` 报告，比如没有连接、表不存在、值放不下；至于数据库本身拒绝的失败，只会写进日志。
-
-读取必定等待，所以“先写后读”的脚本应该给写入加 `and wait`，否则读取可能看到写入之前的行。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+`and wait` 在这些语句上仍然照收，只是不起作用：现在每条语句都会等，写入也不例外；它曾经是写入用来要求这一点的写法，所以本页示例都还留着它。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 写入了多少行
 
-这些语句都可以把影响的行数留在变量里：在 `and wait` 之前写上 `and store affected rows in {_rows}`：
+这些语句都可以把影响的行数留在变量里：写上 `and store affected rows in {_rows}`：
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:

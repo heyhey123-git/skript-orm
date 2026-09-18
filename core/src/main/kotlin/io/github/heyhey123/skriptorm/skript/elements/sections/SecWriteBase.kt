@@ -78,13 +78,6 @@ abstract class SecWriteBase : Section() {
      */
     protected var affectedRowsVariable: Variable<*>? = null
 
-    /**
-     * Whether the continuation waits for this write. Waiting preserves the event continuation and
-     * exposes failures through `last database error`; fire-and-forget writes continue immediately
-     * and can only report later failures to the server log.
-     */
-    protected var waitFlag: Boolean = false
-
     /** Values for single-row writes. Resolves to the columns the author wrote, and only those. */
     protected var singleValues: RawValues? = null
 
@@ -162,10 +155,9 @@ abstract class SecWriteBase : Section() {
             Skript.error(error.message ?: "Invalid affected row count target.")
             return false
         }
-        waitFlag = parseResult.hasTag("wait")
-        if (waitFlag) {
-            parser.hasDelayBefore = Kleenean.TRUE
-        }
+        // Every write is delayed, so Skript knows the lines after it run later. The `and wait` a script
+        // may still write is accepted by the pattern and read by nobody.
+        parser.hasDelayBefore = Kleenean.TRUE
 
         val valuesIndex = valuesExpressionIndex(matchedPattern)
         if (valuesIndex >= 0) {
@@ -334,18 +326,17 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
         val transaction = ConnectionScope.transaction(event)
-        // Everything inside a transaction waits, whether or not the statement was written with
-        // `and wait`: two statements running at once on one pinned connection is not something a script
-        // should be able to ask for, and the transaction cannot commit before the rest of them are done.
-        val waiting = waitFlag || transaction != null
-
-        val continuation = if (waiting) next else null
-        val localVariables = if (waiting && event != null) {
+        // Every write waits, whether or not it says `and wait`: the trigger carries on after the change
+        // has happened, so the order a script reads is the order it wrote, and every failure is in
+        // `last database error` rather than only in the console. `and wait` is still accepted, and does
+        // nothing, the way it has always been on a read.
+        val continuation = next
+        val localVariables = if (event != null) {
             SkriptLocalVariables.remove(event)
         } else {
             null
         }
-        if (waiting && event != null) {
+        if (event != null) {
             Delay.addDelayedEvent(event)
         }
 
@@ -365,39 +356,36 @@ abstract class SecWriteBase : Section() {
             withContext(NonCancellable + SyncDispatcher) {
                 if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
 
-                if (waiting && event != null) {
-                    if (failure != null) {
-                        SkriptDatabaseErrors.set(event, failure)
-                    } else {
-                        SkriptDatabaseErrors.clear(event)
+                try {
+                    if (event != null) {
+                        if (failure != null) {
+                            SkriptDatabaseErrors.set(event, failure)
+                        } else {
+                            SkriptDatabaseErrors.clear(event)
+                        }
                     }
-                }
-                failure?.let {
-                    ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
-                }
-                if (waiting) {
-                    try {
-                        if (event != null && localVariables != null) {
-                            SkriptLocalVariables.restore(event, localVariables)
-                        }
-                        // The count lands in a Skript variable, so it is written once the event's local
-                        // variables are back in place, the way a read stores its result. Only a statement
-                        // that waits can be read afterwards: without `and wait` the script has already
-                        // carried on by the time this runs, so the variable stays as it was cleared.
-                        if (event != null && failure == null) {
-                            result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
-                        }
-                        if (event != null) {
-                            walk(continuation, event)
-                        }
-                    } finally {
-                        if (event != null) SkriptLocalVariables.clear(event)
+                    failure?.let {
+                        ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
                     }
+                    if (event != null && localVariables != null) {
+                        SkriptLocalVariables.restore(event, localVariables)
+                    }
+                    // The count lands in a Skript variable, so it is written once the event's local
+                    // variables are back in place, the way a read stores its result.
+                    if (event != null && failure == null) {
+                        result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
+                    }
+                    if (event != null) {
+                        walk(continuation, event)
+                    }
+                } finally {
+                    if (event != null) SkriptLocalVariables.clear(event)
                 }
             }
         }
 
-        return if (waiting) null else walk(event, false)
+        // The trigger is parked until the write has happened and the continuation has been walked.
+        return null
     }
 
     protected abstract suspend fun executeWrite(

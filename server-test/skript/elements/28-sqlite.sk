@@ -185,27 +185,25 @@ every 5 seconds:
     if {sqlite::rows::insert} is not 1:
         log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::insert}%' for an insert of one row, instead of 1"
 
-    # A statement written without `and wait` clears the variable and never writes it, so it reads as no
-    # answer even once the work is done: the script had already moved on by the time there was a number
-    # to give. The seed is what makes the clear visible, and the read-back below says the write itself
-    # happened all the same.
+    # `and wait` is accepted and unnecessary: the same statement written without it has its count ready on
+    # the next line, because a write waits for its work either way. The seed is what tells "wrote nothing"
+    # from "wrote the count": 7 would still be in there, or the variable would be empty, if it did not.
     in connection "sqlite":
-        set {sqlite::rows::unwaited} to 7
-        update one entity in table "orm_sqlite_probe" by id 4 and store affected rows in {sqlite::rows::unwaited}:
+        set {sqlite::rows::without-wait} to 7
+        update one entity in table "orm_sqlite_probe" by id 4 and store affected rows in {sqlite::rows::without-wait}:
             values:
                 age: 51
-    wait 2 seconds
-    if {sqlite::rows::unwaited} is set:
-        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::unwaited}%' for a statement written without and wait"
+    if {sqlite::rows::without-wait} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::without-wait}%' for a statement written without and wait, instead of 1"
 
     in connection "sqlite":
         select one entity from table "orm_sqlite_probe" by id 4 and store the result in {sqlite::rows::row::*}
     if {sqlite::rows::row::age} is not 51:
-        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left the unwaited write undone: age reads '%{sqlite::rows::row::age}%'"
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left the write undone: age reads '%{sqlite::rows::row::age}%'"
 
-    # A local variable is the form a script writes, and it is the one the awaited statement has to be
-    # careful with: the event's own local variables are taken away while the work runs and put back
-    # around the continuation, so a count written before that would not survive it.
+    # A local variable is the form a script writes, and it is the one a waiting statement has to be careful
+    # with: the event's own local variables are taken away while the work runs and put back around the
+    # continuation, so a count written before that would not survive it.
     in connection "sqlite":
         delete one entity from table "orm_sqlite_probe" by id 999 and store affected rows in {_local_rows} and wait
     if {_local_rows} is not set:

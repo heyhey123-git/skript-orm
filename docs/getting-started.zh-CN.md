@@ -53,7 +53,7 @@ command /adduser <text> <integer>:
         send "已保存 %arg-1%。" to sender
 ```
 
-这里能读到失败原因，靠的是 `and wait`。不写它，section 便把活儿交给后台，下一行立刻执行，此刻 `last database error` 还是空的，见 [错误与等待](errors-and-waiting.zh-CN.md)。
+写入会等，所以下一行执行时 `last database error` 说的就是它：数据库自己拒绝的失败也在里面，而不只是打在控制台。每条语句都会等，写不写 `and wait` 都一样；见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 `values` 里没有 `id`，它由数据库分配。日后需要它，就自己写一个值并改用 `upsert`，见 [菜谱](cookbook.zh-CN.md)。
 

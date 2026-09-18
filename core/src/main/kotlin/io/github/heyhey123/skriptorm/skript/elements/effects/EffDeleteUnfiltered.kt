@@ -23,7 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * way to write one that carries a `where` block.
  */
 @Name("Delete Entities Without A Colon")
-@Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """delete entities from table "logs" with limit 500 and wait
 """
@@ -43,7 +43,6 @@ class EffDeleteUnfiltered : Effect() {
 
     private lateinit var tableNameExpr: Expression<String>
     private var limitExpr: Expression<Int>? = null
-    private var waitFlag: Boolean = false
 
     /** The variable the affected row count is stored in, or null when the statement did not ask for one. */
     private var affectedRowsVariable: Variable<*>? = null
@@ -57,7 +56,6 @@ class EffDeleteUnfiltered : Effect() {
     ): Boolean {
         tableNameExpr = expressions[0] as Expression<String>
         limitExpr = expressions[1] as Expression<Int>?
-        waitFlag = parseResult.hasTag("wait")
         // The count clause is the last expression of the pattern, so it is the last slot.
         affectedRowsVariable = try {
             AffectedRows.target(expressions.lastOrNull())
@@ -94,7 +92,6 @@ class EffDeleteUnfiltered : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
-            wait = waitFlag || target.mustWait,
             query = {
                 target.withQueries { queries -> queries.delete(limit, null).execute(target.table) }
             },

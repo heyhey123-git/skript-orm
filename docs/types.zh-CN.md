@@ -98,5 +98,4 @@ SQL NULL 是能表达的，而且有两条彼此独立的规则：
 
 ## 类型不匹配会怎样
 
-列放不下的值会让这次操作失败，而不是被近似地存进去。带 `and wait` 时，`last database error` 会说明是哪一列、
-期望什么；不带时失败只会写进日志。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+列放不下的值会让这次操作失败，而不是被近似地存进去；`last database error` 会说明是哪一列、期望什么。见 [错误与等待](errors-and-waiting.zh-CN.md)。

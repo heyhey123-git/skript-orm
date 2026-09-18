@@ -91,7 +91,7 @@ delete entities from table "users" and wait:
         active = false
 ```
 
-`select many` 填出来的变量本来就是 `insert many` 要的形状，不需要重新整理。插入写了 `and wait`，删除就不会抢在
+`select many` 填出来的变量本来就是 `insert many` 要的形状，不需要重新整理。插入会等自己的活儿干完，删除就不会抢在
 它前面执行。
 
 ## 在脚本里拼好多行再插入

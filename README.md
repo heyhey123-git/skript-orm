@@ -77,8 +77,8 @@ and hands results back as ordinary Skript variables and values.
 - **A write says how many rows it affected.** `and store affected rows in {_rows}` keeps the count, so a
   script can tell "it was already there" from "it was written", or notice that the row it read moved
   under it. See [Affected rows](docs/affected-rows.md).
-- **A failure is a value.** After an operation written with `and wait`, `last database error` holds
-  what went wrong, and an operation that worked leaves it unset.
+- **A failure is a value.** Every statement waits, so `last database error` holds what went wrong by the
+  time the next line runs, and a statement that worked leaves it unset.
 
 ## Documentation
 
@@ -91,7 +91,7 @@ and hands results back as ordinary Skript variables and values.
 | [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
 | [Updating and deleting](docs/updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
 | [Affected rows](docs/affected-rows.md) | The `store affected rows` clause, and a conditional write without transactions. |
-| [Errors and waiting](docs/errors-and-waiting.md) | `and wait`, `last database error`, and what runs in the background. |
+| [Errors and waiting](docs/errors-and-waiting.md) | What waits, `last database error`, and what a failure does. |
 | [Transactions](docs/transactions.md) | All-or-nothing groups of statements, and what ends them. |
 | [Types](docs/types.md) | What each column type accepts and how it is stored. |
 | [Troubleshooting](docs/troubleshooting.md) | The traps: silent schema changes, invisible NULLs, NBT without SkBee. |

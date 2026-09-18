@@ -105,5 +105,5 @@ if {_user::age} is not set:
 ## Failures
 
 A read always waits and always exposes its failure, so `last database error` right after it says what
-went wrong, and an `and wait` on a read changes nothing. See
+went wrong. An `and wait` on a read is accepted and changes nothing, because it waits either way. See
 [Errors and waiting](errors-and-waiting.md).

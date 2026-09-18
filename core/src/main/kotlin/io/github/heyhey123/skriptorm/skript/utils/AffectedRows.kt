@@ -9,11 +9,11 @@ import org.bukkit.event.Event
  * The optional clause a write statement can end with, and what it does with the count it reports.
  *
  * `store affected rows in {_rows}` turns the count a write already computes into something a script can
- * read: how many rows the statement matched. That is what makes a safe conditional write expressible
+ * read: how many rows the statement affected. That is what makes a safe conditional write expressible
  * without transactions — a statement written as
  *
  * ```
- * update entities in table "accounts" with limit 1 and wait:
+ * update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
  *     where all:
  *         id = {_from}
  *         balance = {_balance}
@@ -38,11 +38,13 @@ import org.bukkit.event.Event
  * unset, because a number nobody can check is worse than no number. Every other statement reports an
  * exact count, so the three states are:
  *
- * - **set** — the statement ran and matched this many rows;
- * - **unset** — the statement was not written with a count to take (nothing was written, the statement
- *   failed before it ran, the count is not exact, or the statement was written without `and wait`, in
- *   which case the value is read before the write has happened);
+ * - **set** — the statement ran and affected this many rows;
+ * - **unset** — no statement answered: it was refused or skipped before it ran, it failed, or the count
+ *   it could give is not exact;
  * - never `0` by accident: `0` is a real answer, "the filter matched nothing".
+ *
+ * Every write waits, so the count is there when the lines after the statement run; `and wait` is still
+ * accepted by these patterns and no longer needed.
  */
 internal object AffectedRows {
 

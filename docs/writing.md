@@ -115,22 +115,18 @@ MySQL's.
 
 ## Waiting
 
-`insert`, `update`, `upsert` and `if absent` take `and wait`:
+A write waits for its work: the lines after it run once the change has been taken, and a failure is
+readable in `last database error`. The wait parks the trigger, not the server thread, so other players and
+other scripts carry on while the statement is in flight.
 
-- **With it**, the rest of the trigger runs after the write has finished, and a failure is readable in
-  `last database error`.
-- **Without it**, the write goes to the background and the next line runs immediately. The synchronous
-  checks still report through `last database error` (no connection, unknown table, a value that does not
-  fit), but a failure from the database itself is only logged.
-
-Reads always wait, so a script that writes and then reads in the same trigger should write with
-`and wait`; otherwise the read may see the row as it was before. See
+`and wait` is still accepted on these statements and does nothing. Every statement waits now, writes
+included; it used to be how a write asked for exactly this, so the examples here keep it. See
 [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were written
 
 Any of these statements can keep the number of rows it affected in a variable, by ending with
-`and store affected rows in {_rows}` before `and wait`:
+`and store affected rows in {_rows}`:
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:

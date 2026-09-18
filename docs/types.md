@@ -113,6 +113,6 @@ a way to build a compound, and the plugin reads and writes compounds through SkB
 
 ## What a mismatch looks like
 
-A value the column cannot hold fails the operation rather than being stored approximately. With
-`and wait`, `last database error` says which column and what was expected; without it, the failure is
-only logged. See [Errors and waiting](errors-and-waiting.md).
+A value the column cannot hold fails the operation rather than being stored approximately, and
+`last database error` says which column and what was expected. See
+[Errors and waiting](errors-and-waiting.md).

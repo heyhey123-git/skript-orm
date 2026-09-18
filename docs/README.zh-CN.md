@@ -18,7 +18,7 @@
 | [读取行](reading.zh-CN.md) | 查一行、多行、分页、按 id，`where` 块，以及结果的形状。 |
 | [更新与删除](updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |
 | [影响行数](affected-rows.zh-CN.md) | `store affected rows` 子句，以及不用事务的条件写入。 |
-| [错误与等待](errors-and-waiting.zh-CN.md) | `and wait`、`last database error`，以及哪些部分在后台跑。 |
+| [错误与等待](errors-and-waiting.zh-CN.md) | 哪些会等、`last database error`，以及失败会怎样。 |
 | [事务](transactions.zh-CN.md) | 全做或全不做：事务怎样结束、失败会怎样、超时。 |
 | [类型](types.zh-CN.md) | 每种列类型接受什么、怎么存。 |
 

@@ -69,7 +69,7 @@ command /adduser <text> <integer>:
 - **碰数据的操作都是 section。** 写入、读取、更新、删除各有各的语法和主体，读取必定等结果。
 - **一个事务就是一个 section。** `database transaction:` 在主体结束时提交，主体里有语句失败时回滚，运行期间独占一条连接。
 - **写入会报出影响的行数。** `and store affected rows in {_rows}` 把行数留下，脚本因此分得清“本来就在”和“刚刚写入”，也能发现读到的行在它眼皮底下被改过。见 [影响行数](docs/affected-rows.zh-CN.md)。
-- **失败是一个值。** 写了 `and wait` 的操作结束之后，`last database error` 里就是出错原因。一切顺利时它保持为空。
+- **失败是一个值。** 每条语句都会等，所以下一行执行时 `last database error` 里就是出错原因。一切顺利时它保持为空。
 
 ## 文档
 
@@ -82,7 +82,7 @@ command /adduser <text> <integer>:
 | [读取行](docs/reading.zh-CN.md) | 查一行、多行、分页、按 id，`where` 块，以及结果的形状。 |
 | [更新与删除](docs/updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |
 | [影响行数](docs/affected-rows.zh-CN.md) | `store affected rows` 子句，以及不用事务的条件写入。 |
-| [错误与等待](docs/errors-and-waiting.zh-CN.md) | `and wait`、`last database error`，以及哪些部分在后台跑。 |
+| [错误与等待](docs/errors-and-waiting.zh-CN.md) | 哪些会等、`last database error`，以及失败会怎样。 |
 | [事务](docs/transactions.zh-CN.md) | 全做或全不做的一组语句，以及它怎样结束。 |
 | [类型](docs/types.zh-CN.md) | 每种列类型接受什么、怎么存。 |
 | [排雷](docs/troubleshooting.zh-CN.md) | 会踩的坑：静默的改表、看不见的 NULL、没有 SkBee 时的 NBT。 |

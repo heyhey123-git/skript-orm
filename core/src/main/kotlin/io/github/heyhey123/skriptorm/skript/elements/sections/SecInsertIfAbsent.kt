@@ -10,7 +10,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Entity If Absent")
-@Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """insert entity if absent into table "users" and wait:
     values:

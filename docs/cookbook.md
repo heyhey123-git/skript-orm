@@ -94,7 +94,7 @@ delete entities from table "users" and wait:
 ```
 
 The variable a `select many` fills is already shaped the way `insert many` reads, so nothing has to be
-reshaped. The insert is written with `and wait` so the delete cannot run before it.
+reshaped. The insert waits, so the delete cannot run before it.
 
 ## Build rows in a script and insert them
 

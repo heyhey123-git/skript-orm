@@ -188,7 +188,7 @@ disconnect from all connections             # 全部
 
 ## 没有连接时的操作
 
-每个 section 都会先看连接。没有任何连接生效时，操作什么都不做，只报 `No database connected.`。带 `and wait` 时这句会落进 `last database error`，不带就只进日志。当具名连接已经存在、却没有一条是默认时，报错会说清这一点并列出名字。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+每个 section 都会先看连接。没有任何连接生效时，操作什么都不做，只报 `No database connected.`，这句会落进 `last database error`。当具名连接已经存在、却没有一条是默认时，报错会说清这一点并列出名字。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 账号凭据
 
@@ -221,6 +221,6 @@ create a connection to database "MySQL" with properties:
 
 ## 并发操作
 
-一个连接内部维持着一个小连接池，操作之间不必排队。也正因如此，一次写入要等它结束之后，才对读取可见，因为两个操作可能跑在池里不同的连接上。从脚本的角度看，决定先后的是 `and wait`。
+一个连接内部维持着一个小连接池，操作之间不必排队。也正因如此，一次写入要等它结束之后，才对读取可见，因为两个操作可能跑在池里不同的连接上。从脚本的角度看，决定先后的是每条语句自己都会做的那次等待。
 
 每条连接都有自己的一片连接池，所以脚本留着几条连接，服务端就运行着几片池子。

@@ -2,8 +2,10 @@
 
 [简体中文](errors-and-waiting.zh-CN.md) | **English**
 
-Two things decide what a script can see about a database operation: whether the operation waits, and
-`last database error`.
+Every statement that touches the database waits for its work. The lines after it run once the work is
+done, local variables keep their values across it, and a failure is waiting in `last database error`.
+That is what makes the order of a script the order of its statements, and it is why there is no such
+thing here as a write that silently happens later.
 
 ## What waits
 
@@ -14,11 +16,16 @@ Two things decide what a script can see about a database operation: whether the 
 | `in connection` | never | The block's own statements decide; the switch itself does no database work. |
 | `use connection`, `make ... the default` | never | They only change which connection later statements use. |
 | `select one`, `select many`, `select page`, `select ... by id` | always | A read has nothing to do until it has the rows. |
-| `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | with `and wait` | Without it the work goes to the background. |
+| `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | always | The lines after a write run once the change has been taken. |
 | `disconnect ...` | following line waits | Asynchronous, but the trigger continues after it finishes. No form reports success. |
 
-A section that waits behaves like any other delayed part of a trigger: the lines after it run later, and
-local variables keep their values across it.
+A statement that waits behaves like any other delayed part of a trigger: the lines after it run later.
+The **server thread is not held while it waits**, so other players and other scripts carry on; only this
+trigger is parked.
+
+`and wait` is still accepted on every read and every write, and does nothing. It used to be how a write
+asked for the behaviour every statement has now, so the examples on these pages keep it: a script written
+against 1.1 keeps working, and the wait it asks for is already there.
 
 ## last database error
 
@@ -42,38 +49,17 @@ send "Stored." to console
   names it, inside a transaction too, because a number must never outlive the statement that produced it.
   See [Affected rows](affected-rows.md).
 - An unset error is printed as `<none>`, so compare with `is set` rather than against text.
-- It is set by a failure and left unset by a success. See the next section, though: "unset" is weaker
-  than it sounds.
-
-## What an unwaited write does not tell you
-
-Without `and wait` the section hands the work to the background and the next line runs immediately:
-
-```sk
-insert one entity into table "users":
-    values:
-        name: "Alice"
-# Runs before the insert is done, and the insert's failure would only be logged.
-if last database error is set:
-    send "This will not report a failed insert." to console
-```
-
-What is still reported without waiting are the checks the section can make on the spot: no current
-database, an unknown table, a value that cannot be converted, a `where` condition naming a column that
-is not in the table. What is **not** reported is anything the database itself refused, which is logged to
-the console with the script line instead. So without `and wait`:
-
-- A write that failed may leave the error unset.
-- A write that succeeded also leaves it unset.
-
-If a script needs to know, use `and wait`.
+- It is set by a failure and left unset by a success: a statement that worked has nothing to say, so the
+  lines after it can treat an unset error as success.
+- A failure is also printed to the console, with the script line it came from. The slot is what a script
+  reads; the console line is what an admin reads.
 
 ## Writing and then reading
 
-Reads always wait, and a write without `and wait` does not, so this can read stale data:
+The write has finished by the time the next line runs, so a read after it sees it:
 
 ```sk
-insert one entity into table "users" and wait:   # the wait is what makes the read below reliable
+insert one entity into table "users" and wait:
     values:
         name: "Alice"
 
@@ -82,14 +68,14 @@ select many entities from table "users" and store the results in {_users::*}:
         name = "Alice"
 ```
 
-The same applies to a read followed by a write that depends on it, and to a delete before a re-insert.
-When the order matters, write `and wait` and let the script say so.
+The same holds for a read followed by a write that depends on it, and for a delete before a re-insert.
+Nothing has to be written to get this order: it is what a statement does.
 
 ## Failures that are not about the database
 
 Some failures happen before anything is sent, and they are reported the same way: a table that was never
 registered on this connection, a column the table description does not have, a value Skript cannot
 convert to the column's type, or a second registration of the same table. All of them appear in
-`last database error` right after the section. What the database itself refuses, such as a `null` where
-the column says `not null` or a value that is too long for the column, comes back from the database
-instead, so it is only reported when the section waits.
+`last database error` right after the statement. What the database itself refuses, such as a `null` where
+the column says `not null` or a value that is too long for the column, arrives the same way: the statement
+waits for the answer before the lines after it run.

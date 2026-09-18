@@ -176,8 +176,8 @@ section 只有在该行以冒号结尾时才会被识别，因此 body 可省略
 - `SecInConnection` 的主体是代码，因此用 `loadCode` 装载；装载同时把它登记进解析器的
   current sections，`exit`、`stop` 提前离开主体时才会通知到它。主体末尾还要接一个自己的
   `TriggerItem`，因为 Skript 没有“主体结束”回调，而这个节点的存在与否决定了作用域会不会泄漏。
-- 写入是异步的。`and wait` 标签决定后续内容是否等待：等待式写入会保留事件 continuation，并通过
-  `last database error` 暴露失败；而即发即弃式写入会立刻继续，后续失败只能写日志。
+- 每条碰数据库的语句都会等：`DatabaseWork.run` 停住 trigger、保留事件 continuation，并把失败写进
+  `last database error`。`and wait` 仍然被所有 pattern 接受，但没有任何代码读它——写入曾经靠它来要求这个行为。
 - 所有值都在主线程、派发之前解析完成，此时局部变量仍附着在事件上。
 - 解析期问题用 `Skript.error(...)` 报告；运行期问题通过 `ErrorPrinter` 与 `SkriptDatabaseErrors` 报告。
 
@@ -410,7 +410,7 @@ release 里写什么，取决于 `CHANGELOG.md` 里对应版本的那一节；�
 
 ```bash
 ./gradlew releaseNotes
-gh release edit v1.1.0 --notes-file build/release-notes.md
+gh release edit v1.2.0 --notes-file build/release-notes.md
 ```
 
 所以发一次版要先动仓库四处：`gradle.properties` 里的版本号、对应的 CHANGELOG 一节、push、然后手动触发。这正是

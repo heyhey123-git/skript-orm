@@ -61,9 +61,9 @@ command /adduser <text> <integer>:
         send "Stored %arg-1%." to sender
 ```
 
-`and wait` is what makes the failure readable here. Without it the section hands the work to the
-background and the next line runs immediately, so `last database error` is still unset; see
-[Errors and waiting](errors-and-waiting.md).
+The write waits, so `last database error` is about it by the time the next line runs: a failure from the
+database itself is in there, not only in the console. Every statement waits, whether or not it says
+`and wait`; see [Errors and waiting](errors-and-waiting.md).
 
 `id` is not in the values because the database assigns it. If you need it afterwards, write your own
 value for it and use `upsert` instead; see [Cookbook](cookbook.md).

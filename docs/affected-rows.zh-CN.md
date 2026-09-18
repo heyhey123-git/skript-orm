@@ -5,7 +5,7 @@
 写入可以报出它动了多少行，脚本可以拿这个数字做判断。没有事务也能写条件更新，靠的就是它：
 
 ```sk
-update entities in table "accounts" with limit 1 and store affected rows in {_rows} and wait:
+update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
     values:
         balance: {_balance} - {_amount}
     where all:
@@ -18,12 +18,12 @@ if {_rows} is 0:
 
 ## 这个子句
 
-`store affected rows in {_rows}` 是可选的，每条写入语句都能带：`insert one`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete`，section 形式和不带冒号的形式都一样。它和 `and wait` 一样带一个 `and`，写在语句自己的参数之后、`and wait` 之前——那个 `and` 不是装饰，它让 Skript 知道前面那个参数到哪里为止。
+`store affected rows in {_rows}` 是可选的，每条写入语句都能带：`insert one`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete`，section 形式和不带冒号的形式都一样。它带着一个 `and`，写在语句自己的参数之后——那个 `and` 不是装饰，它让 Skript 知道前面那个参数到哪里为止。它后面写不写 `and wait` 都照收，也都不起作用。
 
 ```sk
-delete entities from table "logs" with limit 500 and store affected rows in {_deleted} and wait
-insert one {_user::*} into table "archived_users" and store affected rows in {_rows} and wait
-upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
+delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
+insert one {_user::*} into table "archived_users" and store affected rows in {_rows}
+upsert one entity in table "users" by id {_id} and store affected rows in {_rows}:
     values:
         name: "Alice"
 ```
@@ -43,7 +43,7 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
 | 变量的内容 | 含义 |
 | --- | --- |
 | 一个数字 | 语句执行了，影响了这么多行 |
-| 什么都没有 | 没有任何语句给出答复：语句被拒绝或被跳过、失败了、后端数不出来，或者写的时候没带 `and wait` |
+| 什么都没有 | 没有任何语句给出答复：语句被拒绝或被跳过、失败了，或者后端数不出来 |
 
 **零是一个正经答案**，不是缺失：语句执行了，只是没匹配到任何行。这正是它有用的地方，而区分这两种情况靠 `is set`：
 
@@ -54,9 +54,9 @@ else if {_rows} is 0:
     send "没有匹配到行。" to console
 ```
 
-先清空变量，是为了不让上一个语句留下的数字被当成这一条语句的答案。而不带 `and wait` 时，语句会把它清空、然后永远不再写它；所以哪怕活儿已经干完，这个变量读起来仍然是“没有答复”——等到有数字可给的时候，脚本早就往下走了。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+先清空变量，是为了不让上一个语句留下的数字被当成这一条语句的答案。下一行执行时这个数字就已经在了：写入会等自己的活儿干完，所以想让这个子句能读，不需要额外写什么。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
-在[事务](transactions.zh-CN.md)里每条语句都会等待，所以这个子句在事务里一样可用。变量在事务里仍然是逐条语句清空的：被事务跳过的语句没有给出答复，留着上一条语句的数字就变成了假话。事务里特意保留下来的是 `last database error`，为的是回滚的原因还能被读到。
+在[事务](transactions.zh-CN.md)里它的行为一样，而变量在事务里仍然是逐条语句清空的：被事务跳过的语句没有给出答复，留着上一条语句的数字就变成了假话。事务里特意保留下来的是 `last database error`，为的是回滚的原因还能被读到。
 
 ## 一次安全的读改写
 
@@ -69,7 +69,7 @@ select one entity from table "accounts" and store the result in {_account::*}:
 set {_balance} to {_account::balance}
 
 loop 3 times:
-    update entities in table "accounts" with limit 1 and store affected rows in {_rows} and wait:
+    update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
         values:
             balance: {_balance} - {_amount}
         where all:

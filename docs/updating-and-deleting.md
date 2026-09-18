@@ -42,7 +42,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 ```
 
-A delete has no values block; it only takes an optional `where`, an optional limit and `and wait`.
+A delete has no values block; it only takes an optional `where` and an optional limit.
 
 ## Delete by id
 
@@ -80,16 +80,14 @@ The limit is a safety net, not a paging mechanism: which rows it keeps is up to 
 
 ## Waiting
 
-Both sections take `and wait`. With it, the following lines run after the change has finished and a
-failure is readable in `last database error`; without it, the work goes to the background and a
-database failure is only logged. The synchronous checks (no connection, unknown table, a value that does
-not fit, a limit of zero) are reported in `last database error` either way. See
+Both sections wait for their work: the following lines run after the change has finished and a failure is
+readable in `last database error`. The wait parks the trigger, not the server thread. `and wait` is still
+accepted and does nothing, because every statement waits now. See
 [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were changed
 
-Both also take `and store affected rows in {_rows}`, written before `and wait`, which keeps the number of
-rows the statement touched:
+Both also take `and store affected rows in {_rows}`, which keeps the number of rows the statement touched:
 
 ```sk
 delete entities from table "sessions" and store affected rows in {_deleted} and wait:

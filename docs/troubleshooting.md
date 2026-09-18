@@ -3,7 +3,7 @@
 [简体中文](troubleshooting.zh-CN.md) | **English**
 
 The traps in this plugin are mostly quiet ones: an operation that did nothing, a column that is there
-but unreadable, a failure that was only logged. Each entry below is a symptom, what causes it, and what
+but unreadable, a schema that was never created. Each entry below is a symptom, what causes it, and what
 to do.
 
 ## "I added a column and nothing changed"
@@ -78,18 +78,6 @@ See [Types](types.md).
 has index 1. There is no count expression for a `rowIndex::column` result: `size of {_users::*}` counts
 first-layer values, and every row is a sub-list, so it does not count rows. Take the number of rows from
 the row keys themselves, or keep your own counter. See [Reading rows](reading.md).
-
-## The read after a write shows the old data
-
-The write had no `and wait`, so it was still running when the read started. Reads wait, unwaited writes
-do not. Add `and wait` to the write. See [Errors and waiting](errors-and-waiting.md).
-
-## A failure was never reported
-
-`last database error` says nothing, but the console has the failure. That is what an unwaited write
-does with a database-side failure: it logs instead of reporting. The same is true of a `where` value or
-a column type problem that only the database can judge. Either add `and wait`, or read the console; see
-[Errors and waiting](errors-and-waiting.md).
 
 ## A delete or update touched every row
 

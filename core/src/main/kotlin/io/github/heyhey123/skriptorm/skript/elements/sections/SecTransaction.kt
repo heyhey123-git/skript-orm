@@ -36,16 +36,16 @@ import java.time.Duration
  * rollback-only: the statements after it do nothing rather than running work that is about to be
  * thrown away.
  *
- * The statements inside wait whether or not they were written with `and wait`, because two of them
- * running at once on one connection is not something a script should have to think about. That is done
- * by the statements themselves, not here.
+ * The statements inside run on one connection, so they cannot run at the same time and they cannot
+ * overtake each other. That is the same thing every statement outside a transaction does: every statement
+ * waits for its work, and the transaction is what makes them one unit on top of that.
  *
  * A transaction section reached from inside another one joins it rather than starting a second, which
  * is what happens when a function that opens one is called from inside one. Only the section that
  * began the transaction commits it.
  */
 @Name("Database Transaction")
-@Description("Runs the code inside as one database transaction on the connection in effect, or on a named one. Reaching the end of the body commits; `exit`, `stop` and `return` roll back. A statement that fails makes the rest of the body's database statements do nothing, and the transaction is rolled back when the body ends. Everything inside waits, with or without `and wait`. The timeout defaults to 30 seconds and rolls the transaction back on its own if it is still open after that.")
+@Description("Runs the code inside as one database transaction on the connection in effect, or on a named one. Reaching the end of the body commits; `exit`, `stop` and `return` roll back. A statement that fails makes the rest of the body's database statements do nothing, and the transaction is rolled back when the body ends. The timeout defaults to 30 seconds and rolls the transaction back on its own if it is still open after that.")
 @Example(
     """database transaction:
     update one entity in table "accounts" by id {_from} and wait:
@@ -161,7 +161,6 @@ class SecTransaction : ScopedBodySection() {
         return DatabaseWork.run(
             event = event,
             continuation = continuation,
-            wait = true,
             query = { transaction.commit() },
             onFailure = { error ->
                 val message = "The database transaction could not be committed, and whether the server " +
@@ -181,7 +180,6 @@ class SecTransaction : ScopedBodySection() {
         return DatabaseWork.run(
             event = event,
             continuation = continuation,
-            wait = true,
             query = { transaction.rollback() },
             clearErrorOnSuccess = false,
             onFailure = { error ->
