@@ -156,8 +156,8 @@ computation can move out of the body while the statements that have to happen to
   that read a value, change it and write it back can still lose one of the changes; the database's
   isolation level decides what each of them sees.
 - **It does not span connections.** `use connection` and `in connection` refuse to switch to another
-  connection while a transaction is open, and so does `disconnect`. Two connections need two
-  transactions and no promise that both commit.
+  connection while a transaction is open, and so do `disconnect` and `make ... the default`. Two
+  connections need two transactions and no promise that both commit.
 - **It does not cover everything.** `register a database table` is refused inside one, because creating
   a table commits the transaction on MySQL and its relatives. Statements that are not database
   statements are not undone either: a message that was sent stays sent.

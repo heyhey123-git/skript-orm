@@ -11,7 +11,8 @@
 | `create a connection` | 总是 | 不接受也不需要 `and wait`。 |
 | `register a database table` | 总是 | 同上。 |
 | `in connection` | 不等 | 块里的语句各自决定；切换本身不做数据库工作。 |
-| `use connection`、`make ... the default` | 不等 | 它们只改变后续语句用哪条连接。 |
+| `use connection` | 不等 | 它只改变后续语句用哪条连接。 |
+| `make ... the default` | 总是 | 关闭让出角色的那条连接是它的一部分。 |
 | `select one`、`select many`、`select page`、`select ... by id` | 总是 | 读操作没拿到行之前无事可做。 |
 | `insert`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete` | 总是 | 写入之后的语句等改动被数据库接收后才执行。 |
 | `disconnect ...` | 下一行会等 | 异步执行，但 trigger 会在它结束之后继续。各写法都不报成功。 |

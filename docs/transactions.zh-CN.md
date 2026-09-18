@@ -105,5 +105,5 @@ database transaction with timeout 2 minutes:
 ## 它不做什么
 
 - **它不是锁。** 事务决定一组语句到底做不做；两个脚本各自"读出来、改一改、写回去"仍然可能丢掉其中一次改动。各自看到什么，由数据库的隔离级别决定。
-- **它不跨连接。** 事务开着时，`use connection` 和 `in connection` 拒绝切到别的连接，`disconnect` 也一样。两条连接就是两个事务，没有"一起提交"的承诺。
+- **它不跨连接。** 事务开着时，`use connection` 和 `in connection` 拒绝切到别的连接，`disconnect` 与 `make ... the default` 也一样。两条连接就是两个事务，没有"一起提交"的承诺。
 - **它不是万能的。** 事务内禁止 `register a database table`，因为在 MySQL 这类数据库上建表会提交事务。非数据库的语句也不会被撤销：已经发出的消息就是发出去了。

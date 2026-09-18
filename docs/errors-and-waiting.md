@@ -14,7 +14,8 @@ thing here as a write that silently happens later.
 | `create a connection` | always | No `and wait`, and none is accepted. |
 | `register a database table` | always | Same. |
 | `in connection` | never | The block's own statements decide; the switch itself does no database work. |
-| `use connection`, `make ... the default` | never | They only change which connection later statements use. |
+| `use connection` | never | It only changes which connection later statements use. |
+| `make ... the default` | always | Closing the connection that loses the role is part of it. |
 | `select one`, `select many`, `select page`, `select ... by id` | always | A read has nothing to do until it has the rows. |
 | `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | always | The lines after a write run once the change has been taken. |
 | `disconnect ...` | following line waits | Asynchronous, but the trigger continues after it finishes. No form reports success. |

@@ -44,6 +44,14 @@ console while `last database error` stays silent.
 
 ### Fixed
 
+- **A connection that lost the default role with no name of its own was left open for the life of the
+  server.** Nothing could resolve to it afterwards — `in connection` and `use connection` need a name, and
+  it was no longer the default — so it kept its pool of ten server connections, and neither
+  `disconnect from all connections` nor a plugin disable could reach it. `make ... the default` closes it
+  now, the same way an unnamed connection that replaces the default already closed the one it replaced. A
+  **named** connection keeps running and merely stops being the default. The statement waits for that
+  close, so the line after it sees the new default, and it is refused inside a `database transaction`,
+  because the connection it closes may be the one the transaction is running on.
 - **A read that was refused before it ran left the previous result in its variable.** A read that failed
   at the database cleared the variable, while one refused earlier — no connection, an unknown table, a
   `where` value the column cannot hold, a page number of zero — did not, so the previous read's row was

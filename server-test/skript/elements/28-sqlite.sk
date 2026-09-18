@@ -339,6 +339,15 @@ every 5 seconds:
     if {sqlite::refused::effect::id} is set:
         log "SKRIPTORM_SELFTEST=FAIL sqlite a refused colon-free read left '%{sqlite::refused::effect::id}%' behind"
 
+    # Changing the default connection inside a transaction is refused: the connection that loses the role
+    # may be the one the transaction runs on, and closing it would take the transaction with it. The
+    # refusal is a statement of the body that did not run, so the body is undone rather than committed.
+    in connection "sqlite":
+        database transaction:
+            make connection "sqlite" the default
+    if last database error does not contain "cannot be changed inside a database transaction":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite changed the default connection inside a transaction: %last database error%"
+
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
     set {sqlite::failed} to false

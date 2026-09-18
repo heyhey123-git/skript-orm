@@ -204,10 +204,11 @@ make connection "logs" the default
 Unqualified statements then use `"logs"` until something else becomes the default. The connection the
 script is currently in is not affected: a statement that already resolved its connection keeps it.
 
-**Naming a connection what it is worth.** The connection that had the role keeps running, and an unnamed
-one then has no name and is no longer the default — which puts it out of reach of every other statement,
-including `disconnect from all connections` below. It keeps its pool (ten server connections) until the
-server stops. Give a connection a name when it may hand the default role over, or disconnect it first.
+The connection that had the role **is disconnected when it has no name of its own**: no statement can
+resolve to it afterwards, so leaving it running would only hold its pool of ten server connections open
+until the server stops. A **named** connection keeps running and merely stops being the default, because a
+scope or a `use connection` may still be using it. The statement waits for that close, so the next line
+already sees the new default, and it is refused while a `database transaction` is open.
 
 ## Disconnecting
 
@@ -228,11 +229,9 @@ from then on, because the connection they resolve to is closed.
 - The tables registered for a connection belong to that connection. Another connection starts with
   none registered, so registering the same table name on two connections is not a conflict. See
   [Tables](tables.md).
-- `disconnect from all connections` closes the default and every **named** one. A connection that lost the
-  default role without ever having a name is in neither group and stays open; see
-  [Choosing the default](#choosing-the-default).
-- The plugin closes every connection it still holds when the server disables the plugin, with the same
-  exception.
+- The plugin closes every connection when the server disables the plugin, and `disconnect from all
+  connections` closes every one of them: a connection that lost the default role either has a name and is
+  still registered, or was closed when it lost the role. See [Choosing the default](#choosing-the-default).
 
 ## Operations without a connection
 

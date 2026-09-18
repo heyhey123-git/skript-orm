@@ -598,7 +598,46 @@ class DatabaseLifecycleTest {
         assertSame(second, Database.current)
         assertFalse(Database.makeDefault("missing"))
         assertSame(second, Database.current)
-        assertEquals(0, first.disconnectCalls.get())
+        // `first` had no name of its own, so nothing can resolve to it any more and it is closed rather
+        // than left holding a pool.
+        assertEquals(1, first.disconnectCalls.get())
+    }
+
+    @Test
+    fun `losing the default role closes a connection that has no name`() = runBlocking<Unit> {
+        val unnamed = connectedDatabase("default")
+        val named = connectedDatabase(named = "logs")
+
+        assertTrue(Database.makeDefault("logs"))
+
+        assertSame(named, Database.current)
+        assertEquals(1, unnamed.disconnectCalls.get())
+        assertFalse(unnamed.isConnected)
+        assertEquals(0, named.disconnectCalls.get())
+    }
+
+    @Test
+    fun `a named connection that loses the default role keeps running`() = runBlocking<Unit> {
+        // The first connection to succeed is the default, so this one holds both roles.
+        val main = connectedDatabase(named = "main")
+        val logs = connectedDatabase(named = "logs")
+
+        assertTrue(Database.makeDefault("logs"))
+
+        assertSame(logs, Database.current)
+        assertEquals(0, main.disconnectCalls.get())
+        // Still reachable by name, so its operations are still accepted.
+        main.withQueries { }
+    }
+
+    @Test
+    fun `naming the connection that is already the default changes nothing`() = runBlocking<Unit> {
+        val logs = connectedDatabase(named = "logs")
+
+        assertTrue(Database.makeDefault("logs"))
+
+        assertSame(logs, Database.current)
+        assertEquals(0, logs.disconnectCalls.get())
     }
 
     @Test

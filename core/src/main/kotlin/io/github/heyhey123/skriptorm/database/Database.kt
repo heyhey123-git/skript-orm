@@ -116,14 +116,29 @@ abstract class Database {
         /**
          * Makes a registered connection the default one.
          *
+         * The connection that had the role is disconnected when no name keeps it reachable, which is the
+         * rule [publish] applies when an unnamed connection replaces the default: an unnamed connection
+         * that is no longer the default can be resolved by no statement at all, so leaving it running
+         * would leave a pool, and the server connections in it, that nothing can close. A named one keeps
+         * running and merely stops being the default, because a scope or a `use connection` may still be
+         * using it.
+         *
          * @return false when no connected database carries that name.
          */
-        fun makeDefault(name: String): Boolean {
-            if (isShuttingDown) return false
-            val candidate = connections[name] ?: return false
-            if (!candidate.isConnected) return false
-            defaultConnection = candidate
-            return true
+        suspend fun makeDefault(name: String): Boolean = transitionMutex.withLock {
+            if (isShuttingDown) return@withLock false
+            val candidate = connections[name] ?: return@withLock false
+            if (!candidate.isConnected) return@withLock false
+
+            val previous = lifecycleMutex.withLock {
+                val current = defaultConnection
+                defaultConnection = candidate
+                current
+            }
+            if (previous != null && previous !== candidate && previous.connectionName == null) {
+                previous.disconnectInternal()
+            }
+            true
         }
 
         @Volatile
