@@ -172,9 +172,10 @@ abstract class MongoIntegrationTestBase {
      * The type this implementation stores [id] as.
      *
      * The registry holds the MongoDB-specific types, so a test that declared a column with anything else
-     * would be testing a table this implementation never creates.
+     * would be testing a table this implementation never creates. A suite with a table of its own, for the
+     * types the shared one does not declare, reads them the same way through this.
      */
-    private fun <T : Any> mongoType(id: TypeId): DataType<T> {
+    protected fun <T : Any> mongoType(id: TypeId): DataType<T> {
         val type = requireNotNull(MongoDataTypes.typesRegistry[id]) {
             "The MongoDB implementation declares no type for $id."
         }
