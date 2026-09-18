@@ -520,9 +520,15 @@ val serverTestChecks = buildMap {
     // it does not hold, in both modes.
     put("sqlite round trip", "ok")
     if (serverTestUsesDatabase) {
-        // The transaction lines are the one place the same script reports different things depending on
-        // what the implementation can do, so which map is expected here is the implementation's answer.
-        putAll(if (serverTestImplementation.transactions) serverTestDatabaseChecks else serverTestNoTransactionChecks)
+        putAll(serverTestDatabaseChecks)
+        // A run whose implementation has no transactions reports the same lines as any other database
+        // run, except for the transaction ones — so those are overridden, not the whole map. Replacing it
+        // is what the first version of this did, and the MongoDB job's annotations said so within a minute
+        // of the run: `setup`, `roundtrip now` and the connection lines had all been reported and were
+        // "not known to this check".
+        if (!serverTestImplementation.transactions) {
+            putAll(serverTestNoTransactionChecks)
+        }
     }
 }
 
