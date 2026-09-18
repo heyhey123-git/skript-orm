@@ -79,27 +79,30 @@ class EffSelectPageUnfiltered : Effect() {
         val pageSize = pageSizeExpr.getSingle(actualEvent)
         when {
             pageIndex == null -> {
-                DatabaseWork.report(actualEvent, trigger, "Failed to parse query arguments: Page index expression in 'select page' is null.")
+                DatabaseWork.refuseRead(actualEvent, trigger, "Failed to parse query arguments: Page index expression in 'select page' is null.", resultVar)
                 return next
             }
 
             pageSize == null -> {
-                DatabaseWork.report(actualEvent, trigger, "Failed to parse query arguments: Page size expression in 'select page' is null.")
+                DatabaseWork.refuseRead(actualEvent, trigger, "Failed to parse query arguments: Page size expression in 'select page' is null.", resultVar)
                 return next
             }
 
             pageIndex < 1 -> {
-                DatabaseWork.report(actualEvent, trigger, "Failed to parse query arguments: Page index must be at least one.")
+                DatabaseWork.refuseRead(actualEvent, trigger, "Failed to parse query arguments: Page index must be at least one.", resultVar)
                 return next
             }
 
             pageSize <= 0 -> {
-                DatabaseWork.report(actualEvent, trigger, "Failed to parse query arguments: Page size must be positive.")
+                DatabaseWork.refuseRead(actualEvent, trigger, "Failed to parse query arguments: Page size must be positive.", resultVar)
                 return next
             }
         }
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
+        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: run {
+            VariableModifier.clear(resultVar, actualEvent)
+            return next
+        }
 
         return DatabaseWork.run(
             event = actualEvent,

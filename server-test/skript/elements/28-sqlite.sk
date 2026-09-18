@@ -317,6 +317,28 @@ every 5 seconds:
     if {sqlite::numeric::fraction::age} is not 1:
         log "SKRIPTORM_SELFTEST=FAIL sqlite cut a fraction to '%{sqlite::numeric::fraction::age}%' instead of 1"
 
+    # A read that is refused before it runs clears the variable it would have stored into, the way a read
+    # that fails at the database does. Otherwise the previous result is still sitting there and a script
+    # cannot tell "the row is gone" from "the statement did not run".
+    in connection "sqlite":
+        select one entity from table "orm_sqlite_probe" by id 4 and store the result in {sqlite::refused::*}
+    if {sqlite::refused::id} is not 4:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite refused-read setup read '%{sqlite::refused::id}%' instead of 4"
+    in connection "sqlite":
+        select one entity from table "orm_no_such_table" by id 4 and store the result in {sqlite::refused::*}
+    if {sqlite::refused::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite a refused read left '%{sqlite::refused::id}%' in the result variable"
+
+    # The same rule for the colon-free spelling, which refuses through its own path.
+    in connection "sqlite":
+        select entity from table "orm_sqlite_probe" by id 4 and store the result in {sqlite::refused::effect::*}
+    if {sqlite::refused::effect::id} is not 4:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite refused-read setup (colon-free) read '%{sqlite::refused::effect::id}%' instead of 4"
+    in connection "sqlite":
+        select entity from table "orm_no_such_table" by id 4 and store the result in {sqlite::refused::effect::*}
+    if {sqlite::refused::effect::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite a refused colon-free read left '%{sqlite::refused::effect::id}%' behind"
+
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
     set {sqlite::failed} to false

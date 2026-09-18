@@ -44,6 +44,12 @@ console while `last database error` stays silent.
 
 ### Fixed
 
+- **A read that was refused before it ran left the previous result in its variable.** A read that failed
+  at the database cleared the variable, while one refused earlier — no connection, an unknown table, a
+  `where` value the column cannot hold, a page number of zero — did not, so the previous read's row was
+  still sitting there and a script could not tell "the row is gone" from "the statement did not run". Every
+  refusal clears it now, which is the rule the `store affected rows` variable already followed: a
+  statement leaves this statement's answer, or nothing.
 - **A whole number that did not fit its column was stored as a different number.** Skript converts a
   number into whatever type it is asked for, and every one of those conversions narrows: an `int` column
   turned `5000000000` into `705032704` (the low 32 bits), a `tinyint` column turned `300` into `44`, and

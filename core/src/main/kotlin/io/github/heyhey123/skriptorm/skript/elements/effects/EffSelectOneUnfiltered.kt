@@ -74,7 +74,10 @@ class EffSelectOneUnfiltered : Effect() {
         val trigger = this.trigger ?: return next
         DatabaseWork.clearErrorForStatement(actualEvent)
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
+        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: run {
+            VariableModifier.clear(resultVar, actualEvent)
+            return next
+        }
 
         return DatabaseWork.run(
             event = actualEvent,

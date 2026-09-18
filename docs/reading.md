@@ -100,10 +100,10 @@ Both look the same from a script, and both mean a key is unset:
 What happened to the result variable otherwise is worth knowing too:
 
 - **The statement failed** — the database refused the query, or the result could not be read: the variable
-  was cleared, so whatever it held before is gone as well, and `last database error` says why.
+  was cleared, and `last database error` says why.
 - **The statement was refused before it ran** — no connection, an unknown table, a `where` value the column
-  cannot hold: the variable is left **exactly as it was**, still holding the previous read, and
-  `last database error` is the only sign that this statement did not run.
+  cannot hold, a page number of zero: the variable was cleared as well. A read either leaves this
+  statement's result in the variable or nothing at all, never the one before it.
 
 To tell them apart, look at a column that cannot be NULL, such as the primary key:
 
@@ -118,8 +118,8 @@ if {_user::age} is not set:
     send "That user has no age stored." to sender
 ```
 
-Checking `last database error` before reading the variable is what tells a refusal from a read: the
-refusal is the one case where the old contents are still sitting there.
+`last database error` is what says whether the statement ran at all: an unset variable on its own means
+"no row, or a NULL column", which is what the two checks above are for.
 
 ## Failures
 

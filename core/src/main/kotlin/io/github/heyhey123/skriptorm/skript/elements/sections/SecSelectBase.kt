@@ -119,24 +119,32 @@ abstract class SecSelectBase : Section() {
 
     protected open fun resolveExtraArguments(event: Event?, trigger: Trigger): Any? = Unit
 
+    /**
+     * Reports a refusal and clears the result variable, because a read that did not run must not leave
+     * the previous result behind. [DatabaseWork.refuseRead] owns the rule and the reasoning.
+     */
+    private fun refuse(event: Event, trigger: Trigger, message: String) {
+        DatabaseWork.refuseRead(event, trigger, message, resultVar)
+    }
+
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
         val trigger = this.trigger ?: return walk(event, false)
         DatabaseWork.clearErrorForStatement(actualEvent)
 
         val database = ConnectionScope.resolve(event) ?: run {
-            DatabaseWork.report(actualEvent, trigger, ConnectionScope.noConnectionMessage())
+            refuse(actualEvent, trigger, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            DatabaseWork.report(actualEvent, trigger, "Table name is null.")
+            refuse(actualEvent, trigger, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
             val message = "Table '$tableName' not found."
-            DatabaseWork.report(actualEvent, trigger, message)
+            refuse(actualEvent, trigger, message)
             return walk(event, false)
         }
 
@@ -145,7 +153,7 @@ abstract class SecSelectBase : Section() {
                 raw.bind(table).resolve(event)
             } catch (e: Exception) {
                 val message = "Failed to parse where clause: ${e.message}"
-                DatabaseWork.report(actualEvent, trigger, message)
+                refuse(actualEvent, trigger, message)
                 return walk(event, false)
             }
         }
@@ -154,16 +162,19 @@ abstract class SecSelectBase : Section() {
             resolveExtraArguments(event, trigger)
         } catch (e: Exception) {
             val message = "Failed to parse query arguments: ${e.message}"
-            DatabaseWork.report(actualEvent, trigger, message)
+            refuse(actualEvent, trigger, message)
             return walk(event, false)
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
-            DatabaseWork.report(actualEvent, trigger, "Database lifecycle is shutting down.")
+            refuse(actualEvent, trigger, "Database lifecycle is shutting down.")
             return walk(actualEvent, false)
         }
 
         if (DatabaseWork.skipInactiveTransaction(actualEvent, trigger)) {
+            // The statement was skipped by the transaction it belongs to and never ran, so the variable
+            // is cleared like any other refusal. The transaction's own failure stays in the error slot.
+            VariableModifier.clear(resultVar, actualEvent)
             return walk(actualEvent, false)
         }
         val transaction = ConnectionScope.transaction(actualEvent)

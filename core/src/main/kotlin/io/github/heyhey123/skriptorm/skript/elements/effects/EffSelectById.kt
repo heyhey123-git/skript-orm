@@ -78,15 +78,19 @@ class EffSelectById : Effect() {
 
         val id = idExpr.getSingle(actualEvent)
         if (id == null) {
-            DatabaseWork.report(
+            DatabaseWork.refuseRead(
                 actualEvent,
                 trigger,
-                "Failed to parse query arguments: ID expression in 'select by id' is null."
+                "Failed to parse query arguments: ID expression in 'select by id' is null.",
+                resultVar
             )
             return next
         }
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
+        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: run {
+            VariableModifier.clear(resultVar, actualEvent)
+            return next
+        }
 
         return DatabaseWork.run(
             event = actualEvent,

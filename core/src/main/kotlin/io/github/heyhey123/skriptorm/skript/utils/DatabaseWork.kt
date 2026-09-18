@@ -4,6 +4,7 @@ import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
+import ch.njol.skript.lang.Variable
 import io.github.heyhey123.skriptorm.SkriptOrm
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.database.Transaction
@@ -134,6 +135,19 @@ internal object DatabaseWork {
             ConnectionScope.transaction(it)?.markFailed(error)
             SkriptDatabaseErrors.set(it, error)
         }
+    }
+
+    /**
+     * Reports a refusal on behalf of a read, after clearing the variable it would have stored into.
+     *
+     * A read that never ran must not leave the previous result in place. A script cannot tell a stale
+     * variable from a fresh one, and the two mean opposite things: "the row is gone" against "the
+     * statement did not run". Clearing first is the same rule the affected row count follows, and the
+     * reason a read that failed at the database also clears.
+     */
+    fun refuseRead(event: Event, trigger: Trigger, message: String, resultVar: Variable<*>) {
+        VariableModifier.clear(resultVar, event)
+        report(event, trigger, message)
     }
 
     /**
