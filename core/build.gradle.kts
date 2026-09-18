@@ -42,12 +42,22 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// plugin.yml is the only resource this module ships, and Bukkit reports its `version` in the
-// "Enabling skript-orm v..." line and to `/version`. Expanding it from the project version keeps it
-// honest when the version is bumped in gradle.properties.
+// plugin.yml is a template. Bukkit reports the version in the "Enabling skript-orm v..." line and to
+// `/version`, and Paper downloads the driver the `libraries` entry names; expanding both from the values
+// the build already resolved keeps them from drifting away from what was built and tested.
 tasks.processResources {
+    // Declared as an input because the expansions below are not: without it Gradle sees unchanged
+    // resources, skips the task, and the file keeps whatever version it was first written with — a
+    // version bump in the catalog would silently not reach the jar.
+    inputs.property("postgresqlDriver", libs.versions.postgresql.driver.get())
+
     filesMatching("plugin.yml") {
-        expand(mapOf("version" to version))
+        expand(
+            mapOf(
+                "version" to version,
+                "postgresqlDriver" to libs.versions.postgresql.driver.get()
+            )
+        )
     }
 }
 

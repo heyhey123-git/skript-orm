@@ -185,13 +185,12 @@ jobs:
       # driven end to end against something other than MySQL: the element scripts, the round trip, named
       # connections and transactions, all through the real plugin.
       #
-      # PostgreSQL has to be bundled into the jar for that, since the released one registers only the
-      # implementations of `generic-jdbc-implementation`. That also exercises the bundling itself: the
-      # driver is relocated inside the jar, and this is what says the plugin can still load it.
+      # It is also where the driver download is exercised: no jar carries a JDBC driver any more, so the
+      # plugin loads because Paper fetched the PostgreSQL driver the `libraries` entry in plugin.yml names
+      # and put it on the plugin's classpath. If that path breaks, this job is what says so.
       - name: Run the Skript server test against the same server
         run: |
           ./gradlew serverTest --stacktrace \
-            -PbundleModules=generic-jdbc-implementation,postgresql-implementation \
             -Pskriptorm.test.server.type=PostgreSQL \
             -Pskriptorm.test.postgres.url="jdbc:postgresql://127.0.0.1:5432/skriptorm_test" \
             -Pskriptorm.test.postgres.username=postgres \

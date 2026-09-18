@@ -29,7 +29,13 @@ val kotlinVersion = libs.versions.kotlin.get()
 val kotlinCoroutinesVersion = libs.versions.coroutines.get()
 val shadePrefix = "io.github.heyhey123.skriptorm.libs"
 
-// -PbundleModules=mod1,mod2
+// Which implementation modules the jar carries. `-PbundleModules=mod1,mod2` builds a jar for a
+// combination that is not the default, which is how a developer uses an implementation that is not
+// released yet, or none of them.
+//
+// The drivers those modules need are not modules and are never shaded: Paper downloads the `libraries`
+// entry of plugin.yml into the server's `libraries/` on the first start, and puts it on this plugin's
+// classpath. See the "What is inside the jar" section of docs/compatibility.md.
 val bundledModules: List<String> = run {
     val raw = providers.gradleProperty("bundleModules").orNull
     raw
@@ -43,8 +49,14 @@ val bundledModules: List<String> = run {
             exists
         }
         .takeIf { !it.isNullOrEmpty() }
-        ?: listOf("generic-jdbc-implementation") // 默认值
+        ?: listOf("generic-jdbc-implementation", "postgresql-implementation") // 默认值
 }
+
+// The dependency groups that are only ever downloaded, never shaded. Excluding them here is what makes
+// the jar the size of the plugin and the driver the library its authors published, and it is why the
+// relocations below no longer mention them: a relocated copy and a downloaded one would be two drivers.
+// Paper fetches them from the `libraries` entry in plugin.yml, once, on the first start.
+val downloadedDriverGroups = listOf("org.postgresql")
 
 // 确保先评估这些子模块
 bundledModules.forEach { evaluationDependsOn(":$it") }
@@ -140,17 +152,19 @@ tasks {
         relocate("reactor.", "$shadePrefix.reactor.")
         relocate("org.reactivestreams.", "$shadePrefix.org.reactivestreams.")
 
-        // JDBC
+        // The connection pool is shaded and relocated: nothing else on a server provides it, and a second
+        // HikariCP would be a second answer to where connections come from.
         relocate("com.zaxxer.hikari.", "$shadePrefix.com.zaxxer.hikari.")
+
         dependencies {
             exclude(dependency("org.slf4j:.*"))
+            // The drivers arrive through the `libraries` entry of plugin.yml, which Paper resolves into
+            // the server's `libraries/`. Keeping them out of the jar is what leaves them upstream
+            // libraries rather than rewritten copies, so they are excluded rather than relocated.
+            downloadedDriverGroups.forEach { group ->
+                exclude(dependency("$group:.*"))
+            }
         }
-
-        relocate("org.postgresql.", "$shadePrefix.org.postgresql.")
-
-        // MongoDB
-        relocate("com.mongodb.", "$shadePrefix.com.mongodb.")
-        relocate("org.bson.", "$shadePrefix.org.bson.")
     }
 
     build {
@@ -260,16 +274,15 @@ val prepareServerTest by tasks.registering {
     val examplesDirectory = layout.projectDirectory.dir("docs/examples")
 
     doLast {
-        // A type name reaches the server only if the jar it loads registers it, and the released jar
-        // registers just the two of `generic-jdbc-implementation`. A run against an implementation that
-        // is not bundled would otherwise start a whole server to be told `Database 'PostgreSQL' is not
-        // supported.`, so it says which property is missing before that.
+        // A type name reaches the server only if the jar it loads registers it, so a run against an
+        // implementation whose module is not bundled would start a whole server to be told
+        // `Database 'PostgreSQL' is not supported.` — it says what to add before that.
         serverTestImplementation.module?.let { module ->
             if (serverTestUsesDatabase && module !in bundledModules) {
                 throw GradleException(
-                    "The server test cannot connect to ${serverTestDatabaseType.get()}: its " +
-                        "implementation is not in the jar this run installs. Invoke it with " +
-                        "-PbundleModules=${(bundledModules + module).joinToString(",")}."
+                    "The server test cannot connect to ${serverTestDatabaseType.get()}: the jar this run " +
+                        "installs does not carry that implementation. Invoke it with " +
+                        "-PbundleModules=${(bundledModules + module).distinct().joinToString(",")}."
                 )
             }
         }

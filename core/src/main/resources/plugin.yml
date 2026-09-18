@@ -8,3 +8,9 @@ depend:
     - Skript
 softdepend:
     - SkBee
+# Drivers are never shaded into the jar. Paper downloads these once, on the first start, into the
+# server's `libraries/` directory and puts them on this plugin's classpath. The source is the server's
+# Central mirror: `PAPER_DEFAULT_CENTRAL_REPOSITORY`, or the `org.bukkit.plugin.java.LibraryLoader.centralURL`
+# system property, or Google's mirror of Central by default.
+libraries:
+    - org.postgresql:postgresql:${postgresqlDriver}
