@@ -60,6 +60,7 @@ mongodb-driver-kotlin-coroutine = { module = "org.mongodb:mongodb-driver-kotlin-
 postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postgresql-driver" }
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-mysql = { module = "org.testcontainers:mysql" }
+testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
 testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
 
 [plugins]

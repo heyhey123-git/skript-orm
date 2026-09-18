@@ -307,6 +307,19 @@ The same settings are read from `SKRIPTORM_TEST_MYSQL_URL`, `SKRIPTORM_TEST_MYSQ
 neither Docker nor an external server is available, the MySQL tests abort with a reason instead of
 passing silently.
 
+**PostgreSQL tests** (`postgresql-implementation`) run the same way against a real PostgreSQL server,
+and they are the only layer that can say whether the dialect's SQL is SQL PostgreSQL accepts:
+
+```bash
+./gradlew :postgresql-implementation:integrationTest
+```
+
+One `postgres:17-alpine` container is started per test JVM; a server you already have is used instead
+when `-Pskriptorm.test.postgres.url` is set, with the same `SKRIPTORM_TEST_POSTGRES_*` environment
+equivalents as the MySQL suite. The tests drop and recreate their tables, so that database must be
+dedicated to testing, and it has to accept a password over TCP. The SQL itself needs no server and is
+pinned by `PgJdbcDialectTest`, which is part of the ordinary `test` task.
+
 The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper and
 Skript, because those are the classes the JDBC type registry resolves when it initializes.
 `JdbcRuntimeClasspathIntegrationTest` fails loudly if that ever stops being true. NBT is the exception
