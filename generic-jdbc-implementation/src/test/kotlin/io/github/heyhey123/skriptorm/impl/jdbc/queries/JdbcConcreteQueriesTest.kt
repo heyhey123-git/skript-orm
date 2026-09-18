@@ -17,10 +17,13 @@ import java.sql.Connection
 import java.sql.JDBCType
 import java.sql.PreparedStatement
 import java.sql.ResultSet
+import java.sql.SQLException
 import javax.sql.DataSource
 import kotlin.test.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class JdbcConcreteQueriesTest {
 
@@ -65,7 +68,37 @@ class JdbcConcreteQueriesTest {
 
         val absent = updateFixture()
         JdbcInsertIfAbsent(mapOf("name" to "A"), absent.connectionSource, MysqlJdbcDialect).execute(table)
-        verify { absent.connection.prepareStatement("INSERT IGNORE INTO `users` (`name`) VALUES (?)") }
+        verify { absent.connection.prepareStatement("INSERT INTO `users` (`name`) VALUES (?)") }
+    }
+
+    @Test
+    fun `insert if absent treats only a duplicate key as the row being there`() = runBlocking {
+        // MySQL has no statement for it, so the row is written and the key error is caught here: the
+        // count says nothing was written, which is what "the row is already there" means.
+        val duplicate = updateFixture()
+        every { duplicate.statement.executeLargeUpdate() } throws SQLException("Duplicate entry", "23000", 1062)
+
+        val result = JdbcInsertIfAbsent(mapOf("name" to "A"), duplicate.connectionSource, MysqlJdbcDialect).execute(table)
+
+        assertEquals(0L, result.affectedCount)
+        assertTrue(result.countExact)
+
+        // Any other error is a real failure. `INSERT IGNORE` used to swallow these, which is how a value
+        // too long for its column ended up stored cut short with the script told nothing.
+        val tooLong = updateFixture()
+        every { tooLong.statement.executeLargeUpdate() } throws SQLException("Data too long", "22001", 1406)
+
+        assertFailsWith<SQLException> {
+            JdbcInsertIfAbsent(mapOf("name" to "A"), tooLong.connectionSource, MysqlJdbcDialect).execute(table)
+        }
+
+        // A dialect that says it in the statement never catches anything: its server does the skipping.
+        val portable = updateFixture()
+        every { portable.statement.executeLargeUpdate() } throws SQLException("Duplicate entry", "23000", 1062)
+
+        assertFailsWith<SQLException> {
+            JdbcInsertIfAbsent(mapOf("name" to "A"), portable.connectionSource, GenericJdbcDialect).execute(table)
+        }
     }
 
     @Test

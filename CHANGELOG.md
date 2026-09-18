@@ -44,6 +44,12 @@ console while `last database error` stays silent.
 
 ### Fixed
 
+- **`insert entity if absent` on MySQL swallowed every error, not only an existing row.** It was
+  `INSERT IGNORE`, which turns errors into warnings, so a value too long for its column was stored cut
+  short and a `null` in a `not null` column became that column's default — with the script told nothing.
+  The insert is now sent as it is and the duplicate key is the one error the statement reads as "the row is
+  there", which is what PostgreSQL and MongoDB already did. The count is unchanged: `1` written, `0` it was
+  already there, and anything else fails like any other write.
 - **A connection that lost the default role with no name of its own was left open for the life of the
   server.** Nothing could resolve to it afterwards — `in connection` and `use connection` need a name, and
   it was no longer the default — so it kept its pool of ten server connections, and neither

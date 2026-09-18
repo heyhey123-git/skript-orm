@@ -49,7 +49,7 @@ four:
 
 | Type name | What it brings |
 | --- | --- |
-| `"MySQL"` | MySQL's dialect — backtick identifiers, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
+| `"MySQL"` | MySQL's dialect — backtick identifiers, `ON DUPLICATE KEY UPDATE` for `upsert`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
 | `"PostgreSQL"` | PostgreSQL's dialect — `ON CONFLICT`, `EXCLUDED`, `GENERATED … AS IDENTITY`, and a row limit written through `ctid` because PostgreSQL has no `UPDATE ... LIMIT` — and the driver the plugin downloads for it on the first start. |
 | `"MongoDB"` | MongoDB, through the blocking MongoDB Java driver the plugin downloads for it. There is no SQL under it, so several statements answer differently on purpose; [Compatibility](compatibility.md#mongodb) lists them, and its properties are below. |
 | `"JDBC"` | A driver *you* name in a `driver` property, plus a dialect that writes portable SQL: `"double quoted"` identifiers, `LIMIT 1` to take a single row, and `LIMIT ? OFFSET ?` to page — row limiting in the one form MySQL, MariaDB, SQLite, PostgreSQL and H2 all take. Whatever has no portable form — `insert ... if absent`, `upsert ... by id`, a limit on a write, `auto increment` — is refused rather than guessed at. |

@@ -35,7 +35,9 @@ class JdbcDialectTest {
     @Test
     fun `mysql renders its supported write extensions`() {
         assertEquals("SELECT * FROM `users` LIMIT 1", MysqlJdbcDialect.selectOne("users"))
-        assertEquals("INSERT IGNORE INTO `users` (`id`) VALUES (?)", MysqlJdbcDialect.insertIfAbsent("users", listOf("id")))
+        // A plain insert: the duplicate key is caught by the query layer, so that a value the column
+        // cannot hold still fails instead of being stored adjusted.
+        assertEquals("INSERT INTO `users` (`id`) VALUES (?)", MysqlJdbcDialect.insertIfAbsent("users", listOf("id")))
         assertEquals(
             "INSERT INTO `users` (`id`, `name`) VALUES (?, ?) ON DUPLICATE KEY UPDATE `name` = VALUES(`name`)",
             MysqlJdbcDialect.upsertById("users", "id", listOf("name"))

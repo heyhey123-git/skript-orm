@@ -81,7 +81,7 @@
 | | |
 | --- | --- |
 | MySQL | 支持。写 `"MySQL"`。CI 里对着 MySQL 8 测过。 |
-| MariaDB | 未测试。写 `"MySQL"`——语句形状是 MySQL 的（`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`）——很可能可用，但没有任何检查。 |
+| MariaDB | 未测试。写 `"MySQL"`——语句形状是 MySQL 的（`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`）——很可能可用，但没有任何检查。 |
 | PostgreSQL | 支持。写 `"PostgreSQL"`；驱动会在首次启动时下载。CI 里对着真实服务端测过，插件也在真实 Paper 服务端上对着它完整跑过一遍。 |
 | MongoDB | 支持。写 `"MongoDB"`；驱动会在首次启动时下载。它的事务在本实现里还没有做，`database transaction` section 会报那句拒绝。CI 里对着 MongoDB 8 测过。 |
 | SQLite 等 | SQLite 能用，走的是 `"JDBC"` 和 Paper 已经带的那个驱动：方言写出的东西它全不反对，服务端测试在两种模式下都会对它跑一遍插入、读取、分页、更新和删除。那个方言拒绝的照旧拒绝——没有 auto increment、没有 `insert ... if absent`、没有 `upsert`、写操作不能加 limit——其它产品则需要有服务端没带的驱动。 |
@@ -106,8 +106,7 @@
   稳定，没有主键，「第 2 页」就没有意义。
 - **`update`、`update by id` 与 `upsert by id` 报告的是过滤器匹配到的行数**，不是服务端改动的行数。把某列写成
   它已经是的值，这一行照样计数。
-- **`insert if absent` 按 key 判断，而且是原子的。** 已经被唯一索引覆盖的写入会被忽略，如同 SQL 的
-  `INSERT IGNORE`，而不是报成错误。
+- **`insert if absent` 按 key 判断，而且是原子的。** 已经被唯一索引覆盖的写入会被忽略而不是报成错误；在 MongoDB 上这是一个被插件捕获的重复键错误，和 MySQL 方言捕获的是同一类。
 - **`delete ... with limit n` 真的最多删 n 行。** MongoDB 没有删除上限，所以插件先选出这么多个标识，再删掉它们。
 - **与 null 比较的过滤器遵循 MongoDB。** `column = null` 匹配该列是 null **或不存在**的行，`column != null`
   匹配该列存在且不是 null 的行。

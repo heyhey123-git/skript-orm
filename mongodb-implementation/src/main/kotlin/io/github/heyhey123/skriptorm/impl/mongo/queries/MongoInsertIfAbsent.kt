@@ -11,10 +11,11 @@ import io.github.heyhey123.skriptorm.table.Table
 /**
  * An insert that a key the table already holds turns into nothing.
  *
- * The reference behaviour is SQL's `INSERT IGNORE`: write the row, and treat a violation of any unique
- * index as success with no row written. MongoDB raises `E11000` for exactly that, so the insert is left
- * to the server, which makes the check atomic — reading first and inserting after would let two
- * concurrent inserts both find nothing and both write.
+ * The behaviour is the same as the SQL implementations': write the row, and treat a violation of a unique
+ * index as success with no row written. MongoDB raises `E11000` for exactly that, so the insert is left to
+ * the server, which makes the check atomic — reading first and inserting after would let two concurrent
+ * inserts both find nothing and both write. Nothing else is swallowed: a value the document cannot hold
+ * is a failure, as it is for every other write.
  *
  * A table without a unique index has nothing to violate, so this inserts every time. That is what the
  * same statement does in SQL, where the row is written because no key refused it.

@@ -98,7 +98,7 @@ are the four under "The type names a script can write".
 | | |
 | --- | --- |
 | MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
-| MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
+| MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
 | PostgreSQL | Supported. Write `"PostgreSQL"`; the driver is downloaded on the first start. Tested in CI against a real server, and the addon is driven against it on a real Paper server as well. |
 | MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start. Its transactions are not implemented here, so a `database transaction` section reports the refusal. Tested in CI against MongoDB 8. |
 | SQLite and others | SQLite works through `"JDBC"` and the driver Paper already carries: nothing the dialect writes is foreign to it, and the server test runs a round trip of inserts, reads, paging, an update and a delete against it in both of its modes. Everything that dialect refuses stays refused — no auto increment, no `insert ... if absent`, no `upsert`, no limit on a write — and the others need a driver the server does not carry. |
@@ -128,8 +128,9 @@ this implementation does with each statement is worth stating in one place.
   implementations do: MongoDB's natural order is not stable, so "page 2" means nothing without one.
 - **`update`, `update by id` and `upsert by id` report what the filter matched**, not what the server
   changed. Writing a column the value it already holds still counts that row.
-- **`insert if absent` is key-based and atomic.** A write a unique index already covers is ignored, the
-  way SQL's `INSERT IGNORE` is, rather than reported as an error.
+- **`insert if absent` is key-based and atomic.** A write a unique index already covers is ignored rather
+  than reported as an error; on MongoDB that is a duplicate key the plugin catches, the same way the MySQL
+  dialect catches one.
 - **`delete ... with limit n` really deletes at most n rows.** MongoDB has no delete limit, so the plugin
   selects that many identifiers first and deletes those.
 - **A filter comparing against null follows MongoDB.** `column = null` matches a row where the column is

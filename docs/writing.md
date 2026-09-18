@@ -118,11 +118,10 @@ insert entity if absent into table "users" and wait:
         name: "Alice"
 ```
 
-`if absent` inserts only when the database considers the row missing, and does nothing when it is there.
-On MySQL this is `INSERT IGNORE`, so a duplicate key is silently skipped rather than turned into an
-update: an existing row keeps its old values. `INSERT IGNORE` does more than skip a duplicate, though —
-MySQL turns other errors into warnings as well, so a value too long for its column is stored cut short
-rather than refused. Use `insert one` or `upsert` where a value that does not fit has to be reported.
+`if absent` inserts only when the database considers the row missing, and does nothing when it is there: an
+existing row keeps its old values, where `upsert` would overwrite them. On MySQL the insert is attempted
+and a key that is already taken is the one error read as "the row is there"; everything else — a value too
+long for its column, a `null` in a `not null` column — fails the statement the way any other write does.
 Which one to reach for is a matter of what "already there" should mean:
 
 | Want | Use |

@@ -37,7 +37,7 @@ if last database error is set:
 
 | 类型名 | 它带来什么 |
 | --- | --- |
-| `"MySQL"` | MySQL 方言——反引号标识符、`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`、`AUTO_INCREMENT`、`LIMIT` 分页——以及由插件自动找到的 MySQL 驱动（`com.mysql.cj.jdbc.Driver`，或更老的 `com.mysql.jdbc.Driver`）。脚本要用的几乎总是这一个。 |
+| `"MySQL"` | MySQL 方言——反引号标识符、`upsert` 走 `ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`、`AUTO_INCREMENT`、`LIMIT` 分页——以及由插件自动找到的 MySQL 驱动（`com.mysql.cj.jdbc.Driver`，或更老的 `com.mysql.jdbc.Driver`）。脚本要用的几乎总是这一个。 |
 | `"PostgreSQL"` | PostgreSQL 方言——`ON CONFLICT`、`EXCLUDED`、`GENERATED … AS IDENTITY`，以及因为 PostgreSQL 没有 `UPDATE ... LIMIT` 而改用 `ctid` 写出的行数限制——加上插件在首次启动时替它下载的驱动。 |
 | `"MongoDB"` | MongoDB，通过插件为它下载的阻塞式 MongoDB Java 驱动访问。它底下没有 SQL，所以好几条语句的回答是刻意不同的，[兼容性](compatibility.zh-CN.md#mongodb) 一一列出；它自己的属性见下面一节。 |
 | `"JDBC"` | 由**你自己**在 `driver` 属性里指定驱动，配一个写通用 SQL 的方言：`"双引号"` 标识符、取一行用 `LIMIT 1`、分页用 `LIMIT ? OFFSET ?`——这正是 MySQL、MariaDB、SQLite、PostgreSQL、H2 都接受的写法。凡是通用写法表达不了的——`insert ... if absent`、`upsert ... by id`、写操作加 limit、`auto increment`——它宁可拒绝也不猜。 |

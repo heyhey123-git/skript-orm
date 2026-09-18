@@ -3,6 +3,7 @@ package io.github.heyhey123.skriptorm.impl.jdbc.database
 import io.github.heyhey123.skriptorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.skriptorm.table.Table
 import java.sql.JDBCType
+import java.sql.SQLException
 
 /**
  * Defines SQL rendering decisions for the JDBC implementation: identifier quoting, complete SQL
@@ -59,6 +60,18 @@ interface JdbcDialect {
 
     fun insertIfAbsent(table: String, columns: List<String>): String =
         unsupported("Insert-if-absent")
+
+    /**
+     * Whether [error] is a unique or primary key violation, which is the one error an `insert if absent`
+     * treats as "the row is already there" rather than as a failure.
+     *
+     * A dialect whose server has a statement for it answers with that statement and never needs this.
+     * One whose server does not — MySQL — sends the insert as it is and lets the query layer swallow this
+     * error and only this error. Handing the skipping to the server instead, as `INSERT IGNORE` does,
+     * swallows everything: a value too long for its column is stored cut short, a NULL in a `not null`
+     * column becomes that column's default, and the script is told nothing.
+     */
+    open fun isDuplicateKey(error: SQLException): Boolean = false
 
     fun update(table: String, columns: List<String>, whereClause: String?, limit: Int?): String {
         require(columns.isNotEmpty()) { "Update columns cannot be empty." }
@@ -181,19 +194,27 @@ object GenericJdbcDialect : JdbcDialect {
 }
 
 /**
- * MySQL rendering with backtick identifiers, LIMIT/OFFSET, INSERT IGNORE,
+ * MySQL rendering with backtick identifiers, LIMIT/OFFSET, a duplicate key treated as "already there",
  * ON DUPLICATE KEY UPDATE, limited writes, and AUTO_INCREMENT.
  */
 object MysqlJdbcDialect : JdbcDialect {
 
+    /** MySQL's `ER_DUP_ENTRY`, the error the insert below is allowed to treat as "already there". */
+    private const val DUPLICATE_KEY = 1062
+
     override fun renderIdentifier(identifier: String): String =
         "`${identifier.replace("`", "``")}`"
 
-    override fun insertIfAbsent(table: String, columns: List<String>): String {
-        require(columns.isNotEmpty()) { "Insert columns cannot be empty." }
-        return "INSERT IGNORE INTO ${quoteIdentifier(table)} (${columns.joinToString(", ") { quoteIdentifier(it) }}) " +
-            "VALUES (${columns.joinToString(", ") { "?" }})"
-    }
+    /**
+     * A plain insert: the row is written, and a key that is already taken is caught by
+     * [JdbcInsertIfAbsent] rather than by the server.
+     *
+     * `INSERT IGNORE` would be shorter, and it is what this used to send, but it cannot tell one error
+     * from another — see [isDuplicateKey] for what that cost.
+     */
+    override fun insertIfAbsent(table: String, columns: List<String>): String = insert(table, columns)
+
+    override fun isDuplicateKey(error: SQLException): Boolean = error.errorCode == DUPLICATE_KEY
 
     override fun upsertById(table: String, primaryKey: String, columns: List<String>): String {
         require(columns.isNotEmpty()) { "Upsert columns cannot be empty." }

@@ -116,7 +116,7 @@ a way to build a compound, and the plugin reads and writes compounds through SkB
 ## What a mismatch looks like
 
 A value the column cannot hold fails the operation rather than being stored approximately, and
-`last database error` says which column and what was expected. Three things are worth knowing about how
+`last database error` says which column and what was expected. Two things are worth knowing about how
 literally to take that:
 
 - **A whole number outside the column's range is checked before it is sent.** `tinyint` holds −128 to
@@ -127,8 +127,5 @@ literally to take that:
 - **`float` keeps four bytes and `double` is exact to 2^53.** `0.1` written to a `float` column comes back
   as `0.10000000149011612`, and a `bigint`-sized number written to a `double` column loses its low bits.
   Those two are what the column type is, not a mistake the plugin can catch.
-- **`insert entity if absent` on MySQL is the exception.** It is `INSERT IGNORE`, which turns errors into
-  warnings, so a value too long for its column is stored cut short instead of being refused. Use
-  `insert one` or `upsert` where a value that does not fit has to be reported.
 
 See [Errors and waiting](errors-and-waiting.md).
