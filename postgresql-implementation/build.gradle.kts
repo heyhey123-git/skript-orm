@@ -21,6 +21,12 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.coroutines.core)
 
+    // The type registry resolves the Bukkit and Skript classes its types are built on when it
+    // initializes, so the unit tests that read it need those two on their classpath. Nothing here
+    // builds a value or starts a server; the dialect tests beside them need neither.
+    testImplementation(libs.paper.api)
+    testImplementation(libs.skript)
+
     // Integration tests run this implementation against a real PostgreSQL server, which is the only
     // layer that can say whether the dialect's SQL is SQL PostgreSQL accepts. The driver comes with the
     // module; the rest is what a JVM without a server needs to build the objects the plugin builds:
