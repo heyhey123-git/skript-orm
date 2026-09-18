@@ -86,7 +86,8 @@ create a connection to database "MongoDB" with properties:
 - `database` 指定要用的数据库，`mongodb://host:27017/mydb` 这样的 url 也指定了一个。写出来的 `database`
   优先于 url 里的那个；两边都没有时用 `skript-orm`。
 - `auth database` 指定凭据所属的数据库，用于账号放在别处的服务端。默认就是正在使用的那个数据库。
-- **没有事务。** MongoDB 没有事务，所以这条连接上的 `database transaction` section 会失败，报
+- **MongoDB 的事务在本实现里还没有做。** MongoDB 本身是有多文档事务的——副本集从 4.0 起、分片集群从 4.2 起，
+  单机服务端则直接拒绝——只是这条连接目前不会去开事务，所以 `database transaction` section 会失败，报
   `This database implementation does not support transactions.`；见 [兼容性](compatibility.zh-CN.md#mongodb)。
 
 ## 给连接起名

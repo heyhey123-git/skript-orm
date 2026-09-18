@@ -100,7 +100,7 @@ are the four under "The type names a script can write".
 | MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
 | MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
 | PostgreSQL | Supported. Write `"PostgreSQL"`; the driver is downloaded on the first start. Tested in CI against a real server, and the addon is driven against it on a real Paper server as well. |
-| MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start, and the implementation has no transactions. Tested in CI against MongoDB 8. |
+| MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start. Its transactions are not implemented here, so a `database transaction` section reports the refusal. Tested in CI against MongoDB 8. |
 | SQLite and others | SQLite works through `"JDBC"` and the driver Paper already carries: nothing the dialect writes is foreign to it, and the server test runs a round trip of inserts, reads, paging, an update and a delete against it in both of its modes. Everything that dialect refuses stays refused — no auto increment, no `insert ... if absent`, no `upsert`, no limit on a write — and the others need a driver the server does not carry. |
 
 ## MongoDB
@@ -137,10 +137,11 @@ this implementation does with each statement is worth stating in one place.
 - **Nothing else is enforced by the server.** Nullability and size are declarations, not constraints.
   Registration creates the unique index on the primary key and the auto-increment counter, and MongoDB
   creates the collection itself with the first document written.
-- **No transactions.** `supportsTransactions` stays false for this implementation, so a `database
-  transaction` section fails with `This database implementation does not support transactions.` — the
-  same wording any implementation without transactions reports. See
-  [Connections](connections.md#mongodb-properties).
+- **Transactions are not implemented.** `supportsTransactions` stays false for this implementation, so a
+  `database transaction` section fails with `This database implementation does not support transactions.` —
+  the same wording any implementation without transactions reports. MongoDB itself has multi-document
+  transactions on a replica set or a sharded cluster, and a standalone server refuses them; opening one from
+  here is not done yet. See [Connections](connections.md#mongodb-properties).
 
 ## Behaviours that depend on the implementation
 

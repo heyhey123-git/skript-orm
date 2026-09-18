@@ -103,8 +103,10 @@ create a connection to database "MongoDB" with properties:
   `database` wins over the one in the url; with neither, `skript-orm` is used.
 - `auth database` names the database the credentials belong to, for a server whose users live elsewhere.
   It defaults to the database being used.
-- **Transactions are not available.** MongoDB has none, so a `database transaction` section on this
-  connection fails with `This database implementation does not support transactions.`; see
+- **Transactions are not implemented for MongoDB here.** MongoDB itself has multi-document transactions —
+  on a replica set from 4.0, on a sharded cluster from 4.2, while a standalone server refuses them — but this
+  connection does not open one yet, so a `database transaction` section fails with
+  `This database implementation does not support transactions.`; see
   [Compatibility](compatibility.md#mongodb).
 
 ## Naming one

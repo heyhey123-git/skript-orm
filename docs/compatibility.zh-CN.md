@@ -84,7 +84,7 @@
 | MySQL | 支持。写 `"MySQL"`。CI 里对着 MySQL 8 测过。 |
 | MariaDB | 未测试。写 `"MySQL"`——语句形状是 MySQL 的（`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`）——很可能可用，但没有任何检查。 |
 | PostgreSQL | 支持。写 `"PostgreSQL"`；驱动会在首次启动时下载。CI 里对着真实服务端测过，插件也在真实 Paper 服务端上对着它完整跑过一遍。 |
-| MongoDB | 支持。写 `"MongoDB"`；驱动会在首次启动时下载，而且这个实现没有事务。CI 里对着 MongoDB 8 测过。 |
+| MongoDB | 支持。写 `"MongoDB"`；驱动会在首次启动时下载。它的事务在本实现里还没有做，`database transaction` section 会报那句拒绝。CI 里对着 MongoDB 8 测过。 |
 | SQLite 等 | SQLite 能用，走的是 `"JDBC"` 和 Paper 已经带的那个驱动：方言写出的东西它全不反对，服务端测试在两种模式下都会对它跑一遍插入、读取、分页、更新和删除。那个方言拒绝的照旧拒绝——没有 auto increment、没有 `insert ... if absent`、没有 `upsert`、写操作不能加 limit——其它产品则需要有服务端没带的驱动。 |
 
 ## MongoDB
@@ -114,8 +114,9 @@
   匹配该列存在且不是 null 的行。
 - **除此之外，服务端什么都不强制。** 可空与长度是声明，不是约束。注册会建主键上的唯一索引和自增计数器，集合则由
   MongoDB 在写入第一份文档时自行创建。
-- **没有事务。** 这个实现的 `supportsTransactions` 保持为 false，所以 `database transaction` section 会失败，报
-  `This database implementation does not support transactions.`——这与任何没有事务的实现报的是同一句话。见
+- **事务还没有实现。** 这个实现的 `supportsTransactions` 保持为 false，所以 `database transaction` section 会
+  失败，报 `This database implementation does not support transactions.`——这与任何没有事务的实现报的是同一句
+  话。MongoDB 本身在副本集或分片集群上是有多文档事务的，单机服务端会拒绝；从这里开事务目前还没做。见
   [连接](connections.zh-CN.md#mongodb-属性)。
 
 ## 依赖实现的行为
