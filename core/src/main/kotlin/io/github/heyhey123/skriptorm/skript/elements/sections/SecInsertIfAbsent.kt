@@ -3,13 +3,14 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 import ch.njol.skript.doc.*
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Entity If Absent")
-@Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
+@Description("Inserts one row only when the database implementation considers it absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support and conflict rules depend on the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """insert entity if absent into table "users" and wait:
     values:
@@ -29,8 +30,8 @@ class SecInsertIfAbsent : SecWriteBase() {
             SkriptSyntax.section(
                 addon,
                 SecInsertIfAbsent::class.java,
-                "insert [one] [entity] if absent into [table] %string% [wait:and wait]",
-                "insert [one] [entity] %objects% if absent into [table] %string% [wait:and wait]"
+                "insert [one] [entity] if absent into [table] %string% [and store affected rows in %-number%] [wait:and wait]",
+                "insert [one] [entity] %objects% if absent into [table] %string% [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -44,10 +45,10 @@ class SecInsertIfAbsent : SecWriteBase() {
         multipleValues: List<Map<String, Any?>>?,
         whereClause: WhereClause?,
         extraArguments: Any?
-    ) {
+    ): WriteResult {
         // As in SecInsertOne: a column the values omit is absent from the statement, so the database
         // default applies rather than a NULL written by the ORM.
-        queries.insertIfAbsent(requireNotNull(singleValues)).execute(table)
+        return queries.insertIfAbsent(requireNotNull(singleValues)).execute(table)
     }
 
     override fun toString(event: Event?, debug: Boolean) = "insert if absent into table $tableNameExpr"

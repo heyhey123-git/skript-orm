@@ -9,7 +9,7 @@ every 5 seconds:
         stop trigger
 
     set {_age} to 1 + 1
-    update entities in table "orm_selftest" with limit 10 and wait:
+    update entities in table "orm_selftest" with limit 10 and store affected rows in {_rows} and wait:
         values:
             age: {_age}
         where all:

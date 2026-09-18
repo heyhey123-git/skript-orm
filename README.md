@@ -87,6 +87,7 @@ and hands results back as ordinary Skript variables and values.
 | [Writing rows](docs/writing.md) | Insert one, insert many, insert from a variable, upsert, `values` blocks. |
 | [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
 | [Updating and deleting](docs/updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
+| [Affected rows](docs/affected-rows.md) | The `store affected rows` clause, and a conditional write without transactions. |
 | [Errors and waiting](docs/errors-and-waiting.md) | `and wait`, `last database error`, and what runs in the background. |
 | [Transactions](docs/transactions.md) | All-or-nothing groups of statements, and what ends them. |
 | [Types](docs/types.md) | What each column type accepts and how it is stored. |

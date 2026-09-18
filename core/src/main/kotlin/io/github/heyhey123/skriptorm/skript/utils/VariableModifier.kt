@@ -20,4 +20,14 @@ object VariableModifier {
         val keys = value.keys.toTypedArray()
         variable.change(event, delta, ChangeMode.SET, keys)
     }
+
+    /**
+     * Writes a single [value] into [variable], replacing whatever it held.
+     *
+     * Unlike [writeMap] this does not clear first: a variable that holds one value is replaced by the
+     * `SET`, and clearing it separately would only add a step a script could observe in between.
+     */
+    fun writeValue(variable: Variable<*>, event: Event?, value: Any?) {
+        variable.change(event, arrayOf(value), ChangeMode.SET)
+    }
 }

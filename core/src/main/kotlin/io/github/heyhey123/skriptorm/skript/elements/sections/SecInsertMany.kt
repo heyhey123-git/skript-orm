@@ -3,13 +3,14 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 import ch.njol.skript.doc.*
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities")
-@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
+@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """insert many entities into table "users" and wait:
     values:
@@ -36,8 +37,8 @@ class SecInsertMany : SecWriteBase() {
             SkriptSyntax.section(
                 addon,
                 SecInsertMany::class.java,
-                "insert many [entities] into [table] %string% [wait:and wait]",
-                "insert many [entities] %objects% into [table] %string% [wait:and wait]"
+                "insert many [entities] into [table] %string% [and store affected rows in %-number%] [wait:and wait]",
+                "insert many [entities] %objects% into [table] %string% [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -60,9 +61,8 @@ class SecInsertMany : SecWriteBase() {
         multipleValues: List<Map<String, Any?>>?,
         whereClause: WhereClause?,
         extraArguments: Any?
-    ) {
+    ): WriteResult =
         queries.insertMany(multipleValues ?: listOf(requireNotNull(singleValues))).execute(table)
-    }
 
     override fun toString(event: Event?, debug: Boolean) = "insert many into table $tableNameExpr"
 }

@@ -86,6 +86,20 @@ database failure is only logged. The synchronous checks (no connection, unknown 
 not fit, a limit of zero) are reported in `last database error` either way. See
 [Errors and waiting](errors-and-waiting.md).
 
+## How many rows were changed
+
+Both also take `and store affected rows in {_rows}`, written before `and wait`, which keeps the number of
+rows the statement touched:
+
+```sk
+delete entities from table "sessions" and store affected rows in {_deleted} and wait:
+    where all:
+        last_seen < {_cutoff}
+```
+
+A count of `0` means the statement ran and matched nothing, which is how an update guarded by the values
+it read says that somebody else got there first. See [Affected rows](affected-rows.md).
+
 ## Updating from a variable
 
 Both `update` and `upsert` also accept the new values as a variable shaped like a select result, which

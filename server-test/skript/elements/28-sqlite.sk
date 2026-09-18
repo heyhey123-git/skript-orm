@@ -81,11 +81,13 @@ every 5 seconds:
         log "SKRIPTORM_SELFTEST=FAIL sqlite select page: %last database error%"
 
     in connection "sqlite":
-        update one entity in table "orm_sqlite_probe" by id 2 and wait:
+        update one entity in table "orm_sqlite_probe" by id 2 and store affected rows in {sqlite::rows::update} and wait:
             values:
                 name: "Carol"
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL sqlite update: %last database error%"
+    if {sqlite::rows::update} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::update}%' for an update of one row, instead of 1"
 
     in connection "sqlite":
         select one entity from table "orm_sqlite_probe" by id 2 and store the result in {sqlite::updated::*}
@@ -135,6 +137,71 @@ every 5 seconds:
             name: string(64), not null
     if last database error does not contain "Auto increment is not supported by this JDBC dialect.":
         log "SKRIPTORM_SELFTEST=FAIL sqlite auto increment was not refused: %last database error%"
+
+    # The affected row count, which is the one thing the statements above compute and never read. Each
+    # variable is seeded with a number no statement here can report, so a check that passes without the
+    # clause doing anything would fail: silence is not allowed to look like the right answer.
+    #
+    # The delete and the insert also settle what the row count means on this driver: zero rows for a
+    # statement that matched nothing, one row for each row it wrote.
+    in connection "sqlite":
+        set {sqlite::rows::none} to 7
+        update one entity in table "orm_sqlite_probe" by id 999 and store affected rows in {sqlite::rows::none} and wait:
+            values:
+                name: "Nobody"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows update: %last database error%"
+    if {sqlite::rows::none} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left the variable unset after a statement that matched nothing"
+    if {sqlite::rows::none} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::none}%' for an update that matched no row, instead of 0"
+
+    in connection "sqlite":
+        delete one entity from table "orm_sqlite_probe" by id 1 and store affected rows in {sqlite::rows::delete} and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows delete: %last database error%"
+    if {sqlite::rows::delete} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::delete}%' for a delete that removed one row, instead of 1"
+
+    # A statement the dialect refuses never reaches the driver, and it leaves the variable unset: what a
+    # script must not read is a number left over from the statement before it.
+    in connection "sqlite":
+        set {sqlite::rows::refused} to 7
+        insert one entity if absent into table "orm_sqlite_probe" and store affected rows in {sqlite::rows::refused} and wait:
+            values:
+                id: 3
+                name: "Dave"
+    if {sqlite::rows::refused} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows kept '%{sqlite::rows::refused}%' after a statement that was refused"
+
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and store affected rows in {sqlite::rows::insert} and wait:
+            values:
+                id: 4
+                name: "Erin"
+                age: 50
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows insert: %last database error%"
+    if {sqlite::rows::insert} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::insert}%' for an insert of one row, instead of 1"
+
+    # A statement written without `and wait` clears the variable and never writes it, so it reads as no
+    # answer even once the work is done: the script had already moved on by the time there was a number
+    # to give. The seed is what makes the clear visible, and the read-back below says the write itself
+    # happened all the same.
+    in connection "sqlite":
+        set {sqlite::rows::unwaited} to 7
+        update one entity in table "orm_sqlite_probe" by id 4 and store affected rows in {sqlite::rows::unwaited}:
+            values:
+                age: 51
+    wait 2 seconds
+    if {sqlite::rows::unwaited} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{sqlite::rows::unwaited}%' for a statement written without and wait"
+
+    in connection "sqlite":
+        select one entity from table "orm_sqlite_probe" by id 4 and store the result in {sqlite::rows::row::*}
+    if {sqlite::rows::row::age} is not 51:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left the unwaited write undone: age reads '%{sqlite::rows::row::age}%'"
 
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.

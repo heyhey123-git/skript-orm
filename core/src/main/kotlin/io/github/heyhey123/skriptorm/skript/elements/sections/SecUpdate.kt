@@ -4,13 +4,14 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Update Entities")
-@Description("Updates rows, optionally with a positive limit and nested where block. The new values may be written in the section body, or taken from a list variable shaped like a select result. Omitting where updates all rows allowed by the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
+@Description("Updates rows, optionally with a positive limit and nested where block. The new values may be written in the section body, or taken from a list variable shaped like a select result. Omitting where updates all rows allowed by the implementation. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """update entities in table "users" with limit 10 and wait:
     values:
@@ -34,8 +35,8 @@ class SecUpdate : SecWriteBase() {
             SkriptSyntax.section(
                 addon,
                 SecUpdate::class.java,
-                "update [entities] in [table] %string% [with limit %integer%] [wait:and wait]",
-                "update [entities] %objects% in [table] %string% [with limit %integer%] [wait:and wait]"
+                "update [entities] in [table] %string% [with limit %integer%] [and store affected rows in %-number%] [wait:and wait]",
+                "update [entities] %objects% in [table] %string% [with limit %integer%] [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -54,12 +55,12 @@ class SecUpdate : SecWriteBase() {
         require(it > 0) { "Update limit must be positive." }
     }
 
-    override suspend fun executeWrite(queries: Queries, table: Table, singleValues: Map<String, Any?>?, multipleValues: List<Map<String, Any?>>?, whereClause: WhereClause?, extraArguments: Any?) {
+    override suspend fun executeWrite(queries: Queries, table: Table, singleValues: Map<String, Any?>?, multipleValues: List<Map<String, Any?>>?, whereClause: WhereClause?, extraArguments: Any?): WriteResult {
         // Patch semantics: the query layer builds the SET list from the supplied columns only, so a
         // column the values omit keeps its stored value. A list variable cannot carry a null, so
         // storing SQL NULL requires a literal `null` in a values block. Reading an omitted column as
         // NULL would silently clear every column a dynamic variable happens to miss.
-        queries.update(requireNotNull(singleValues), extraArguments as Int?, whereClause).execute(table)
+        return queries.update(requireNotNull(singleValues), extraArguments as Int?, whereClause).execute(table)
     }
 
     override fun toString(event: Event?, debug: Boolean) = "update entities in table $tableNameExpr"

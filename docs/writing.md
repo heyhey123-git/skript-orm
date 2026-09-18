@@ -126,3 +126,17 @@ MySQL's.
 Reads always wait, so a script that writes and then reads in the same trigger should write with
 `and wait`; otherwise the read may see the row as it was before. See
 [Errors and waiting](errors-and-waiting.md).
+
+## How many rows were written
+
+Any of these statements can keep the number of rows it affected in a variable, by ending with
+`and store affected rows in {_rows}` before `and wait`:
+
+```sk
+upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
+    values:
+        name: "Alice"
+```
+
+That is how a script tells "it was already there" from "it was written", and how it writes a condition
+that only takes effect while a value it read is still current. See [Affected rows](affected-rows.md).

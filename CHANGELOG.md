@@ -13,6 +13,18 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+### Added
+
+- **`store affected rows in {_rows}`**, on every statement that writes: `insert one`, `insert many`,
+  `insert ... if absent`, `update`, `upsert` and `delete`, in the section form and the colon-free one
+  alike. The clause is written before `and wait`, as in
+  `update entities in table "accounts" and store affected rows in {_rows} and wait`, and it keeps the
+  number of rows the statement affected. A count of `0` is a real answer — the statement ran and matched
+  nothing — while a variable left unset means no statement answered, because the statement was refused,
+  failed, could not be counted exactly, or was written without `and wait`. That is what makes a
+  conditional write possible without a transaction. See
+  [Affected rows](docs/affected-rows.md) for the three states and a safe read-modify-write recipe.
+
 ## [1.1.0] - 2026-09-18
 
 A release about the databases a script can reach: MongoDB joins the type names, SQLite is documented as

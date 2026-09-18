@@ -92,5 +92,51 @@ every 5 seconds:
     if {_id::id} is not set:
         log "SKRIPTORM_SELFTEST=FAIL roundtrip found no row through a where on the primary key"
 
+    # The affected row count. A write that names a variable in its `store affected rows` clause hands it
+    # the number of rows the backend reports as written, once the statement has finished.
+    #
+    # The count is cleared when the statement starts and written when it succeeds exactly, so a zero is a
+    # real answer and an unset variable means no statement answered. The value is set to 7 first, because
+    # a zero that was already there would pass the checks below without the clause doing anything.
+    set {_rows} to 7
+    update one entity in table "orm_roundtrip" by id 999999999 and store affected rows in {_rows} and wait:
+        values:
+            name: "nobody"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows update failed: %last database error%"
+    if {_rows} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows left the variable unset after a statement that matched nothing"
+    if {_rows} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows read '%{_rows}%' for an update that matched no row, instead of 0"
+
+    set {_rows} to 7
+    delete one entity from table "orm_roundtrip" by id 999999999 and store affected rows in {_rows} and wait
+    if {_rows} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows read '%{_rows}%' for a delete that matched no row, instead of 0"
+
+    # A row that exists, changed by the statement: every backend reports one row here, whatever it counts
+    # as written. The name is left as the new value, because nothing below reads it again.
+    update one entity in table "orm_roundtrip" by id {orm_selftest::later::id} and store affected rows in {_rows} and wait:
+        values:
+            name: "Bob"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows update of an existing row failed: %last database error%"
+    if {_rows} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows read '%{_rows}%' for an update that changed one row, instead of 1"
+
+    # A statement that names a variable leaves every other one alone.
+    set {_keep} to 5
+    delete one entity from table "orm_roundtrip" by id 999999999 and wait
+    if {_keep} is not 5:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows touched a variable no statement named"
+
+    # A statement refused before it runs leaves the variable unset, so a stale number is never handed to a
+    # script as this statement's answer. The missing table is the point: `last database error` is set on
+    # purpose here, and the step below clears it again.
+    set {_rows} to 7
+    delete entities from table "orm_no_such_table" and store affected rows in {_rows} and wait
+    if {_rows} is set:
+        log "SKRIPTORM_SELFTEST=FAIL affected rows kept '%{_rows}%' after the statement was refused"
+
     log "SKRIPTORM_SELFTEST detail: roundtrip -> ran"
     set {skriptorm::selftest::done::roundtrip} to true

@@ -172,6 +172,12 @@ variable happens to miss.
 `WriteResult(affectedCount, countExact)` reports how many rows are **known** to be affected, and
 whether that number is the exact total.
 
+A statement can hand that number to a script with the optional `store affected rows` clause, which
+`skript/utils/AffectedRows` owns: the pattern fragment, the variable it may name, and the rule that says
+when the variable is written. The clause is cleared when the statement starts and written only for an
+exact count, so a zero stays distinguishable from "no answer"; `WriteResult.countExact` is what a new
+implementation has to get right for that to hold.
+
 For JDBC batches, `SUCCESS_NO_INFO` means the driver cannot report a count for that command. It is
 **not** one row: leave `affectedCount` alone and set `countExact = false`. `EXECUTE_FAILED` is an
 error. Other negative counts are an invalid driver response and must raise.

@@ -8,6 +8,7 @@ import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
+import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
@@ -22,7 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * Skript warns about. The `values` spelling keeps its section, because it has a body to give.
  */
 @Name("Insert One Entity From A Variable Without A Colon")
-@Description("Inserts one row, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
+@Description("Inserts one row, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """select one entity from table "users" and store the result in {_user::*}
 insert one {_user::*} into table "archived_users"
@@ -36,7 +37,7 @@ class EffInsertOneFromVariable : Effect() {
             SkriptSyntax.effect(
                 addon,
                 EffInsertOneFromVariable::class.java,
-                "insert one [entity] %objects% into [table] %string% [wait:and wait]"
+                "insert one [entity] %objects% into [table] %string% [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -44,6 +45,9 @@ class EffInsertOneFromVariable : Effect() {
     private lateinit var tableNameExpr: Expression<String>
     private lateinit var valuesVariable: Variable<*>
     private var waitFlag: Boolean = false
+
+    /** The variable the affected row count is stored in, or null when the statement did not ask for one. */
+    private var affectedRowsVariable: Variable<*>? = null
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -60,6 +64,13 @@ class EffInsertOneFromVariable : Effect() {
         valuesVariable = valuesExpression
         tableNameExpr = expressions[1] as Expression<String>
         waitFlag = parseResult.hasTag("wait")
+        // The count clause is the last expression of the pattern, so it is the last slot.
+        affectedRowsVariable = try {
+            AffectedRows.target(expressions.lastOrNull())
+        } catch (error: IllegalArgumentException) {
+            Skript.error(error.message ?: "Invalid affected row count target.")
+            return false
+        }
 
         parser.hasDelayBefore = Kleenean.TRUE
         return true
@@ -72,6 +83,7 @@ class EffInsertOneFromVariable : Effect() {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
         DatabaseWork.clearErrorForStatement(actualEvent)
+        AffectedRows.clear(affectedRowsVariable, actualEvent)
 
         val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
 
@@ -84,6 +96,7 @@ class EffInsertOneFromVariable : Effect() {
             query = {
                 target.withQueries { queries -> queries.insertOne(row).execute(target.table) }
             },
+            deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { error ->
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")
             }

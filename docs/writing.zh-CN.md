@@ -105,3 +105,15 @@ insert entity if absent into table "users" and wait:
 - **不带它**：写入交给后台，下一行立刻执行。同步检查仍会通过 `last database error` 报告，比如没有连接、表不存在、值放不下；至于数据库本身拒绝的失败，只会写进日志。
 
 读取必定等待，所以“先写后读”的脚本应该给写入加 `and wait`，否则读取可能看到写入之前的行。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+
+## 写入了多少行
+
+这些语句都可以把影响的行数留在变量里：在 `and wait` 之前写上 `and store affected rows in {_rows}`：
+
+```sk
+upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
+    values:
+        name: "Alice"
+```
+
+脚本靠它分辨“本来就在”和“刚刚写入”，也靠它写出“只在读到的值仍然是当时那个值时才生效”的条件。见 [影响行数](affected-rows.zh-CN.md)。

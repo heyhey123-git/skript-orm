@@ -70,7 +70,11 @@ database transaction:
 ```
 
 `last database error` holds the first failure, so the line after the section says what went wrong even
-though the rollback itself succeeded.
+though the rollback itself succeeded. That slot is the one thing a transaction keeps across statements:
+a statement inside one does not clear it, because the cause of the rollback is worth more than the
+silence of the statements that were skipped. A `store affected rows` variable is not kept that way — it
+is cleared per statement, in a transaction too, so that no number is left over from a statement that
+never answered. See [Affected rows](affected-rows.md).
 
 ## Waiting inside one
 

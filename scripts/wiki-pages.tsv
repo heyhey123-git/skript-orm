@@ -11,6 +11,7 @@ docs/tables.zh-CN.md	Tables
 docs/writing.zh-CN.md	Writing-Rows
 docs/reading.zh-CN.md	Reading-Rows
 docs/updating-and-deleting.zh-CN.md	Updating-And-Deleting
+docs/affected-rows.zh-CN.md	Affected-Rows
 docs/errors-and-waiting.zh-CN.md	Errors-And-Waiting
 docs/transactions.zh-CN.md	Transactions
 docs/types.zh-CN.md	Types

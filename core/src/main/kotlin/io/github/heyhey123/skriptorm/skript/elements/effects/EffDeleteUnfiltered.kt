@@ -1,11 +1,14 @@
 package io.github.heyhey123.skriptorm.skript.elements.effects
 
+import ch.njol.skript.Skript
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
+import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
+import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
@@ -20,7 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * way to write one that carries a `where` block.
  */
 @Name("Delete Entities Without A Colon")
-@Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged.")
+@Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. With and wait, failures are available as the last database error; otherwise execution continues immediately and asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """delete entities from table "logs" with limit 500 and wait
 """
@@ -33,7 +36,7 @@ class EffDeleteUnfiltered : Effect() {
             SkriptSyntax.effect(
                 addon,
                 EffDeleteUnfiltered::class.java,
-                "delete [entities] from [table] %string% [with limit %integer%] [wait:and wait]"
+                "delete [entities] from [table] %string% [with limit %integer%] [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -41,6 +44,9 @@ class EffDeleteUnfiltered : Effect() {
     private lateinit var tableNameExpr: Expression<String>
     private var limitExpr: Expression<Int>? = null
     private var waitFlag: Boolean = false
+
+    /** The variable the affected row count is stored in, or null when the statement did not ask for one. */
+    private var affectedRowsVariable: Variable<*>? = null
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -52,6 +58,13 @@ class EffDeleteUnfiltered : Effect() {
         tableNameExpr = expressions[0] as Expression<String>
         limitExpr = expressions[1] as Expression<Int>?
         waitFlag = parseResult.hasTag("wait")
+        // The count clause is the last expression of the pattern, so it is the last slot.
+        affectedRowsVariable = try {
+            AffectedRows.target(expressions.lastOrNull())
+        } catch (error: IllegalArgumentException) {
+            Skript.error(error.message ?: "Invalid affected row count target.")
+            return false
+        }
 
         parser.hasDelayBefore = Kleenean.TRUE
         return true
@@ -64,6 +77,7 @@ class EffDeleteUnfiltered : Effect() {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
         DatabaseWork.clearErrorForStatement(actualEvent)
+        AffectedRows.clear(affectedRowsVariable, actualEvent)
 
         val limit = limitExpr?.getSingle(actualEvent)
         if (limit != null && limit <= 0) {
@@ -84,6 +98,7 @@ class EffDeleteUnfiltered : Effect() {
             query = {
                 target.withQueries { queries -> queries.delete(limit, null).execute(target.table) }
             },
+            deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { error ->
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")
             }

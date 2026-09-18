@@ -10,6 +10,7 @@
 - [写入行](Writing-Rows)
 - [读取行](Reading-Rows)
 - [更新与删除](Updating-And-Deleting)
+- [影响行数](Affected-Rows)
 - [错误与等待](Errors-And-Waiting)
 - [事务](Transactions)
 - [类型](Types)

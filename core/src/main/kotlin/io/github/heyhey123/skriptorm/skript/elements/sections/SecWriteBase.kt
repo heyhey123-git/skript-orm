@@ -13,6 +13,8 @@ import io.github.heyhey123.skriptorm.SkriptOrm
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.result.WriteResult
+import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
@@ -59,10 +61,22 @@ import org.bukkit.event.Event
  * operation. That is deliberately not offered: the same input would otherwise clear every column a
  * dynamic variable happens to miss, and an unknown column name is the only mistake this reader can
  * reject, while a forgotten column passes silently.
+ *
+ * ## The affected row count
+ *
+ * Every write pattern ends with [AffectedRows.PATTERN], an optional clause that stores the number of rows
+ * the statement affected into a variable the script names. It is cleared when the statement starts and
+ * written when it succeeds with an exact count, which is documented on [AffectedRows] and is what lets a
+ * script express a conditional write without transactions.
  */
 abstract class SecWriteBase : Section() {
 
     protected lateinit var tableNameExpr: Expression<String>
+
+    /**
+     * The variable the affected row count is stored in, or null when the statement did not ask for one.
+     */
+    protected var affectedRowsVariable: Variable<*>? = null
 
     /**
      * Whether the continuation waits for this write. Waiting preserves the event continuation and
@@ -140,6 +154,14 @@ abstract class SecWriteBase : Section() {
     ): Boolean {
         tableNameExpr = expressions[tableNameIndex(matchedPattern)] as Expression<String>
         extractExtraParams(expressions, matchedPattern)
+        // The count clause is the last expression of every write pattern, so the target is the last
+        // slot; it is null when the optional group was left out.
+        affectedRowsVariable = try {
+            AffectedRows.target(expressions.lastOrNull())
+        } catch (error: IllegalArgumentException) {
+            Skript.error(error.message ?: "Invalid affected row count target.")
+            return false
+        }
         waitFlag = parseResult.hasTag("wait")
         if (waitFlag) {
             parser.hasDelayBefore = Kleenean.TRUE
@@ -235,7 +257,12 @@ abstract class SecWriteBase : Section() {
 
     override fun walk(event: Event?): TriggerItem? {
         val trigger = this.trigger ?: return walk(event, false)
-        event?.let { DatabaseWork.clearErrorForStatement(it) }
+        event?.let {
+            DatabaseWork.clearErrorForStatement(it)
+            // Cleared before anything can refuse the statement, so a statement that never ran leaves the
+            // variable unset rather than holding what an earlier one wrote.
+            AffectedRows.clear(affectedRowsVariable, it)
+        }
 
         val database = ConnectionScope.resolve(event) ?: run {
             DatabaseWork.report(event, trigger, ConnectionScope.noConnectionMessage())
@@ -324,8 +351,9 @@ abstract class SecWriteBase : Section() {
 
         SkriptOrm.ioScope.launch {
             var failure: Throwable? = null
+            var result: WriteResult? = null
             try {
-                DatabaseWork.withQueries(database, transaction) { queries ->
+                result = DatabaseWork.withQueries(database, transaction) { queries ->
                     executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, extraArguments)
                 }
             } catch (_: CancellationException) {
@@ -342,6 +370,9 @@ abstract class SecWriteBase : Section() {
                         SkriptDatabaseErrors.set(event, failure)
                     } else {
                         SkriptDatabaseErrors.clear(event)
+                        // Only a statement that waits can be read afterwards: without `and wait` the script
+                        // has already carried on by the time this runs, so the variable stays as cleared.
+                        result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
                     }
                 }
                 failure?.let {
@@ -372,5 +403,5 @@ abstract class SecWriteBase : Section() {
         multipleValues: List<Map<String, Any?>>?,
         whereClause: WhereClause?,
         extraArguments: Any?
-    )
+    ): WriteResult
 }

@@ -8,6 +8,7 @@ import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
+import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
@@ -22,7 +23,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * @see EffInsertOneFromVariable for why this form exists beside its section.
  */
 @Name("Upsert One Entity By ID From A Variable Without A Colon")
-@Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. With and wait, failures are available as the last database error.")
+@Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. With and wait, failures are available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """set {_user::id} to 1
 set {_user::name} to "Alice"
@@ -37,7 +38,7 @@ class EffUpsertByIdFromVariable : Effect() {
             SkriptSyntax.effect(
                 addon,
                 EffUpsertByIdFromVariable::class.java,
-                "upsert [one] [entity] %objects% in [table] %string% by id %object% [wait:and wait]"
+                "upsert [one] [entity] %objects% in [table] %string% by id %object% [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -46,6 +47,9 @@ class EffUpsertByIdFromVariable : Effect() {
     private lateinit var idExpr: Expression<Any>
     private lateinit var valuesVariable: Variable<*>
     private var waitFlag: Boolean = false
+
+    /** The variable the affected row count is stored in, or null when the statement did not ask for one. */
+    private var affectedRowsVariable: Variable<*>? = null
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -63,6 +67,13 @@ class EffUpsertByIdFromVariable : Effect() {
         tableNameExpr = expressions[1] as Expression<String>
         idExpr = ExpressionsHelper.withAnyType(expressions[2]!!)
         waitFlag = parseResult.hasTag("wait")
+        // The count clause is the last expression of the pattern, so it is the last slot.
+        affectedRowsVariable = try {
+            AffectedRows.target(expressions.lastOrNull())
+        } catch (error: IllegalArgumentException) {
+            Skript.error(error.message ?: "Invalid affected row count target.")
+            return false
+        }
 
         parser.hasDelayBefore = Kleenean.TRUE
         return true
@@ -75,6 +86,7 @@ class EffUpsertByIdFromVariable : Effect() {
         val actualEvent = event ?: return next
         val trigger = this.trigger ?: return next
         DatabaseWork.clearErrorForStatement(actualEvent)
+        AffectedRows.clear(affectedRowsVariable, actualEvent)
 
         val id = idExpr.getSingle(actualEvent)
         if (id == null) {
@@ -99,6 +111,7 @@ class EffUpsertByIdFromVariable : Effect() {
                     queries.upsertById(id, row).execute(target.table)
                 }
             },
+            deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { error ->
                 ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")
             }

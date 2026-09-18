@@ -61,7 +61,7 @@ database transaction:
             what: "order stored"
 ```
 
-`last database error` 里是最初那个失败，所以 section 之后的那行仍然说得出出了什么事，即使回滚本身是成功的。
+`last database error` 里是最初那个失败，所以 section 之后的那行仍然说得出出了什么事，即使回滚本身是成功的。事务唯一会跨语句保留的就是这个槽位：事务里的语句不会清掉它，因为回滚的原因比那些被跳过的语句的沉默值钱。`store affected rows` 的变量不按这个规矩来——它逐条语句清空，事务里也一样，免得留下一条从未给出答复的语句的数字。见 [影响行数](affected-rows.zh-CN.md)。
 
 ## 事务里的等待
 

@@ -35,7 +35,12 @@ send "Stored." to console
 - It belongs to the **event** the operation ran in. Two players running the same command each have their
   own, and a value read in a later, unrelated event tells you nothing.
 - Each operation **clears it before it runs**, so what you read is about the operation you just ran, not
-  an older one.
+  an older one. **Inside a transaction it is deliberately not cleared**: the statement that failed leaves
+  its cause there, the statements after it are skipped without reporting anything of their own, and
+  clearing it would leave the script reading nothing at all. See [Transactions](transactions.md).
+- The `store affected rows` variable is the other way round: it is cleared for **every** statement that
+  names it, inside a transaction too, because a number must never outlive the statement that produced it.
+  See [Affected rows](affected-rows.md).
 - An unset error is printed as `<none>`, so compare with `is set` rather than against text.
 - It is set by a failure and left unset by a success. See the next section, though: "unset" is weaker
   than it sounds.

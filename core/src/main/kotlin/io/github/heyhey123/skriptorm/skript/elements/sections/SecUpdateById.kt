@@ -4,6 +4,7 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
@@ -11,7 +12,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Update Entity By ID")
-@Description("Updates one row by its registered primary-key value. The new values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged.")
+@Description("Updates one row by its registered primary-key value. The new values may be written in the section body, or taken from a list variable shaped like a select result. With and wait, failures are available as the last database error; otherwise asynchronous failures are only logged. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """update one entity in table "users" by id {_id} and wait:
     values:
@@ -31,8 +32,8 @@ class SecUpdateById : SecWriteBase() {
             SkriptSyntax.section(
                 addon,
                 SecUpdateById::class.java,
-                "update [one] [entity] in [table] %string% by id %object% [wait:and wait]",
-                "update [one] [entity] %objects% in [table] %string% by id %object% [wait:and wait]"
+                "update [one] [entity] in [table] %string% by id %object% [and store affected rows in %-number%] [wait:and wait]",
+                "update [one] [entity] %objects% in [table] %string% by id %object% [and store affected rows in %-number%] [wait:and wait]"
             )
         }
     }
@@ -51,10 +52,10 @@ class SecUpdateById : SecWriteBase() {
     override fun resolveExtraArguments(event: Event?): Any =
         requireNotNull(idExpr.getSingle(event)) { "ID expression in 'update by id' is null." }
 
-    override suspend fun executeWrite(queries: Queries, table: Table, singleValues: Map<String, Any?>?, multipleValues: List<Map<String, Any?>>?, whereClause: WhereClause?, extraArguments: Any?) {
+    override suspend fun executeWrite(queries: Queries, table: Table, singleValues: Map<String, Any?>?, multipleValues: List<Map<String, Any?>>?, whereClause: WhereClause?, extraArguments: Any?): WriteResult {
         // Patch semantics, as in SecUpdate: only the supplied columns form the SET list, and an
         // omitted column is left untouched rather than written as NULL.
-        queries.updateById(requireNotNull(extraArguments), requireNotNull(singleValues)).execute(table)
+        return queries.updateById(requireNotNull(extraArguments), requireNotNull(singleValues)).execute(table)
     }
 
     override fun toString(event: Event?, debug: Boolean) = "update entity in table $tableNameExpr by id $idExpr"

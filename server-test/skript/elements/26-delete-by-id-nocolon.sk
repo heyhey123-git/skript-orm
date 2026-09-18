@@ -6,6 +6,6 @@ every 5 seconds:
     if {skriptorm::selftest::done::delete-by-id-nocolon} is set:
         stop trigger
 
-    delete one entity from table "orm_selftest" by id 1 and wait
+    delete one entity from table "orm_selftest" by id 1 and store affected rows in {_rows} and wait
     log "SKRIPTORM_SELFTEST detail: delete by id without colon -> %last database error%"
     set {skriptorm::selftest::done::delete-by-id-nocolon} to true

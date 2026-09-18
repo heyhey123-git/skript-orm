@@ -77,6 +77,19 @@ limit 是保险，不是分页手段：留下哪几行由数据库决定，所�
 工作交给后台，数据库层面的失败只会写日志。同步检查（没有连接、表不存在、值放不下、limit 为零）无论哪种情况都会出现在
 `last database error` 里。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
+## 改动了多少行
+
+两个 section 也都接受 `and store affected rows in {_rows}`，写在 `and wait` 之前，它会留下语句动过的行数：
+
+```sk
+delete entities from table "sessions" and store affected rows in {_deleted} and wait:
+    where all:
+        last_seen < {_cutoff}
+```
+
+行数为 `0` 表示语句执行了、只是没匹配到任何行；用读到的值给自己上锁的更新，就是靠这个说“别人先动手了”。见
+[影响行数](affected-rows.zh-CN.md)。
+
 ## 从变量更新
 
 `update` 与 `upsert` 都接受“形状像查询结果的变量”作为新值，这也是“读出来、改一改、存回去”最短的写法：
