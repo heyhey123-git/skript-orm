@@ -4,11 +4,16 @@
 # is both the run-once guard and what `99-finish.sk` waits for: it is set once the element has
 # reported, because a section or effect may delay its own detail line. `prepareServerTest` clears
 # Skript's variable store before every run, so a marker cannot survive from an earlier one.
+#
+# The `where` matches nothing, which is what keeps this harmless for the elements next to it, and it
+# leaves `with limit` out on purpose: that group is optional, and the row count clause after it has to
+# be reached with the group absent as well as with it present. `13-update-entities.sk` covers the other
+# half of that pair.
 every 5 seconds:
     if {skriptorm::selftest::done::delete-entities} is set:
         stop trigger
 
-    delete entities from table "orm_selftest" with limit 10 and wait:
+    delete entities from table "orm_selftest" and store affected rows in {_rows} and wait:
         where all:
             name = "nobody"
     log "SKRIPTORM_SELFTEST detail: delete entities -> %last database error%"
