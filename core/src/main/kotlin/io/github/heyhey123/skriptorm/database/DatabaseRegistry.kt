@@ -16,6 +16,10 @@ object DatabaseRegistry {
     /**
      * Register a database factory.
      *
+     * A factory registers itself as its object is initialized, so [DatabaseFactory.typeName] is read while
+     * that object is still being built: an implementation whose name lives in a property has to register
+     * itself after that property is assigned, which is why the factories of this repository compute it.
+     *
      * @param factory The database factory to register.
      */
     fun register(factory: DatabaseFactory) {

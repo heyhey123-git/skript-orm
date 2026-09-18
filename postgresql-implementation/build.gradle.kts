@@ -15,11 +15,22 @@ configurations["integrationTestRuntimeOnly"].extendsFrom(configurations.testRunt
 dependencies {
     compileOnly(project(":core"))
     implementation(project(":generic-jdbc-implementation"))
-    implementation(libs.postgresql.driver)
+
+    // The driver is never in the jar and never on a runtime classpath of this build: Paper resolves the
+    // `libraries` entry of plugin.yml into the server's `libraries/` and puts it on this plugin's
+    // classpath, so what the module needs from it is the classes to compile against. `compileOnly` says
+    // exactly that, where `implementation` would put a copy on every runtime classpath and leave an
+    // exclusion in the shaded jar as the only thing keeping it out.
+    compileOnly(libs.postgresql.driver)
 
     testImplementation(project(":core"))
     testImplementation(kotlin("test"))
     testImplementation(libs.coroutines.core)
+
+    // The JDBC layer reaches the driver at runtime, so a test that opens a connection needs it on its own
+    // classpath: `compileOnly` above reaches no test classpath, and the integration tests inherit this
+    // one. The dialect tests beside them need neither, since they only render SQL.
+    testImplementation(libs.postgresql.driver)
 
     // The type registry resolves the Bukkit and Skript classes its types are built on when it
     // initializes, so the unit tests that read it need those two on their classpath. Nothing here

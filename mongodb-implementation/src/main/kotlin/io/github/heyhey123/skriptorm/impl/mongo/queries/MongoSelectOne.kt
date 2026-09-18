@@ -1,14 +1,12 @@
 package io.github.heyhey123.skriptorm.impl.mongo.queries
 
-import com.mongodb.kotlin.client.coroutine.MongoDatabase
+import com.mongodb.client.MongoDatabase
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.impl.mongo.condition.MongoConditionTranslator
 import io.github.heyhey123.skriptorm.impl.mongo.result.MongoDataCursor
 import io.github.heyhey123.skriptorm.queries.SelectOne
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
-import kotlinx.coroutines.flow.toList
-import org.bson.Document
 
 class MongoSelectOne(
     where: WhereClause?,
@@ -16,12 +14,12 @@ class MongoSelectOne(
 ) : SelectOne(where), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
-        val collection = database.getCollection<Document>(table.name)
+        val collection = database.getCollection(table.name)
         val filter = where?.let {
-            MongoConditionTranslator.translate(it)
+            MongoConditionTranslator.translate(it, table)
         }
         val findFlow = filter?.let { collection.find(it) } ?: collection.find()
-        val resultList = findFlow.limit(1).toList()
-        return CursorResult(MongoDataCursor(resultList))
+        val documents = findFlow.limit(1).toList()
+        return CursorResult(MongoDataCursor(documents, table.columns.keys.toList()))
     }
 }

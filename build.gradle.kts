@@ -49,14 +49,40 @@ val bundledModules: List<String> = run {
             exists
         }
         .takeIf { !it.isNullOrEmpty() }
-        ?: listOf("generic-jdbc-implementation", "postgresql-implementation") // 默认值
+        ?: listOf(
+            "generic-jdbc-implementation",
+            "postgresql-implementation",
+            "mongodb-implementation"
+        ) // 默认值
 }
 
-// The dependency groups that are only ever downloaded, never shaded. Excluding them here is what makes
-// the jar the size of the plugin and the driver the library its authors published, and it is why the
-// relocations below no longer mention them: a relocated copy and a downloaded one would be two drivers.
-// Paper fetches them from the `libraries` entry in plugin.yml, once, on the first start.
-val downloadedDriverGroups = listOf("org.postgresql")
+// Nothing here excludes a driver, because no driver reaches this classpath: an implementation module
+// declares its driver `compileOnly`, so the only copy of it is the one Paper downloads from the
+// `libraries` entry of plugin.yml into the server's `libraries/` on the first start. A driver declared as
+// a normal dependency would be shaded into the jar instead, and a rewritten copy beside the downloaded
+// one would be two drivers.
+
+// The `libraries` entry plugin.yml is built from: one driver for each implementation the jar carries, in
+// the YAML shape the file wants. A driver for an implementation that is not in the jar would be a
+// download nobody asked for, and a download that fails stops the plugin from loading at all — so the list
+// follows the modules rather than the catalog.
+//
+// Handed to `:core`, which expands plugin.yml, instead of letting it work the list out again: the modules
+// this jar carries are decided here.
+val driverLibraries: String = buildList {
+    if ("postgresql-implementation" in bundledModules) {
+        add("org.postgresql:postgresql:${libs.versions.postgresql.driver.get()}")
+    }
+    if ("mongodb-implementation" in bundledModules) {
+        add("org.mongodb:mongodb-driver-sync:${libs.versions.mongodb.driver.get()}")
+    }
+}.let { libraries ->
+    // The empty case is a flow sequence rather than nothing, so the entry stays a YAML list of no entries
+    // instead of a key with no value at all.
+    if (libraries.isEmpty()) " []" else "\n" + libraries.joinToString(separator = "\n") { "    - $it" }
+}
+
+project(":core").extensions.extraProperties["skriptOrmDriverLibraries"] = driverLibraries
 
 // 确保先评估这些子模块
 bundledModules.forEach { evaluationDependsOn(":$it") }
@@ -157,13 +183,9 @@ tasks {
         relocate("com.zaxxer.hikari.", "$shadePrefix.com.zaxxer.hikari.")
 
         dependencies {
+            // The one thing that is excluded rather than relocated: the server already has slf4j, and a
+            // shaded copy would be a second logging API on this plugin's classpath.
             exclude(dependency("org.slf4j:.*"))
-            // The drivers arrive through the `libraries` entry of plugin.yml, which Paper resolves into
-            // the server's `libraries/`. Keeping them out of the jar is what leaves them upstream
-            // libraries rather than rewritten copies, so they are excluded rather than relocated.
-            downloadedDriverGroups.forEach { group ->
-                exclude(dependency("$group:.*"))
-            }
         }
     }
 

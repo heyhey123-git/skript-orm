@@ -1,6 +1,6 @@
 package io.github.heyhey123.skriptorm.impl.mongo.queries
 
-import com.mongodb.kotlin.client.coroutine.MongoDatabase
+import com.mongodb.client.MongoDatabase
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.queries.SelectById

@@ -15,8 +15,8 @@ import java.nio.ByteBuffer
 import java.util.UUID
 
 object TinyIntMongoValueConverter : ValueConverter<Byte, Int>(
-    Byte::class.java,
-    Int::class.java
+    Byte::class.javaObjectType,
+    Int::class.javaObjectType
 ) {
 
     override fun toStorage(value: Byte): Int = value.toInt()
@@ -25,8 +25,8 @@ object TinyIntMongoValueConverter : ValueConverter<Byte, Int>(
 }
 
 object FloatMongoValueConverter : ValueConverter<Float, Double>(
-    Float::class.java,
-    Double::class.java
+    Float::class.javaObjectType,
+    Double::class.javaObjectType
 ) {
 
     override fun toStorage(value: Float): Double = value.toDouble()

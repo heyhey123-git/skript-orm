@@ -48,7 +48,7 @@ jobs:
       - uses: ./.github/actions/prepare-build
 
       - name: Run unit and Skript tests
-        run: ./gradlew :core:test :core:integrationTest :generic-jdbc-implementation:test --stacktrace
+        run: ./gradlew :core:test :core:integrationTest :generic-jdbc-implementation:test :mongodb-implementation:test --stacktrace
 
       # Reading a job log through the API needs admin rights, while annotations are public, so every
       # failing test is reported as an annotation as well.
@@ -250,6 +250,42 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: mysql-testcontainers-test-reports
+          path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+  # MongoDB through Testcontainers, because the runner image installs no MongoDB server. This is the only
+  # layer that can say whether a filter, a conversion or a count means what it claims: the module's unit
+  # suite runs without a server and cannot reach any of that.
+  #
+  # Like the job above it, it pulls an image GitHub cannot cache, so it is restricted to the default branch
+  # and to manual runs.
+  mongo-testcontainers:
+    name: MongoDB tests through Testcontainers
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/prepare-build
+        with:
+          gradle-cache-read-only: true
+
+      - name: Run the MongoDB integration tests
+        run: ./gradlew :mongodb-implementation:integrationTest --stacktrace
+
+      - name: Annotate failing tests
+        if: failure()
+        uses: ./.github/actions/annotate-test-failures
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mongo-testcontainers-test-reports
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
 

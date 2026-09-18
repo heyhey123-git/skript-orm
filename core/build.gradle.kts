@@ -43,19 +43,27 @@ tasks.test {
 }
 
 // plugin.yml is a template. Bukkit reports the version in the "Enabling skript-orm v..." line and to
-// `/version`, and Paper downloads the driver the `libraries` entry names; expanding both from the values
+// `/version`, and Paper downloads the drivers the `libraries` entry names; expanding both from the values
 // the build already resolved keeps them from drifting away from what was built and tested.
+//
+// The driver list comes from the root project, which is what decides which implementation modules the jar
+// carries. Its value is the YAML of the entry: a flow sequence when there is no driver to name, and one
+// block entry per driver otherwise.
+val driverLibraries: String = requireNotNull(project.findProperty("skriptOrmDriverLibraries") as? String) {
+    "The root build did not pass the driver list that plugin.yml is expanded with."
+}
+
 tasks.processResources {
     // Declared as an input because the expansions below are not: without it Gradle sees unchanged
-    // resources, skips the task, and the file keeps whatever version it was first written with — a
-    // version bump in the catalog would silently not reach the jar.
-    inputs.property("postgresqlDriver", libs.versions.postgresql.driver.get())
+    // resources, skips the task, and the file keeps whatever driver list it was first written with — a
+    // jar built with another `-PbundleModules` would then ask Paper for the wrong drivers.
+    inputs.property("driverLibraries", driverLibraries)
 
     filesMatching("plugin.yml") {
         expand(
             mapOf(
                 "version" to version,
-                "postgresqlDriver" to libs.versions.postgresql.driver.get()
+                "libraries" to driverLibraries
             )
         )
     }
