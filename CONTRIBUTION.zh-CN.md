@@ -19,12 +19,14 @@ Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 | `postgresql-implementation`   | PostgreSQL 专属 JDBC 行为    |
 | `mongodb-implementation`      | MongoDB 行为               |
 
-根项目负责产出 shadow 插件 jar。`-PbundleModules=a,b` 选择打包哪些实现，默认只打包
-`generic-jdbc-implementation`。
+根项目负责产出 shadow 插件 jar。它会打包**每一个实现模块**——通用 JDBC 那一个和 PostgreSQL 那一个——并且
+**不带任何 JDBC 驱动**：Paper 会在首次启动时，依据 `plugin.yml` 里的 `libraries` 条目，把某个模块需要的驱动
+下载到服务端的 `libraries/` 目录。这样 jar 就只有插件本身的体积，驱动也仍是其作者发布的那份库，代价是服务端必须
+能连上一次它自己的 Maven Central 镜像。`-PbundleModules=a,b` 则按别的组合构建 jar，尚未发布的模块就是靠它来试的：
 
 ```bash
 ./gradlew build                                  # shadow jar 输出到 build/dist
-./gradlew build -PbundleModules=generic-jdbc-implementation,postgresql-implementation
+./gradlew build -PbundleModules=generic-jdbc-implementation,mongodb-implementation
 ```
 
 ### wiki 镜像

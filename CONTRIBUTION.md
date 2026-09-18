@@ -20,12 +20,16 @@ surface that is pleasant to use**. When a change and a principle disagree, the p
 | `postgresql-implementation`   | PostgreSQL-specific JDBC behaviour                       |
 | `mongodb-implementation`      | MongoDB behaviour                                        |
 
-The root project builds the shaded plugin jar. `-PbundleModules=a,b` selects which implementations
-are bundled; it defaults to `generic-jdbc-implementation`.
+The root project builds the shaded plugin jar. It bundles every implementation module — the generic JDBC
+one and the PostgreSQL one — and **no JDBC driver**: Paper downloads the driver a module needs on the first
+start, into the server's `libraries/` directory, from the `libraries` entry in `plugin.yml`. That keeps the
+jar the size of the plugin and the driver the library its authors published, at the cost of a server that
+must be able to reach the server's mirror of Maven Central once. `-PbundleModules=a,b` builds a jar for
+another combination, which is how a module that is not released yet is tried:
 
 ```bash
 ./gradlew build                                  # shadow jar into build/dist
-./gradlew build -PbundleModules=generic-jdbc-implementation,postgresql-implementation
+./gradlew build -PbundleModules=generic-jdbc-implementation,mongodb-implementation
 ```
 
 ### The wiki mirror

@@ -39,39 +39,42 @@ this.
 ## The implementation name
 
 The quoted word is a **type name**, not the name of a database product: it selects the code that builds
-the SQL and reads the rows back, and it is matched exactly, case-sensitively. The jar registers two:
+the SQL and reads the rows back, and it is matched exactly, case-sensitively. The jar registers three:
 
 | Type name | What it brings |
 | --- | --- |
 | `"MySQL"` | MySQL's dialect — backtick identifiers, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
+| `"PostgreSQL"` | PostgreSQL's dialect — `ON CONFLICT`, `EXCLUDED`, `GENERATED … AS IDENTITY`, and a row limit written through `ctid` because PostgreSQL has no `UPDATE ... LIMIT` — and the driver the plugin downloads for it on the first start. |
 | `"JDBC"` | A driver *you* name in a `driver` property, plus a dialect that writes portable SQL: `"double quoted"` identifiers, `LIMIT 1` to take a single row, and `LIMIT ? OFFSET ?` to page — row limiting in the one form MySQL, MariaDB, SQLite, PostgreSQL and H2 all take. Whatever has no portable form — `insert ... if absent`, `upsert ... by id`, a limit on a write, `auto increment` — is refused rather than guessed at. |
 
-The driver is a class name, and it has to be on the server's classpath before the plugin can use it: this
-jar bundles no driver at all. For a database whose SQL is standard-shaped — PostgreSQL, say — that is the
-whole connection:
+Where the driver comes from is the difference between the last two. `"PostgreSQL"` names a driver this
+plugin fetches and keeps ready; `"JDBC"` names a class that has to be on the server's classpath already,
+which is what it is for. The second is how SQLite is reached, since Paper carries its driver:
 
 ```sk
 create a connection to database "JDBC" with properties:
-    driver: "org.postgresql.Driver"
-    url: "jdbc:postgresql://localhost:5432/mydb"
-    username: "root"
-    password: "123456"
+    driver: "org.sqlite.JDBC"
+    url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
+
+Only `"JDBC"` asks you for a class name, and only for it does this jar bundle no driver at all. What the
+PostgreSQL connection needs instead of a class name is nothing: its driver is fetched on the first start,
+which [Compatibility](compatibility.md#what-is-inside-the-jar) explains — including what a server that
+cannot reach the mirror it comes from has to do about it.
 
 Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
 
 - **MySQL.** The dialect writes `"double quoted"` identifiers, which MySQL reads as string literals
-  unless its `ANSI_QUOTES` mode is on, so a MySQL connection written this way fails on the quoting
+  unless its `ANSI_QUOTES` mode is on, so a MySQL connection written as `"JDBC"` fails on the quoting
   before it reaches anything else. Write `"MySQL"` for MySQL.
-- **SQLite.** This type is the way to reach it, and the driver is already there: nothing the dialect
+- **SQLite.** `"JDBC"` is the way to reach it, and the driver is already there: nothing the dialect
   writes is foreign to SQLite, so a connection to a file works for everything the type supports. What
   the dialect refuses stays refused, which on SQLite means no auto increment, no `insert ... if absent`,
   no `upsert` and no limit on a write, so a table's key is one the script supplies.
 
-So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"`,
-`"PostgreSQL"`, `"MongoDB"` and `"SQLite"`: those are products, not types. What a connection reaches is
-a product; what a script names is one of the two types above, and [Compatibility](compatibility.md)
-keeps the two lists apart.
+So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"`, `"MongoDB"`
+and `"SQLite"`: those are products, not types. What a connection reaches is a product; what a script
+names is one of the three types above, and [Compatibility](compatibility.md) keeps the two lists apart.
 
 ## Naming one
 

@@ -53,6 +53,7 @@ and hands results back as ordinary Skript variables and values.
 | **Paper** | 26.2 or newer, the server line this build compiles against. |
 | **Skript** | 2.16.2 or newer. On anything older the plugin disables itself and says why in the console. |
 | **MySQL** | The shipped implementation, tested against MySQL 8. Paper already ships the driver, so there is nothing to install for it. |
+| **PostgreSQL** | Also shipped, and tested in CI. Its driver is downloaded on the first start into the server's `libraries/`; see [Compatibility](docs/compatibility.md#what-is-inside-the-jar). |
 | **SkBee** | Optional, and only for `nbtcompound` columns. Scripts can only build an NBT compound when SkBee is installed in any case. |
 
 ## Install

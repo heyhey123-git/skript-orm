@@ -10,30 +10,43 @@
 | **Skript** | 2.16.2 或更高。更低版本上插件会说明原因并禁用自己，所以旧 Skript 上的表现是“插件在、但没有启用”。 |
 | **Java** | 用服务端自带的；插件针对 Paper 26.2 所用的 Java 版本构建。 |
 | **MySQL** | 打包的实现针对 MySQL，CI 里对着 MySQL 8 测过。MariaDB 等 MySQL 兼容服务端没有测过。 |
+| **PostgreSQL** | 通过 `"PostgreSQL"` 支持。CI 里对着 PostgreSQL 测过：既测了实现本身，也在真实服务端上完整跑过一遍插件。 |
 | **SkBee** | 可选，只有 `nbtcompound` 列需要它。 |
 
 ## 脚本能写的类型名
 
-`create a connection to database "..."` 里写的是实现的**类型名**，大小写敏感的精确匹配。发布 jar 里注册了两个：
+`create a connection to database "..."` 里写的是实现的**类型名**，大小写敏感的精确匹配。发布 jar 里注册了三个：
 
 | 类型名 | 它是什么 |
 | --- | --- |
 | `"MySQL"` | MySQL 方言，加上由插件自动找到的 MySQL 驱动。这里产品和类型名恰好是同一个词，这也是本页两份清单容易被混为一谈的唯一原因。 |
+| `"PostgreSQL"` | PostgreSQL 方言，加上插件为它下载的驱动。见 [jar 里有什么](#jar-里有什么)。 |
 | `"JDBC"` | 由你在 `driver` 属性里指定驱动，配一个写通用 SQL 的方言（`"双引号"` 标识符、取一行用 `LIMIT 1`、分页用 `LIMIT ? OFFSET ?`），通用写法表达不了的一律拒绝。 |
 
 其它任何名字都会在 section 运行时被拒绝，报 `Database '<名字>' is not supported.`。没有叫 `"MariaDB"`、
-`"PostgreSQL"`、`"MongoDB"` 或 `"SQLite"` 的类型；它们是产品，下面「数据库产品」那节讲的是它们。
+`"MongoDB"` 或 `"SQLite"` 的类型；它们是产品，下面「数据库产品」那节讲的是它们。
 
 ## jar 里有什么
 
-发布出来的 jar 打包了插件本体、Kotlin 运行时、连接池，以及上面那两个类型名——两者其实是同一个 JDBC 实现，
-一个加上 MySQL 方言，一个从脚本取驱动。它**不**打包 MySQL 的 JDBC 驱动，因为服务端本来就有：Paper 自带
-MySQL Connector/J 并让插件可见，所以不需要额外安装；`"JDBC"` 用的是服务端为它指向的那个库所带的驱动，
-这也是它唯一的用武之地。
+发布出来的 jar 打包了插件本体、Kotlin 运行时、连接池，以及本仓库**每一个实现模块**——MySQL 方言与通用 JDBC
+那一个，还有 PostgreSQL 模块。它**一个 JDBC 驱动都不带**，这是有意为之：
 
-仓库里还有一个 PostgreSQL 实现和一个 MongoDB 实现。它们不在默认构建里、不在 CI 覆盖范围内、本文档也不介绍；
-构建时可以用 `-PbundleModules=` 把它们打进去，那是开发者的事，不是受支持的配置——它们也是本仓库提到的数据库
-类型比发布 jar 注册的更多的原因。
+- MySQL 和通用类型用的是服务端本来就有的驱动。Paper 自带 MySQL Connector/J 并让插件可见，所以不需要为它装什么；
+  `"JDBC"` 则是给服务端自带、而这个 jar 一无所知的驱动用的。
+- PostgreSQL 的驱动写在 `plugin.yml` 的 `libraries` 条目里，由 Paper 在首次启动时下载一次，放进服务端的
+  `libraries/` 目录，再从那里加载到插件的 classpath 上。下载源是**服务端**的 Maven Central 镜像：
+  `PAPER_DEFAULT_CENTRAL_REPOSITORY`，或 `org.bukkit.plugin.java.LibraryLoader.centralURL` 系统属性，默认则是
+  Google 的 Central 镜像。首次启动之后，驱动就在 `libraries/` 里，也从那里取用，所以每个服务端只下载一次。
+
+这个条目是一份承诺：Paper 把解析不到的库当作致命错误，所以连不上镜像的服务端根本不会加载本插件。出路是上面那个
+镜像设置——值得一提的是，它作用于该服务端上**每一个**插件的下载，而不只是本插件——或者手工把目录放好，其中可靠的
+做法是从一个已经启动过一次的服务端上，把整个 `libraries/` 目录拷过来。
+
+这也是这个 jar 不把任何驱动 shade 进去的原因。重写过的副本和下载来的那一份会变成两个驱动，而下载来的那一份才是
+其作者发布的库：它保留自己的 service 文件，版本号只需在一处升级，校验和也由 Paper 核对。
+
+MongoDB 实现在仓库里，但不在 jar 里，不在 CI 覆盖范围内，本文档也不介绍。`-PbundleModules=` 可以按任意组合打包
+模块，包括还没发布的模块，那是开发者的事，而不是受支持的配置。
 
 ## NBT compound 与 SkBee
 
@@ -58,13 +71,13 @@ MySQL Connector/J 并让插件可见，所以不需要额外安装；`"JDBC"` �
 
 ## 数据库产品
 
-这里没有一个名字是类型名：这一节说的是连接**能连到什么**，类型名只有「脚本能写的类型名」里那两个。
+这里没有一个名字是类型名：这一节说的是连接**能连到什么**，类型名只有「脚本能写的类型名」里那三个。
 
 | | |
 | --- | --- |
 | MySQL | 支持。写 `"MySQL"`。CI 里对着 MySQL 8 测过。 |
 | MariaDB | 未测试。写 `"MySQL"`——语句形状是 MySQL 的（`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`）——很可能可用，但没有任何检查。 |
-| PostgreSQL | 本版本不支持。仓库里有实现，发布 jar 里没有。 |
+| PostgreSQL | 支持。写 `"PostgreSQL"`；驱动会在首次启动时下载。CI 里对着真实服务端测过，插件也在真实 Paper 服务端上对着它完整跑过一遍。 |
 | MongoDB | 本版本不支持。实现只在仓库里，不在 jar 里。 |
 | SQLite 等 | SQLite 能用，走的是 `"JDBC"` 和 Paper 已经带的那个驱动：方言写出的东西它全不反对，服务端测试在两种模式下都会对它跑一遍插入、读取、分页、更新和删除。那个方言拒绝的照旧拒绝——没有 auto increment、没有 `insert ... if absent`、没有 `upsert`、写操作不能加 limit——其它产品则需要有服务端没带的驱动。 |
 

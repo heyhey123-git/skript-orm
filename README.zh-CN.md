@@ -53,6 +53,7 @@ command /adduser <text> <integer>:
 | **Paper** | 26.2 或更高，本插件正是针对这条版本线编译的。 |
 | **Skript** | 2.16.2 或更高。版本不够时插件会自行禁用，并在控制台说明缘由。 |
 | **MySQL** | 打包的数据库实现，对着 MySQL 8 测过。驱动 Paper 自带，不必另装。 |
+| **PostgreSQL** | 也已打包，CI 里对着真库测过。它的驱动会在首次启动时下载到服务端的 `libraries/`；见 [兼容性](docs/compatibility.zh-CN.md#jar-里有什么)。 |
 | **SkBee** | 可选，只有 `nbtcompound` 列需要它。反过来说，没有 SkBee 时脚本本来也造不出 NBT 数据。 |
 
 ## 安装
