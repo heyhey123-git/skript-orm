@@ -17,10 +17,15 @@ create a connection to database "MySQL" with properties:
 - `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"PostgreSQL"`, `"MongoDB"` and
   `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
-- Any other literal property in the block is handed to the implementation untouched, so a future
-  implementation can ask for more without new syntax.
+- Any other literal property in the block is handed to the implementation, which looks up only the names
+  it knows: one it does not know is **ignored without a word**, so a misspelled `statment timeout`
+  changes nothing at all and reports nothing. What the implementations read is `statement timeout`, the
+  `driver` of a `"JDBC"` connection, and MongoDB's `database` and `auth database`.
 - The section always waits: when the next line runs, the connection is either live or failed. `and wait`
   is neither needed nor accepted here.
+- **It is refused inside a `database transaction`.** The section reports
+  `A connection cannot be created inside a database transaction. Roll it back first.` and connects
+  nothing, because replacing the connection would take the transaction with it.
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -199,6 +204,11 @@ make connection "logs" the default
 Unqualified statements then use `"logs"` until something else becomes the default. The connection the
 script is currently in is not affected: a statement that already resolved its connection keeps it.
 
+**Naming a connection what it is worth.** The connection that had the role keeps running, and an unnamed
+one then has no name and is no longer the default — which puts it out of reach of every other statement,
+including `disconnect from all connections` below. It keeps its pool (ten server connections) until the
+server stops. Give a connection a name when it may hand the default role over, or disconnect it first.
+
 ## Disconnecting
 
 ```sk
@@ -218,7 +228,11 @@ from then on, because the connection they resolve to is closed.
 - The tables registered for a connection belong to that connection. Another connection starts with
   none registered, so registering the same table name on two connections is not a conflict. See
   [Tables](tables.md).
-- The plugin closes every connection when the server disables the plugin.
+- `disconnect from all connections` closes the default and every **named** one. A connection that lost the
+  default role without ever having a name is in neither group and stays open; see
+  [Choosing the default](#choosing-the-default).
+- The plugin closes every connection it still holds when the server disables the plugin, with the same
+  exception.
 
 ## Operations without a connection
 
@@ -252,13 +266,19 @@ create a connection to database "MySQL" with properties:
   the server is restarted, and there is nothing else that would end it.
 - What it guarantees is that the script stops waiting, not that the server stopped working: the driver
   cancels the statement, and MySQL does that by killing the query from another connection.
-- It covers one statement. Waiting for a free connection, and `commit`/`rollback` waiting on a lock, are
-  not covered by it; those are bounded by the server's own limits and by `socketTimeout` in the url.
+- It covers one statement, and only after that statement has a connection to run on. Waiting for a free
+  one is bounded by the pool instead: **30 seconds**, after which the statement fails with
+  `HikariPool-1 - Connection is not available, request timed out after 30000ms`. `statement timeout: 0`
+  removes the limit on the statement, not that wait. A `commit` or `rollback` waiting on a lock is bounded
+  by the server's own limits and by `socketTimeout` in the url.
 - On MongoDB the same property becomes the driver's socket read timeout, and the connection's
   `closeWaitTimeout` is that timeout plus five seconds, exactly as it is on the SQL side. What differs is
   what the two sides do when it expires: MySQL cancels the statement from another connection, while
   MongoDB's driver only stops waiting for the response — the server finishes the statement it was sent.
-  Either way the property bounds how long a script waits, not what the server does.
+  Either way the property bounds how long a script waits, not what the server does. It is applied over the
+  url, so a `socketTimeoutMS` written into a connection string is replaced by this property and by its
+  30-second default; set the value here instead, and `statement timeout: 0` leaves the url's own value
+  alone.
 - MySQL's `innodb_lock_wait_timeout` defaults to 50 seconds, longer than this, so a statement waiting on
   a lock is cancelled by this timeout first and reports a timeout rather than a lock wait. Raise this
   value past 50 if you would rather read MySQL's own message.
@@ -271,10 +291,13 @@ Inside a transaction, a statement gets what is left of the transaction's own tim
 
 ## Several operations at once
 
-A connection keeps a small pool of database connections, so operations do not have to queue behind each
-other. That is also why a write is visible to a read only after it has finished: two operations may run
-on different pooled connections. What orders them from a script's point of view is the wait every
-statement performs.
+A connection keeps a pool of **ten** database connections of its own, so operations do not have to queue
+behind each other; an eleventh at the same time waits, for up to the 30 seconds above. The size is not
+something a script can set: no connection property reaches the pool.
 
-Each connection has a pool of its own, so the number of connections a script keeps open is the number
-of pools the server runs.
+That is also why a write is visible to a read only after it has finished: two operations may run on
+different pooled connections. What orders them from a script's point of view is the wait every statement
+performs.
+
+Each connection has a pool of its own, so a script with three connections can hold thirty server
+connections open — worth counting against the database's own `max_connections`.

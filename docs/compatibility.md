@@ -77,7 +77,7 @@ supported, for two reasons:
   classes, so the two cannot be mixed.
 
 The plugin therefore does not compile against, or depend on, any NBT implementation. It looks SkBee's
-classes up by name when the first NBT value is handled and links them, which is why:
+classes up by name once, while the plugin enables, and links them, which is why:
 
 - **The standalone NBT API plugin is not supported**, and installing it neither helps nor conflicts.
 - **No SkBee version is pinned, but NBT is linked against a fixed set of names.** A version that still

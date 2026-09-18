@@ -149,7 +149,11 @@ command /whois <text>:
 ```
 
 A second script may use the same table, because the connection belongs to the server rather than to the
-script that made it; see [Connections](connections.md).
+script that made it. **Only one script should create it, though**: a second `create a connection` replaces
+the default connection and starts with nothing registered, so the tables the first script registered are
+gone from it and its statements report `Table 'users' not found.` A second script either leaves the
+connecting to the first one or makes a connection of its own with `named`. See
+[Connections](connections.md).
 
 ## Where to go next
 

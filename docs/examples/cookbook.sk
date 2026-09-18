@@ -9,7 +9,6 @@ command /example-adduser-with-id <text>:
         add 1 to {users::next-id}
         upsert one entity in table "users" by id {users::next-id} and wait:
             values:
-                id: {users::next-id}
                 name: arg-1
         if last database error is set:
             send "Could not store %arg-1%: %last database error%" to sender
@@ -20,7 +19,6 @@ command /example-join:
     trigger:
         upsert one entity in table "players" by id uuid of player and wait:
             values:
-                uuid: uuid of player
                 name: name of player
                 last_seen: now
         if last database error is set:
@@ -31,14 +29,14 @@ command /example-addage <integer>:
         select one entity from table "players" and store the result in {_row::*}:
             where all:
                 uuid = uuid of player
-        if {_row::id} is not set:
+        if {_row::uuid} is not set:
             send "No row for you yet." to sender
             stop
         set {_age} to {_row::age}
         if {_age} is not set:
             set {_age} to 0
         set {_new-age} to {_age} + arg-1
-        update one entity in table "players" by id {_row::id} and wait:
+        update one entity in table "players" by id uuid of player and wait:
             values:
                 age: {_new-age}
         if last database error is set:
@@ -77,10 +75,12 @@ command /example-walk-pages:
             select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
                 where all:
                     active = true
-            if size of {_page-rows::*} is 0:
+            set {_row} to 1
+            while {_page-rows::%{_row}%::id} is set:
+                send "%{_page-rows::%{_row}%::name}%" to console
+                add 1 to {_row}
+            if {_row} is 1:
                 exit loop
-            loop {_page-rows::*}:
-                send "%{_page-rows::%loop-value%::name}%" to console
             add 1 to {_page}
 
 command /example-savetool:
@@ -96,14 +96,18 @@ command /example-savetool:
 command /example-prune:
     trigger:
         set {_cutoff} to now - 30 days
+        set {_pruned} to 0
         loop 10 times:
-            delete entities from table "logs" with limit 500 and wait:
+            delete entities from table "logs" with limit 500 and store affected rows in {_deleted} and wait:
                 where all:
                     created < {_cutoff}
             if last database error is set:
                 send "Prune failed: %last database error%" to console
                 exit loop
-        send "Pruned up to 5000 old rows." to sender
+            add {_deleted} to {_pruned}
+            if {_deleted} is less than 500:
+                exit loop
+        send "Pruned %{_pruned}% old rows." to sender
 
 command /example-second-script:
     trigger:

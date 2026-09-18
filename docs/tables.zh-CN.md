@@ -19,11 +19,9 @@ register a database table "users":
 name: type[(size)][, primary key][, auto increment][, not null]
 ```
 
-- **列名**可以包含字母、数字、组合标记和下划线，不能以数字开头。它按原样使用，所以拼写要保持一致：在 Linux 上
-  运行的 MySQL，表名是区分大小写的。
-- **类型**用 [类型](types.zh-CN.md) 里的名字。写错时，语句执行时会去当前连接的数据库里查这个类型，失败紧接着出现在
-  `last database error` 里，信息说明这个数据库不支持它。
-- **括号里的长度**只对本身有长度概念的类型有意义（`string`、`uuid`、`location`），且必须大于 0。
+- **列名**可以包含字母、数字、组合标记和下划线，不能以数字开头。`register a database table` 后面的**表名**守同一条规则，而且是语句执行时才检查：`"my table"`、`"2fa_codes"` 会被拒绝，报 `Invalid table name '…'` 落进 `last database error`，加不加引号都一样；列名则在解析脚本时就查，所以更早失败。名字按原样使用，拼写要保持一致：在 Linux 上运行的 MySQL，表名区分大小写。
+- **类型**用 [类型](types.zh-CN.md) 里的名字。写错时，语句执行时会去当前连接的数据库里查这个类型，失败紧接着出现在 `last database error` 里，信息说明这个数据库不支持它。
+- **括号里的长度**是给 `string` 的，且必须大于 0；不写就用该类型的默认值 255。写到别的类型上，PostgreSQL 会拒绝——那里 `uuid` 与 `location` 都是 `BYTEA`，不接受长度；MySQL 与 `"JDBC"` 则接受，并把它当成列的宽度：`location(16)` 比一个序列化后的 location 还小，之后每次写入都会因"数据过长"失败。不管括号写什么，`uuid` 就是 16 字节、`location` 就是 2048，所以长度留给 `string` 就好。
 - **修饰符**与类型之间、以及彼此之间都用逗号分隔，可取 `primary key`、`auto increment`、`not null`、`nullable`。
   不写 `not null` 的列就是可空的；两者同时写会报错。
 
@@ -49,7 +47,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 **已经存在的表会被原样保留。** 在脚本里加一列再 reload，数据库不会有任何变化：插件记住了新列，数据库没有多出来，于是提到这一列的操作会在运行时报错，没提到的照常工作。这里**不会**有警告，因为从插件的角度看，注册确实成功了。要改表就自己执行 `ALTER TABLE`，开发库里也可以把表删掉让插件重建，亡羊补牢为时未晚。
 
-**“已注册”是按连接记的。** 在同一个连接上再执行一次 `register a database table "users"`，会得到 `Table 'users' is already registered.`。reload 之后又注册一遍的脚本，撞上的正是这一条。写法上避开它并不难，先连接便是：
+**“已注册”是按连接记的。** 在同一个连接上再执行一次 `register a database table "users"`，会得到 `Table 'users' is already registered.`——常见的是第二个脚本往第一个脚本建好的那条连接上重名注册，或者 reload 之后没重新连接就注册。下面这一对语句每次都新建连接，所以避开了它：
 
 ```sk
 on load:
@@ -63,7 +61,7 @@ on load:
         name: string(64), not null
 ```
 
-重连会得到一个没有注册过任何表的新连接，所以 reload 之后这一对语句可以再跑一遍。见 [连接](connections.zh-CN.md)。
+`create a connection` 每执行一次就新建一条连接，而新连接里一张表都没注册，所以"先连接、再注册"的脚本 reload 之后照常能跑：reload 替换的是连接，不是往旧连接里再注册一次。真正会被拒的，是撞上一条还被别的东西持有着的连接。见 [连接](connections.zh-CN.md)。
 
 ## 失败
 

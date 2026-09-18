@@ -27,8 +27,11 @@ See [Tables](tables.md).
 
 ## "Table 'users' is already registered."
 
-The registration is remembered per connection, so a script that reloads and registers again is refused.
-Connect first, which gives a fresh connection with nothing registered:
+The registration is remembered per **connection**, and `create a connection` builds a new one every time it
+runs. So the refusal needs a registration that meets a connection something else still holds: a second
+script registering the same table name on the connection the first script made, or a reloaded script that
+registers without connecting again. A script that connects and registers together in `on load` never sees
+it, because the reload replaces the connection:
 
 ```sk
 on load:
@@ -40,6 +43,8 @@ on load:
         id: bigint, primary key, auto increment, not null
         name: string(64), not null
 ```
+
+See [Tables](tables.md).
 
 ## "Table 'users' not found."
 
@@ -112,6 +117,11 @@ or a `timespan` when the exact moment matters. A `time` column is a Minecraft ti
 clock reading either. See [Types](types.md).
 
 ## Paging skips or repeats rows
+
+A page is an offset into the primary-key order, not a snapshot of it. A row written or deleted while a
+script is walking the pages shifts everything behind it, so a row at a page boundary is seen twice or not
+at all. When the table is being written to, walk it with a key-set filter (`id > {_last}`) instead of with
+`select page`.
 
 Pagination orders by the registered primary key, so a table without one is refused, and pages are
 one-based. Keys inside a page restart at 1 (`{_page::1::name}`), which is easy to mistake for the first

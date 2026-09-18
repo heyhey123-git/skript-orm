@@ -56,14 +56,14 @@ command /addage <integer>:
         select one entity from table "players" and store the result in {_row::*}:
             where all:
                 uuid = uuid of player
-        if {_row::id} is not set:
+        if {_row::uuid} is not set:
             send "你还没有对应的行。" to sender
             stop
         set {_age} to {_row::age}
         if {_age} is not set:
             set {_age} to 0
         set {_new-age} to {_age} + arg-1
-        update one entity in table "players" by id {_row::id} and wait:
+        update one entity in table "players" by id uuid of player and wait:
             values:
                 age: {_new-age}
         if last database error is set:
@@ -117,10 +117,11 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
-    # 按行号自己往下走：每一行都是子列表，所以下一行的某一列没有值，就是行号到头了。
+    # 按行号自己往下走，判断的是主键：每一行都是子列表，所以下一行的键没有值，就是行号到头了。
+    # 用主键而不是别的列，是因为 NULL 列同样会让键消失，那一行就会把遍历提前截断。
     # 走完之后 {_row} 还是 1，说明这一页本身就是空的。
     set {_row} to 1
-    while {_page-rows::%{_row}%::name} is set:
+    while {_page-rows::%{_row}%::id} is set:
         send "%{_page-rows::%{_row}%::name}%" to console
         add 1 to {_row}
     if {_row} is 1:
@@ -128,9 +129,11 @@ while {_page} <= 100:
     add 1 to {_page}
 ```
 
-`size of {_page-rows::*}` 数不出行数：它只数第一层的值，而每一行都是下一层的子列表，所以上面按行号自己往前走，走到下一行的列没有值为止。
+`size of {_page-rows::*}` 数不出行数：它只数第一层的值，而每一行都是下一层的子列表，所以上面按行号自己往前走，走到下一行的键没有值为止。
 
 循环上界是保险。没有计数查询时，正是它拦住了“条件一直匹配、脚本翻页不止”的可能。
+
+一页是主键顺序上的偏移，不是快照，所以这种遍历只在没人写这张表时安全：两次翻页之间插入或删除一行，它后面的所有行都会挪位，遍历就可能重复或漏掉一行。表在被写入时，请改用主键游标（`where all: id > {_last}`）；见 [读取行](reading.zh-CN.md)。
 
 ## 存下物品的 NBT
 
@@ -161,17 +164,21 @@ command /savetool:
 command /prune:
     trigger:
         set {_cutoff} to now - 30 days
+        set {_pruned} to 0
         loop 10 times:
-            delete entities from table "logs" with limit 500 and wait:
+            delete entities from table "logs" with limit 500 and store affected rows in {_deleted} and wait:
                 where all:
                     created < {_cutoff}
             if last database error is set:
                 send "清理失败: %last database error%" to console
                 exit loop
-        send "最多清理了 5000 行旧数据。" to sender
+            add {_deleted} to {_pruned}
+            if {_deleted} is less than 500:
+                exit loop
+        send "清理了 %{_pruned}% 行旧数据。" to sender
 ```
 
-有界批次能让一条语句不至于长时间占着表。删除不会报告删掉了几行，所以循环上界就是实际能用的终止条件：这段每次最多删 `10 × 500` 行，过一会儿再跑一次，接着往下删便是。
+有界批次能让一条语句不至于长时间占着表。删除会报告自己删掉了几行，所以"这一批不满 500"就是活儿干完了：循环到此为止，不必跑满十次，脚本也能说清一共清了多少行。
 
 ## 让第二个脚本共用这张表
 
@@ -180,6 +187,7 @@ command /prune:
 ```sk
 # database.sk
 on load:
+    set {database::ready} to false    # 上一次运行留下的全局量不能冒充这一次的结果
     create a connection to database "MySQL" with properties:
         url: "jdbc:mysql://localhost:3306/mydb"
         username: "root"
@@ -208,3 +216,5 @@ command /whois <text>:
 
 第二个脚本也去连接并不算错误，但它会替换掉当前连接、并且一开始没有任何已注册的表，所以这件事还是交给那个负责的
 脚本。见 [连接](connections.zh-CN.md)。
+
+`{database::ready}` 是全局量，会活过一次重启：如果第一行不先把它置为 false，那么有一次连接失败的加载会让上一次运行留下的 `true` 冒充成功，另一个脚本就会一路把语句打进 `No database connected.`，而不是说出这段菜谱想说的那句话。

@@ -15,8 +15,9 @@ create a connection to database "MySQL" with properties:
 
 - `"MySQL"` 是实现的名称。jar 里注册了四个：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
-- 块里其它字面量属性会原样交给实现。日后有实现需要更多参数，也不必新添语法。
+- 块里其它字面量属性会交给实现，而实现只查自己认识的名字：**不认识的会被静默忽略**，所以把 `statement timeout` 敲成 `statment timeout` 既不生效也不报错。各实现真正会读的是 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`。
 - 这个 section 必定等待：下一行执行时，连接要么可用，要么已经失败。这里既不需要 `and wait`，也不接受它。
+- **它不能在 `database transaction` 里运行。** 这时 section 只报 `A connection cannot be created inside a database transaction. Roll it back first.`，什么也不连——替换连接会把事务一起带走。
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -168,6 +169,8 @@ make connection "logs" the default
 
 此后无限定语句都用 `"logs"`，直到有别的连接成为默认。脚本当前所在的连接不受影响：已经解析出连接的语句就继续用它。
 
+**顺手给连接起个名字。** 让出默认角色的那条连接照旧跑着；如果它本来就没有名字，那它现在既不是默认、也不在名字表里，于是任何语句都够不着它——连下面的 `disconnect from all connections` 也不行。它会一直占着自己那片池子（十条服务端连接）直到服务端关闭。可能让出默认角色的连接，请给它起名字，或者先断开再切换。
+
 ## 断开连接
 
 ```sk
@@ -184,7 +187,8 @@ disconnect from all connections             # 全部
 关闭了。
 
 - 已注册的表跟着连接走。另一条连接开始时一张表都没注册，所以同一个表名在两条连接上各注册一次并不冲突。见 [表](tables.zh-CN.md)。
-- 服务端禁用插件时，插件会关掉每一条连接。
+- `disconnect from all connections` 关掉的是默认连接和**所有具名连接**。一条让出默认角色又没有名字的连接两边都不算，会一直开着；见[选择默认连接](#选择默认连接)。
+- 服务端禁用插件时，插件会关掉它仍然持有的每一条连接，例外同上。
 
 ## 没有连接时的操作
 
@@ -212,8 +216,8 @@ create a connection to database "MySQL" with properties:
 - `0` 表示不限，也就是驱动的默认行为：跑多久都等。
 - 它存在的原因是：一条永远不结束的语句会一直占着池子里的一条连接，直到服务器重启，而没有别的东西会终结它。
 - 它能保证的是**脚本不再等**，不是服务端停了：取消由驱动发起，MySQL 的做法是另开一条连接把那个查询杀掉。
-- 它只管一条语句。从池里等一条空闲连接、以及 `commit` / `rollback` 等锁，都不在其中；那些由服务端自己的上限和 url 上的 `socketTimeout` 兜着。
-- 在 MongoDB 上，同一个属性会变成驱动的 socket 读取超时，而这条连接的 `closeWaitTimeout` 是这个超时加五秒，和 SQL 那边完全一样。不同的是超时后两边各自怎么做：MySQL 从另一条连接把语句杀掉，MongoDB 的驱动则只是不再等响应——服务端会把已经收到的语句做完。无论哪边，这个属性限制的都是**脚本等多久**，而不是服务端做什么。
+- 它只管一条语句，而且只管**已经拿到连接之后**的那条语句。从池里等一条空闲连接由池自己兜着：**30 秒**，超了语句就会失败并报 `HikariPool-1 - Connection is not available, request timed out after 30000ms`。`statement timeout: 0` 去掉的是语句本身的限制，不是这个等待。`commit` / `rollback` 等锁则由服务端自己的上限和 url 上的 `socketTimeout` 兜着。
+- 在 MongoDB 上，同一个属性会变成驱动的 socket 读取超时，而这条连接的 `closeWaitTimeout` 是这个超时加五秒，和 SQL 那边完全一样。不同的是超时后两边各自怎么做：MySQL 从另一条连接把语句杀掉，MongoDB 的驱动则只是不再等响应——服务端会把已经收到的语句做完。无论哪边，这个属性限制的都是**脚本等多久**，而不是服务端做什么。它是**盖在 url 之上**的：连接串里写的 `socketTimeoutMS` 会被这个属性及其 30 秒默认值替换掉，所以请在这里设值；`statement timeout: 0` 则会保留 url 自己的值。
 - MySQL 的 `innodb_lock_wait_timeout` 默认 50 秒，比这个长，所以等锁的语句通常先被这个超时取消，报出来的是超时而不是锁等待。想让数据库自己说话，就把这个值调到 50 以上。
 - 这个值必须是整秒。别的写法会被拒绝，报 `Connection property 'statement timeout' must be a whole number of seconds, but was 'x'.`；负数则报 `Connection property 'statement timeout' must not be negative, but was -1.`。
 
@@ -221,6 +225,8 @@ create a connection to database "MySQL" with properties:
 
 ## 并发操作
 
-一个连接内部维持着一个小连接池，操作之间不必排队。也正因如此，一次写入要等它结束之后，才对读取可见，因为两个操作可能跑在池里不同的连接上。从脚本的角度看，决定先后的是每条语句自己都会做的那次等待。
+一个连接内部维持着**十条**连接的池子，操作之间不必排队；同一时刻的第十一条会等，最多等上面说的 30 秒。池子大小改不了：没有任何连接属性能碰到它。
 
-每条连接都有自己的一片连接池，所以脚本留着几条连接，服务端就运行着几片池子。
+也正因如此，一次写入要等它结束之后，才对读取可见，因为两个操作可能跑在池里不同的连接上。从脚本的角度看，决定先后的是每条语句自己都会做的那次等待。
+
+每条连接都有自己的一片连接池，所以三条连接最多能让服务端同时持有三十条数据库连接——对着数据库自己的 `max_connections` 算一算。

@@ -132,7 +132,7 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-另一份脚本可以直接用同一张表，因为连接属于服务端，不属于建立它的那个脚本，见 [连接](connections.zh-CN.md)。
+另一份脚本可以直接用同一张表，因为连接属于服务端，不属于建立它的那个脚本。但**建连接的只能有一个脚本**：第二个 `create a connection` 会替换默认连接，而新连接里什么都没注册，于是第一个脚本注册过的表在它眼里全没了，语句会报 `Table 'users' not found.`。第二份脚本要么别碰连接，要么用 `named` 建自己那条。见 [连接](connections.zh-CN.md)。
 
 ## 接下来读什么
 

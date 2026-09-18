@@ -33,16 +33,18 @@ register a database table "users":
 | `time` | a Skript time | `INT` | |
 | `timespan` | a Skript timespan | `BIGINT` | |
 
-A size in brackets is only meaningful for the types that have one: `string`, `uuid` and `location`.
-`uuid` and `location` have defaults that are already right for their contents, so a size is usually
-only written for `string`.
+A size in brackets is for `string`. `uuid` is 16 bytes and `location` has its own serialized form, and
+PostgreSQL refuses a size for either; see [Tables](tables.md).
 
 ### On MongoDB
 
-The "Stored as" column above is the SQL type, and it is what `"MySQL"`, `"JDBC"` and `"PostgreSQL"`
-create. `"MongoDB"` is the type name with no SQL under it: a document holds BSON, nothing becomes a SQL
-column, and the same logical types map like this. The rest of what that implementation does differently
-is on [Compatibility](compatibility.md#mongodb).
+The "Stored as" column above is what `"MySQL"` and `"JDBC"` create. `"PostgreSQL"` is close but not the
+same: `tinyint` is a `SMALLINT`, `float` a `REAL`, `double` a `DOUBLE PRECISION`, and every binary type
+(`uuid`, `itemstack`, `location`, `bukkitserializable`, `nbtcompound`) a `BYTEA`, which takes no size — so
+`uuid(16)` and `location(2048)` are refused there rather than accepted. `"MongoDB"` is the type name with no
+SQL under it: a document holds BSON, nothing becomes a SQL column, and the same logical types map like
+this. The rest of what that implementation does differently is on
+[Compatibility](compatibility.md#mongodb).
 
 | Type | BSON |
 | --- | --- |

@@ -76,6 +76,13 @@ console while `last database error` stays silent.
 - The transaction timeout is written up in full: the spellings it accepts, the value it needs, when its
   clock starts, that it belongs to the transaction rather than to the connection, and what a long body or
   a statement that runs into the deadline does.
+- An audit of every page turned up the places where the docs stopped short of the code, and they are fixed
+  throughout: what a pool is and what bounds waiting for one; what a size in a table declaration applies
+  to; which statements `store affected rows` answers "was it written" for; what a list variable cannot
+  carry; what a ragged `insert many` does; what a `by id` write on a missing row reports; what a limit
+  that resolves to nothing does; the order paging uses and why it is not a snapshot; what a refused read
+  leaves in the result variable; what a failure does to the rest of the trigger; why a table can be
+  "already registered"; and four recipes that could not have worked as written.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.1.0...v1.2.0
 

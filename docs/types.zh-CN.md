@@ -32,14 +32,11 @@ register a database table "users":
 | `time` | Skript 的 time | `INT` | |
 | `timespan` | Skript 的 timespan | `BIGINT` | |
 
-括号里的大小只对本身有大小概念的类型有意义：`string`、`uuid`、`location`。后两者的默认值本来就和内容匹配，
-所以通常只给 `string` 写大小。
+括号里的大小是给 `string` 的。`uuid` 就是 16 字节，`location` 有自己的序列化形式，而 PostgreSQL 对这两者都拒绝写大小；见 [表](tables.zh-CN.md)。
 
 ### MongoDB
 
-上面那张表的“MySQL 存储”是 SQL 类型，`"MySQL"`、`"JDBC"` 与 `"PostgreSQL"` 建出来的就是它。`"MongoDB"`
-是底下没有 SQL 的那个类型名：文档里存的是 BSON，没有任何东西会变成 SQL 列，同一批逻辑类型的对应关系如下。
-这一实现其它不同之处在 [兼容性](compatibility.zh-CN.md#mongodb)。
+上面那张表的“MySQL 存储”一列是 `"MySQL"` 与 `"JDBC"` 建出来的。`"PostgreSQL"` 接近但不相同：`tinyint` 是 `SMALLINT`、`float` 是 `REAL`、`double` 是 `DOUBLE PRECISION`，而所有二进制类型（`uuid`、`itemstack`、`location`、`bukkitserializable`、`nbtcompound`）都是 `BYTEA`，不接受大小——所以 `uuid(16)`、`location(2048)` 在那里会被拒绝，而不是被接受。`"MongoDB"` 是底下没有 SQL 的那个类型名：文档里存的是 BSON，没有任何东西会变成 SQL 列，同一批逻辑类型的对应关系如下。这一实现其它不同之处在 [兼容性](compatibility.zh-CN.md#mongodb)。
 
 | 类型 | BSON |
 | --- | --- |

@@ -84,6 +84,23 @@ still being built, and the transaction cannot commit before the statements it is
 Nothing has to be written for that, because every statement waits anyway, and `and wait` inside a
 transaction is accepted and does nothing.
 
+## One inside another
+
+A `database transaction` written inside another one joins it: only the outermost section commits, so an
+inner one is not a savepoint and cannot be undone on its own. Two consequences are worth knowing:
+
+- Naming **another connection** in the inner section is refused with
+  `A database transaction is already open on another connection.` That refusal is a statement of the outer
+  body which did not run, so the outer transaction becomes rollback-only and everything the body did is
+  undone.
+- `rollback database transaction` in the inner section rolls back the **whole** transaction rather than the
+  inner body, and the statements after it in the outer body report that the transaction is no longer
+  running.
+
+A function called from inside a transaction is part of it: its statements run on the transaction's
+connection, and a `database transaction` written in the function joins the caller's rather than opening a
+second one.
+
 ## The timeout
 
 A transaction holds one of the connection's pooled connections for its whole life, so one that is never

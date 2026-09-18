@@ -24,6 +24,14 @@ insert one entity into table "users" and wait:
 - **A column that is left out is not part of the statement.** An `insert` leaves it to the database
   default, which is how an auto-increment key stays automatic, while an `update` or an `upsert by id`
   leaves it at its stored value. Writing `null` instead stores SQL NULL; see [Types](types.md).
+- **A column that is named but resolves to nothing is written as SQL NULL.** `name: {_nick}` with
+  `{_nick}` unset is not the same as leaving `name` out: the key is there with no value, and the statement
+  stores NULL (or fails on a `not null` column). Only leaving the line out keeps the stored value.
+- **A list variable cannot carry SQL NULL.** Skript deletes a key that is set to null, and a select leaves
+  the key of a NULL column unset, so a row copied out of a select result and written back from a variable
+  has no value for those columns at all: an `insert` gives them the database default — and fails on a
+  `not null` column that has none — while an `update` leaves them untouched. A `values` block with a
+  literal `null` is the only way to write NULL.
 - An unknown column name fails before anything is sent to the database.
 
 ## Insert one
@@ -76,9 +84,18 @@ or the rows come from a variable:
 insert many {_rows::*} into table "archived_users" and wait
 ```
 
-Rows may name different columns. A row that omits a column is written with that column left out of the
-statement where the database allows it, and as NULL where a single statement has to bind one column
-list for every row.
+Rows may name different columns, with two rules:
+
+- A **`values` block** has to name the same columns in every row. One statement binds one column list, so
+  a row that omits a column another row names is refused at runtime with
+  `Batch row 2 does not contain the same columns as the first row.`
+- A **list variable** holding several rows is filled to its common column set instead, and a row that
+  omits a column is written with NULL there. That is what lets a select result be inserted straight back.
+  MongoDB takes ragged rows either way.
+
+A variable that is not set, or holds nothing, fails the statement with `{_rows::*} is not set.` rather
+than writing no rows — and a `select many` that matched nothing leaves its result variable unset, so a
+script that feeds one into `insert many` should check it first. See [Reading rows](reading.md).
 
 ## In-or-out: upsert and if absent
 
@@ -89,8 +106,10 @@ upsert one entity in table "users" by id {_id} and wait:
         age: 26
 ```
 
-`upsert` writes the row with that primary-key value, updating it when it is already there. On MySQL this
-is `INSERT ... ON DUPLICATE KEY UPDATE`.
+`upsert` writes the row with that primary-key value, updating it when it is already there. The key goes in
+`by id` and **not** in the `values` block: a `values` entry naming the primary key is refused with
+`The primary key must not be included in upsert values.`, because the key is what decides whether the row
+is inserted or updated. On MySQL this is `INSERT ... ON DUPLICATE KEY UPDATE`.
 
 ```sk
 insert entity if absent into table "users" and wait:
@@ -110,7 +129,7 @@ Which one to reach for is a matter of what "already there" should mean:
 | --- | --- |
 | Create it, or overwrite it with these values | `upsert` |
 | Create it only if it is missing, leave the old row alone | `insert entity if absent` |
-| Know whether it was created | Only `if absent` can show it: a skipped insert leaves the old row's values, so a read-back that differs from what you wrote means the row was already there. `upsert` writes your values either way. |
+| Know whether it was created | `insert entity if absent ... and store affected rows in {_rows}`: `1` means the row was written and `0` means a key already held it. A read-back works too, but only `if absent` leaves the old row alone to be compared against. |
 
 Both depend on the implementation's conflict rules, as their description says; the behaviour above is
 MySQL's.
@@ -136,5 +155,8 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
         name: "Alice"
 ```
 
-That is how a script tells "it was already there" from "it was written", and how it writes a condition
-that only takes effect while a value it read is still current. See [Affected rows](affected-rows.md).
+For `insert entity if absent` that count is exactly "was it written": `1` it was, `0` a key already held the
+row. It is also how a script writes a condition that only takes effect while a value it read is still
+current. For anything else the number is the backend's answer for that statement — an `upsert` on MySQL
+counts `1` for an insert and `2` for an update, while PostgreSQL and MongoDB report `1` either way — so
+read [Affected rows](affected-rows.md) before branching on it.

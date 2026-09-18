@@ -33,6 +33,9 @@ count expression for a `rowIndex::column` result: `size of {_users::*}` counts f
 every row is a sub-list, so it does not count rows. Take the number of rows from the row keys themselves,
 or keep your own counter.
 
+A `select many` has no `ORDER BY`, so which row ends up as `::1` is the database's business. Sort in the
+script when the order matters; `select page` is the one read that has an order of its own.
+
 ## Select page
 
 ```sk
@@ -44,8 +47,12 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 - The page number and the size both start at one: `page 1` is the first page and a size of 20 means
   twenty rows.
 - Keys are page-local, so `{_page::1::name}` is the first row **of that page**, not of the table.
-- Pagination needs a registered primary key, because the rows have to be ordered to be paged.
+- Rows come in **primary-key order, ascending**, which is also why pagination needs a registered primary
+  key: it is the order every backend can agree on.
 - A page past the end is empty rather than an error.
+- A page is an **offset into that order, not a snapshot**: a row written or deleted between two page reads
+  shifts everything behind it, so a row can be seen twice or missed. While a table is being written to,
+  walk it with a key-set filter (`id > {_last}`) instead.
 
 ## Select by id
 
@@ -61,7 +68,8 @@ with no `where` block.
 ## Where blocks
 
 A `where` block holds one condition per line, under `where all:` or `where any:`. All conditions must
-hold, or at least one must, respectively.
+hold, or at least one must, respectively. Either header can be negated: `where not all:` asks for "at
+least one does not hold", and `where no any:` (or `where not any:`) for "none of them holds".
 
 ```sk
 select many entities from table "users" and store the results in {_users::*}:
@@ -89,6 +97,14 @@ Both look the same from a script, and both mean a key is unset:
 - **No row matched** on a `select one`, so nothing was stored.
 - **The column is NULL** in the row that matched.
 
+What happened to the result variable otherwise is worth knowing too:
+
+- **The statement failed** — the database refused the query, or the result could not be read: the variable
+  was cleared, so whatever it held before is gone as well, and `last database error` says why.
+- **The statement was refused before it ran** — no connection, an unknown table, a `where` value the column
+  cannot hold: the variable is left **exactly as it was**, still holding the previous read, and
+  `last database error` is the only sign that this statement did not run.
+
 To tell them apart, look at a column that cannot be NULL, such as the primary key:
 
 ```sk
@@ -101,6 +117,9 @@ if {_user::id} is not set:
 if {_user::age} is not set:
     send "That user has no age stored." to sender
 ```
+
+Checking `last database error` before reading the variable is what tells a refusal from a read: the
+refusal is the one case where the old contents are still sitting there.
 
 ## Failures
 

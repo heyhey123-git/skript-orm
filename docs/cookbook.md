@@ -58,14 +58,14 @@ command /addage <integer>:
         select one entity from table "players" and store the result in {_row::*}:
             where all:
                 uuid = uuid of player
-        if {_row::id} is not set:
+        if {_row::uuid} is not set:
             send "No row for you yet." to sender
             stop
         set {_age} to {_row::age}
         if {_age} is not set:
             set {_age} to 0
         set {_new-age} to {_age} + arg-1
-        update one entity in table "players" by id {_row::id} and wait:
+        update one entity in table "players" by id uuid of player and wait:
             values:
                 age: {_new-age}
         if last database error is set:
@@ -73,6 +73,10 @@ command /addage <integer>:
             stop
         send "Your age is now %{_new-age}%." to sender
 ```
+
+The value that identifies the row is the primary key the table was registered with: `uuid` here, matching
+the recipe above. A table that has both an `id` and a `uuid` uses whichever is the primary key, which is
+the one `by id` and `store affected rows` work with.
 
 Only the columns in the `values` block are written, so the rest of the row is left alone.
 
@@ -119,10 +123,11 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
-    # Walk the row indices: every row is a sub-list, so a row index is done when a column of the next
-    # row is unset. `{_row} is 1` after the walk means the page itself came back empty.
+    # Walk the row indices, testing the primary key: every row is a sub-list, so a row index is done when
+    # the next row's key is unset. The key and not another column, because a NULL column leaves its key
+    # unset too and would end the walk at that row. `{_row} is 1` after the walk means the page was empty.
     set {_row} to 1
-    while {_page-rows::%{_row}%::name} is set:
+    while {_page-rows::%{_row}%::id} is set:
         send "%{_page-rows::%{_row}%::name}%" to console
         add 1 to {_row}
     if {_row} is 1:
@@ -135,6 +140,11 @@ rather than rows, which is why the recipe counts the row indices itself.
 
 The loop bound is a safety net: without a count query, an upper bound is what keeps a script from paging
 forever when a condition keeps matching.
+
+A page is an offset into the primary-key order rather than a snapshot of it, so this walk is safe only
+while nothing writes to the table: a row inserted or deleted between two pages shifts everything behind it,
+and the walk can repeat or miss a row. A table that is being written to is better walked by key
+(`where all: id > {_last}`); see [Reading rows](reading.md).
 
 ## Store an item's NBT
 
@@ -166,19 +176,23 @@ way to check what is inside. See [Types](types.md).
 command /prune:
     trigger:
         set {_cutoff} to now - 30 days
+        set {_pruned} to 0
         loop 10 times:
-            delete entities from table "logs" with limit 500 and wait:
+            delete entities from table "logs" with limit 500 and store affected rows in {_deleted} and wait:
                 where all:
                     created < {_cutoff}
             if last database error is set:
                 send "Prune failed: %last database error%" to console
                 exit loop
-        send "Pruned up to 5000 old rows." to sender
+            add {_deleted} to {_pruned}
+            if {_deleted} is less than 500:
+                exit loop
+        send "Pruned %{_pruned}% old rows." to sender
 ```
 
-A bounded batch keeps one statement from holding the table for long. A delete does not report how many
-rows it removed, so the loop bound is the practical stop condition: the recipe deletes at most
-`10 × 500` rows per run, and running it again a moment later continues where it left off.
+A bounded batch keeps one statement from holding the table for long. The delete reports how many rows it
+removed, so a batch that comes back short is the end of the work: the loop stops there instead of running
+all ten times, and the script can say how many rows it pruned.
 
 ## Use the table from a second script
 
@@ -187,6 +201,7 @@ The connection belongs to the server, so exactly one script should own it and re
 ```sk
 # database.sk
 on load:
+    set {database::ready} to false    # a global from an earlier run must not pass for this one
     create a connection to database "MySQL" with properties:
         url: "jdbc:mysql://localhost:3306/mydb"
         username: "root"
@@ -215,3 +230,7 @@ command /whois <text>:
 
 A second script that connects as well is not an error, but it replaces the connection and starts with no
 tables registered, so the owning script is the one that should do it. See [Connections](connections.md).
+
+`{database::ready}` is a global, which means it survives a restart: without the first line setting it to
+false, a load that failed to connect leaves the previous run's `true` in place, and the other script runs
+its statements into `No database connected.` instead of saying what the recipe intends.

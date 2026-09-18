@@ -43,6 +43,19 @@ wrote. Which updates count is the backend's answer rather than this addon's — 
 without changing is one row to PostgreSQL and to MongoDB, and zero rows to MySQL. Compare the number only
 where the statement changes a value, as the example above does.
 
+| Statement | MySQL | PostgreSQL | MongoDB |
+| --- | --- | --- | --- |
+| `insert one`, `insert many` | rows written | rows written | rows written |
+| `update` | rows **changed** | rows matched | rows matched |
+| `delete` | rows removed | rows removed | rows removed |
+| `upsert` | `1` inserted, `2` updated, `0` for a row that already held those values | `1` either way | `1` inserted, rows matched when updated |
+| `insert ... if absent` | `1` written, `0` a key already held it | same | same |
+| a batch the driver cannot count | no number at all | same | never happens |
+
+Only `insert ... if absent` answers the question scripts reach for this clause with — "was it written" — on
+every backend. An `upsert` does not: a `2` on MySQL says it updated, and the other two do not tell the two
+cases apart at all.
+
 A backend that answers a batch without a per-row count reports no number at all rather than a wrong one.
 
 ## Set, unset and zero
@@ -73,6 +86,10 @@ Inside a [transaction](transactions.md) it works the same way, and the variable 
 by statement there: a statement the transaction skipped has not answered, and a number left over from the
 statement before it would say otherwise. `last database error` is the one that is kept instead, so that
 the cause of a rollback can still be read.
+
+Ending the transaction does not clear the variable either: a rollback does not reach back and unset it, so
+after the section a `{_rows}` of `1` can describe a statement whose work was undone. Check
+`last database error` before trusting the number once a transaction is over.
 
 ## A safe conditional write
 

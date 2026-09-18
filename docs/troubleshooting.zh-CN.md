@@ -20,7 +20,7 @@ ALTER TABLE users ADD COLUMN joined DATE NULL;
 
 ## “Table 'users' is already registered.”
 
-注册是记在连接上的，所以 reload 之后又注册一遍，必然被拒。先连接就好，新连接里一张表都没注册：
+注册是记在**连接**上的，而 `create a connection` 每执行一次都新建一条连接。所以会被拒的，是"注册时撞上一条还被别的东西持有着的连接"：第二个脚本往第一个脚本建好的那条连接上重名注册，或者 reload 之后没重新连接就注册。把连接和注册写在同一个 `on load` 里的脚本永远不会撞上，因为 reload 替换的是连接：
 
 ```sk
 on load:
@@ -32,6 +32,8 @@ on load:
         id: bigint, primary key, auto increment, not null
         name: string(64), not null
 ```
+
+见 [表](tables.zh-CN.md)。
 
 ## “Table 'users' not found.”
 
@@ -85,6 +87,8 @@ else if {_user::age} is not set:
 `date` 列是 SQL `DATE`，不存时分秒。要精确时刻，请用 `bigint`（epoch 毫秒）或 `timespan`。顺带一提，`time` 列存的是 Minecraft 一天中的时刻，同样不是墙上时间。见 [类型](types.zh-CN.md)。
 
 ## 分页会漏行或重复
+
+一页是主键顺序上的**偏移，不是快照**。脚本翻页期间插入或删除一行，它后面的所有行都会挪位，页边界上的那一行会被读到两次、或干脆跳过。表在被写入时，请用主键游标（`id > {_last}`）遍历，而不是 `select page`。
 
 分页按已注册的主键排序，没有主键的表会被拒；页码从 1 起。页内的键又从 1 起（`{_page::1::name}`），很容易误当成整张表的第一行。见 [读取行](reading.zh-CN.md)。
 

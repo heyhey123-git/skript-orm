@@ -20,6 +20,8 @@ insert one entity into table "users" and wait:
 - 右边可以是任何 Skript 表达式，变量、参数、函数都行。
 - 每行必须在同一行里写成 `column: expression`。只有需要多行的操作（见 `insert many`）才允许嵌套块。
 - **没写的列不会出现在语句里**。插入时，数据库默认值就此生效，自增主键正是这样保持自动的；而在 `update` 与 `upsert by id` 里，没写的列保持它原来的值。想存 SQL NULL，就写 `null`；见 [类型](types.zh-CN.md)。
+- **写了列名、但表达式解析出空值，同样按 SQL NULL 写入。** `name: {_nick}` 在 `{_nick}` 未设置时，和"整行不写 `name`"不是一回事：键在那儿、只是没有值，于是语句写入 NULL（`not null` 列则直接失败）。只有把这一行整个省掉，才会保留原来的值。
+- **列表变量带不动 SQL NULL。** Skript 会把设为 null 的键删掉，而查询结果里 NULL 列本来就没有键，所以"从查询结果里抄一行、再从变量写回去"时，这些列在变量里根本不存在：`insert` 会给它们数据库默认值（`not null` 又没有默认值的列会直接失败），`update` 则原样不动。想写 NULL，只能用带字面量 `null` 的 `values` 块。
 - 列名不存在时，在发出任何语句之前就会失败。
 
 ## 插入一行
@@ -67,7 +69,12 @@ insert many entities into table "users" and wait:
 insert many {_rows::*} into table "archived_users" and wait
 ```
 
-各行可以写不同的列。省略某列时，只要数据库允许，这条语句就不提它。而当一条语句必须为所有行绑定同一组列时，该列按 NULL 写入。
+各行可以写不同的列，但有两条规则：
+
+- **`values` 块**里每一行必须写同一组列。一条语句只能绑定一组列，所以某行少写了别的行有的列，运行时会被拒绝：`Batch row 2 does not contain the same columns as the first row.`
+- 装着多行的**列表变量**则会补齐到共同的列集合，某行缺的列按 NULL 写入。查询结果因此可以直接插回去。MongoDB 两种写法都接受参差的行。
+
+变量未设置或里面什么都没有时，语句会失败并报 `{_rows::*} is not set.`，而不是"写入 0 行"——而没匹配到任何行的 `select many` 恰恰会把结果变量留空，所以把它的结果喂给 `insert many` 之前要先检查一下。见 [读取行](reading.zh-CN.md)。
 
 ## 有则更新、无则插入
 
@@ -78,7 +85,7 @@ upsert one entity in table "users" by id {_id} and wait:
         age: 26
 ```
 
-`upsert` 写入给定主键值的行：已经存在就更新它。在 MySQL 上这是 `INSERT ... ON DUPLICATE KEY UPDATE`。
+`upsert` 写入给定主键值的行：已经存在就更新它。主键写在 `by id` 里，**不要**写进 `values` 块：`values` 里出现主键会被拒绝，报 `The primary key must not be included in upsert values.`，因为正是主键决定这一行是插入还是更新。在 MySQL 上这是 `INSERT ... ON DUPLICATE KEY UPDATE`。
 
 ```sk
 insert entity if absent into table "users" and wait:
@@ -93,7 +100,7 @@ insert entity if absent into table "users" and wait:
 | --- | --- |
 | 没有就建、有就拿这些值覆盖 | `upsert` |
 | 只在缺失时建，已有行别动 | `insert entity if absent` |
-| 想知道到底建没建 | 只有 `if absent` 能看出来：插入被跳过时旧行的值原封不动，所以读回来的值和你写下的不一样，就说明那一行本来就在；`upsert` 则是不管原来有没有，都写下你的值 |
+| 想知道到底建没建 | `insert entity if absent ... and store affected rows in {_rows}`：`1` 表示确实写进去了，`0` 表示已有键占着它。读回来比对也行，但只有 `if absent` 会把旧行原样留着给你比 |
 
 两者都取决于实现自己的冲突规则，它们的描述里也是这么写的。上文说的是 MySQL 的行为。
 
@@ -113,4 +120,4 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
         name: "Alice"
 ```
 
-脚本靠它分辨“本来就在”和“刚刚写入”，也靠它写出“只在读到的值仍然是当时那个值时才生效”的条件。见 [影响行数](affected-rows.zh-CN.md)。
+对 `insert entity if absent` 来说，这个数就是"到底写没写进去"：`1` 写了，`0` 是已有键占着。脚本也靠它写出"只在读到的值仍然是当时那个值时才生效"的条件。至于别的语句，这个数字是各后端自己的说法——`upsert` 在 MySQL 上插入记 `1`、更新记 `2`，而 PostgreSQL 与 MongoDB 两种情况都记 `1`——所以拿它分支之前先看[影响行数](affected-rows.zh-CN.md)。

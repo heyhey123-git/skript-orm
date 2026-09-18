@@ -33,6 +33,10 @@ update one entity in table "users" by id {_id} and wait:
 
 This takes no `where` block: it updates the row whose registered primary key has that value.
 
+**A key the table does not hold is not an error.** The statement touches nothing, `last database error`
+stays unset, and `store affected rows` reports `0` — which is what to check when it matters whether the
+row was there. `delete one entity ... by id` behaves the same way.
+
 ## Delete by condition
 
 ```sk
@@ -51,6 +55,9 @@ delete one entity from table "users" by id {_id} and wait
 if last database error is set:
     send "Delete failed: %last database error%" to console
 ```
+
+That check answers "did the statement run", not "was there a row": a key nothing holds deletes nothing and
+reports no error, so the count from `and store affected rows in {_rows}` is what says whether it did.
 
 The colon marks a statement that has a body. This one has none, and neither has an `update`, an `upsert`
 or an `insert` whose values come from a variable; those are written without it, as
@@ -72,8 +79,15 @@ block at all. When the intent is "all rows", write it as such and keep a `with l
 
 ## Limits
 
-`with limit N` asks for at most N rows and must be positive. On MySQL it becomes `... LIMIT N`, which
-is a MySQL feature; an implementation that cannot express it says so instead of ignoring it.
+`with limit N` asks for at most N rows. MySQL writes `... LIMIT N`, PostgreSQL picks the rows by `ctid`
+first so that `LIMIT` still applies, and MongoDB selects the ids the same way; only a generic `"JDBC"`
+connection cannot express it, and it says so instead of ignoring the limit.
+
+The limit has to resolve to a single positive number. A number that is zero or less is refused at run time
+with `Update limit must be positive.` (or `Delete limit must be positive.`), but an expression that
+resolves to nothing at all — an unset variable, or one holding several values — leaves the statement
+**unlimited**, because there is nothing to apply. A limit used as a safety net is worth checking in the
+script before the statement runs.
 
 The limit is a safety net, not a paging mechanism: which rows it keeps is up to the database, so a
 `where` block is what makes an update or a delete predictable.

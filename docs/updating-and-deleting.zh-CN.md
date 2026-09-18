@@ -31,6 +31,8 @@ update one entity in table "users" by id {_id} and wait:
 
 它不接受 `where` 块：更新的是“已注册主键等于该值”的那一行。
 
+**表里没有这个键不是错误。** 语句什么都不动，`last database error` 保持为空，`store affected rows` 报 `0`——想知道那一行到底在不在，看的是这个数。`delete one entity ... by id` 同理。
+
 ## 按条件删除
 
 ```sk
@@ -50,6 +52,8 @@ if last database error is set:
     send "删除失败: %last database error%" to console
 ```
 
+这个检查回答的是"语句跑没跑"，不是"有没有那一行"：没有键匹配时删除什么都不做，也不报错，所以要说清到底删没删，得看 `and store affected rows in {_rows}` 给的数。
+
 冒号标出的是有正文的语句。这条没有正文；从变量取值的 `update`、`upsert` 与 `insert` 也没有，它们都不写冒号，见 [写入行](writing.zh-CN.md)。
 
 ## 不写 where 会怎样
@@ -66,8 +70,9 @@ delete entities from table "users" and wait
 
 ## limit
 
-`with limit N` 表示最多 N 行，且必须为正。在 MySQL 上它会变成 `... LIMIT N`，这是 MySQL 的特性；无法表达它的实现
-会明确报错，而不是悄悄忽略。
+`with limit N` 表示最多 N 行。MySQL 写成 `... LIMIT N`，PostgreSQL 则先用 `ctid` 选出这些行，好让 `LIMIT` 仍然生效，MongoDB 也是先选出 id；只有通用 `"JDBC"` 连接无法表达，它会明确报错而不是悄悄忽略。
+
+limit 必须解析成**单个正数**。零或负数会在运行时被拒绝，报 `Update limit must be positive.`（或 `Delete limit must be positive.`）；但表达式什么都解析不出来时——变量没设置，或者装着好几个值——语句会**完全不限量**，因为没有东西可应用。拿 limit 当保险的话，请在脚本里先检查它的值。
 
 limit 是保险，不是分页手段：留下哪几行由数据库决定，所以让更新/删除可预期的是 `where` 块。
 

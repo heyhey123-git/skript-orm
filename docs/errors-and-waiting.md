@@ -51,6 +51,9 @@ send "Stored." to console
 - An unset error is printed as `<none>`, so compare with `is set` rather than against text.
 - It is set by a failure and left unset by a success: a statement that worked has nothing to say, so the
   lines after it can treat an unset error as success.
+- **A failure does not stop the trigger.** The lines after a failed statement still run, which is why the
+  examples here check the slot and `stop` themselves. A script whose next lines depend on the write having
+  happened has to do the same.
 - A failure is also printed to the console, with the script line it came from. The slot is what a script
   reads; the console line is what an admin reads.
 
