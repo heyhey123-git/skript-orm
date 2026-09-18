@@ -203,6 +203,16 @@ every 5 seconds:
     if {sqlite::rows::row::age} is not 51:
         log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left the unwaited write undone: age reads '%{sqlite::rows::row::age}%'"
 
+    # A local variable is the form a script writes, and it is the one the awaited statement has to be
+    # careful with: the event's own local variables are taken away while the work runs and put back
+    # around the continuation, so a count written before that would not survive it.
+    in connection "sqlite":
+        delete one entity from table "orm_sqlite_probe" by id 999 and store affected rows in {_local_rows} and wait
+    if {_local_rows} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows left a local variable unset"
+    if {_local_rows} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{_local_rows}%' from a local variable, instead of 0"
+
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
     set {sqlite::failed} to false

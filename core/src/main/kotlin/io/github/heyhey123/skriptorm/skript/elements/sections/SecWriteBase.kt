@@ -370,9 +370,6 @@ abstract class SecWriteBase : Section() {
                         SkriptDatabaseErrors.set(event, failure)
                     } else {
                         SkriptDatabaseErrors.clear(event)
-                        // Only a statement that waits can be read afterwards: without `and wait` the script
-                        // has already carried on by the time this runs, so the variable stays as cleared.
-                        result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
                     }
                 }
                 failure?.let {
@@ -382,6 +379,13 @@ abstract class SecWriteBase : Section() {
                     try {
                         if (event != null && localVariables != null) {
                             SkriptLocalVariables.restore(event, localVariables)
+                        }
+                        // The count lands in a Skript variable, so it is written once the event's local
+                        // variables are back in place, the way a read stores its result. Only a statement
+                        // that waits can be read afterwards: without `and wait` the script has already
+                        // carried on by the time this runs, so the variable stays as it was cleared.
+                        if (event != null && failure == null) {
+                            result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
                         }
                         if (event != null) {
                             walk(continuation, event)
