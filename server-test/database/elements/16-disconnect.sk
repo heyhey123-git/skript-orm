@@ -36,7 +36,7 @@ every 5 seconds:
     # The all-form is driven here too, because this is the last script that needs a connection: every
     # other one that reads the database has recorded itself by now. The connection it closes is this
     # element's own, so the form is checked with something alive to close rather than as a no-op.
-    create a connection named "closing" to database "MySQL" with properties:
+    create a connection named "closing" to database "__TYPE__" with properties:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"

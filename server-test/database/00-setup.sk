@@ -1,8 +1,10 @@
 # Connects the run to the database it was pointed at, and gives it a table of its own.
 #
-# `prepareServerTest` writes this file with the credentials substituted, because they come from the
-# `skriptorm.test.mysql.*` properties and do not belong in the repository. It fires before the element
-# scripts so they run against a live connection.
+# `prepareServerTest` writes this file with the implementation name and the credentials substituted,
+# because they come from the `skriptorm.test.*` properties and do not belong in the repository. Which
+# implementation that is comes from `skriptorm.test.server.type`, so the same scripts drive the run
+# against MySQL and against PostgreSQL. It fires before the element scripts so they run against a live
+# connection.
 #
 # The table here is deliberately not the one the element scripts register: two `register table`
 # statements for the same name would make the second one fail, and the element scripts have to stay
@@ -17,7 +19,7 @@ every 1 second:
         stop trigger
     set {skriptorm::selftest::started::setup} to true
 
-    create a connection to database "MySQL" with properties:
+    create a connection to database "__TYPE__" with properties:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"

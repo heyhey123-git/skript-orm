@@ -201,17 +201,53 @@ dependencies {
     "serverTestPlugins"(libs.skript)
 }
 
-// A database for the server test, read from the same keys the JDBC integration tests read, so one
-// `-P` set configures both layers. Without a url the run has no database, which is the default and
-// how it runs locally; with one, the element scripts run against it and a round trip joins them.
-val serverTestDatabaseUrl = providers.gradleProperty("skriptorm.test.mysql.url")
-    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_URL"))
-val serverTestDatabaseUsername = providers.gradleProperty("skriptorm.test.mysql.username")
-    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_USERNAME"))
-    .orElse("root")
-val serverTestDatabasePassword = providers.gradleProperty("skriptorm.test.mysql.password")
-    .orElse(providers.environmentVariable("SKRIPTORM_TEST_MYSQL_PASSWORD"))
-    .orElse("")
+// A database for the server test, read from the same keys the integration suite of that implementation
+// reads, so one `-P` set configures both layers. Which implementation is `skriptorm.test.server.type`,
+// the name the scripts write after `database`: `MySQL` by default, because that is what these scripts
+// were written against and what the released jar registers beside `"JDBC"`, or `PostgreSQL`, which is
+// what its own job runs. Without a url the run has no database, which is the default and how it runs
+// locally; with one, the element scripts run against it and a round trip joins them.
+
+/**
+ * What the server test needs to know about one implementation.
+ *
+ * @property keys the name its properties and environment variables are built from, which is not always
+ *   the name a script writes: PostgreSQL's are `skriptorm.test.postgres.*`, not `postgresql`.
+ * @property module the build module that registers its type name, when that is not part of the jar the
+ *   run installs, so the test can say which one to bundle.
+ * @property username the account a fresh install of that server has.
+ */
+data class ServerTestImplementation(val keys: String, val module: String?, val username: String)
+
+val serverTestImplementations = mapOf(
+    "MySQL" to ServerTestImplementation(keys = "mysql", module = null, username = "root"),
+    "PostgreSQL" to ServerTestImplementation(
+        keys = "postgres",
+        module = "postgresql-implementation",
+        username = "postgres"
+    )
+)
+
+val serverTestDatabaseType = providers.gradleProperty("skriptorm.test.server.type").orElse("MySQL")
+val serverTestImplementation: ServerTestImplementation = serverTestImplementations[serverTestDatabaseType.get()]
+    ?: error(
+        "skriptorm.test.server.type must name one of ${serverTestImplementations.keys}, " +
+            "but was '${serverTestDatabaseType.get()}'."
+    )
+
+// No fallback for the url: whether one was given is what decides between the two modes, so an empty one
+// would turn every run into a run that tries to connect. An empty password is a real one, though.
+fun serverTestSetting(name: String): Provider<String> =
+    providers.gradleProperty("skriptorm.test.${serverTestImplementation.keys}.$name")
+        .orElse(
+            providers.environmentVariable(
+                "SKRIPTORM_TEST_${serverTestImplementation.keys.uppercase()}_${name.uppercase()}"
+            )
+        )
+
+val serverTestDatabaseUrl = serverTestSetting("url")
+val serverTestDatabaseUsername = serverTestSetting("username").orElse(serverTestImplementation.username)
+val serverTestDatabasePassword = serverTestSetting("password").orElse("")
 val serverTestUsesDatabase = serverTestDatabaseUrl.isPresent
 
 val prepareServerTest by tasks.registering {
@@ -224,6 +260,20 @@ val prepareServerTest by tasks.registering {
     val examplesDirectory = layout.projectDirectory.dir("docs/examples")
 
     doLast {
+        // A type name reaches the server only if the jar it loads registers it, and the released jar
+        // registers just the two of `generic-jdbc-implementation`. A run against an implementation that
+        // is not bundled would otherwise start a whole server to be told `Database 'PostgreSQL' is not
+        // supported.`, so it says which property is missing before that.
+        serverTestImplementation.module?.let { module ->
+            if (serverTestUsesDatabase && module !in bundledModules) {
+                throw GradleException(
+                    "The server test cannot connect to ${serverTestDatabaseType.get()}: its " +
+                        "implementation is not in the jar this run installs. Invoke it with " +
+                        "-PbundleModules=${(bundledModules + module).joinToString(",")}."
+                )
+            }
+        }
+
         val run = runDirectory.get().asFile
         // Skript's whole plugin directory goes, not just its scripts: every element script keeps a
         // guard variable so that it runs once, and Skript stores variables there. A guard left over
@@ -249,7 +299,9 @@ val prepareServerTest by tasks.registering {
         if (serverTestUsesDatabase) {
             sourceDirectory.dir("database").asFile.copyRecursively(scripts, overwrite = true)
             // Every script carrying the placeholders is filled in, not only the setup: the connection
-            // element opens a second connection of its own and needs the same credentials.
+            // element opens a second connection of its own and needs the same implementation and the
+            // same credentials.
+            val type = serverTestDatabaseType.get()
             val url = serverTestDatabaseUrl.get()
             val username = serverTestDatabaseUsername.get()
             val password = serverTestDatabasePassword.get()
@@ -259,7 +311,8 @@ val prepareServerTest by tasks.registering {
                     val text = script.readText()
                     if ("__URL__" !in text) return@forEach
                     script.writeText(
-                        text.replace("__URL__", url)
+                        text.replace("__TYPE__", type)
+                            .replace("__URL__", url)
                             .replace("__USERNAME__", username)
                             .replace("__PASSWORD__", password)
                     )

@@ -24,7 +24,7 @@ every 5 seconds:
         stop trigger
     set {skriptorm::selftest::started::connections} to true
 
-    create a connection named "secondary" to database "MySQL" with properties:
+    create a connection named "secondary" to database "__TYPE__" with properties:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"
@@ -75,7 +75,7 @@ every 5 seconds:
     # `use connection` switches for the rest of the event. This second named connection has no tables
     # registered, so the read fails on the lookup: that failure is one the default connection could not
     # have produced for `orm_roundtrip`, which is what makes it evidence of the switch.
-    create a connection named "tertiary" to database "MySQL" with properties:
+    create a connection named "tertiary" to database "__TYPE__" with properties:
         url: "__URL__"
         username: "__USERNAME__"
         password: "__PASSWORD__"

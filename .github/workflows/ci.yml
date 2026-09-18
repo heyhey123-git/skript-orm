@@ -180,12 +180,42 @@ jobs:
         if: failure()
         uses: ./.github/actions/annotate-test-failures
 
+      # The same server and the same database, now with the Skript layer pointed at it. The scripts take
+      # the implementation from `skriptorm.test.server.type`, so this is the one job where the addon is
+      # driven end to end against something other than MySQL: the element scripts, the round trip, named
+      # connections and transactions, all through the real plugin.
+      #
+      # PostgreSQL has to be bundled into the jar for that, since the released one registers only the
+      # implementations of `generic-jdbc-implementation`. That also exercises the bundling itself: the
+      # driver is relocated inside the jar, and this is what says the plugin can still load it.
+      - name: Run the Skript server test against the same server
+        run: |
+          ./gradlew serverTest --stacktrace \
+            -PbundleModules=generic-jdbc-implementation,postgresql-implementation \
+            -Pskriptorm.test.server.type=PostgreSQL \
+            -Pskriptorm.test.postgres.url="jdbc:postgresql://127.0.0.1:5432/skriptorm_test" \
+            -Pskriptorm.test.postgres.username=postgres \
+            -Pskriptorm.test.postgres.password=postgres
+
+      - name: Annotate the server test
+        if: failure()
+        uses: ./.github/actions/annotate-server-test
+
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: postgres-test-reports
           path: '**/build/reports/tests/**'
+          if-no-files-found: ignore
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: postgres-server-log
+          # The whole directory, so the harness's problem list travels with the log.
+          path: build/server-test/logs/
           if-no-files-found: ignore
 
   # The same tests through the path a developer uses locally: no external server configured, so the

@@ -378,12 +378,20 @@ Two properties of a Minecraft server shape the scripts:
 and `eula.txt`. Writing that last file accepts the Minecraft EULA for this disposable server, which
 is why the task and not a developer is what does it.
 
-The same element scripts also run against a database. Passing the MySQL properties the JDBC tests use
-(`-Pskriptorm.test.mysql.url`, `username`, `password`) adds `server-test/database/`: a setup script that
-`prepareServerTest` writes with the credentials substituted, which connects and registers a table of
-its own, and a round trip that writes a row, reads it back and compares it. The element scripts then
-run against the live connection, which is the only way to cover the value conversions inside `values`
-and `where`: those happen after the database lookup, so a run without a database never reaches them.
+The same element scripts also run against a database. Passing the properties the integration suite of one
+implementation uses — `-Pskriptorm.test.mysql.url`, `username`, `password` for MySQL, or the
+`skriptorm.test.postgres.*` equivalents — adds `server-test/database/`: a setup script that
+`prepareServerTest` writes with the implementation name and the credentials substituted, which connects
+and registers a table of its own, and a round trip that writes a row, reads it back and compares it. The
+element scripts then run against the live connection, which is the only way to cover the value conversions
+inside `values` and `where`: those happen after the database lookup, so a run without a database never
+reaches them.
+
+Which implementation those keys describe is `skriptorm.test.server.type`, the name the scripts write after
+`database`. It defaults to `MySQL`; `PostgreSQL` runs the same scripts against the other implementation
+the repository has, which is what its CI job does. The name also decides which keys the credentials come
+from, so one `-P` set configures both the integration tests and this layer, and a name belonging to
+neither fails the build instead of quietly running without a database.
 
 Two consequences shape those scripts. Every element reports whatever its step produced once a
 connection exists, so in this mode their expected messages are empty and only their presence is
@@ -403,8 +411,10 @@ register the same table twice.
   servers for one pull. The connection details are passed as `-P` properties rather than environment
   variables, because a Gradle property is delivered with every invocation even when the daemon was
   started earlier.
-- `postgres-installed` does the same for PostgreSQL, which the runner image also installs: the
-  `postgresql-implementation` tests are the only place the PostgreSQL dialect meets a server.
+- `postgres-installed` does the same for PostgreSQL, which the runner image also installs, and then runs
+  the Skript server test against that same server: the `postgresql-implementation` tests are the only
+  place the PostgreSQL dialect meets a server, and the server test is the only place the addon is driven
+  end to end against an implementation other than MySQL.
 - `mysql-testcontainers` runs the same suite with no server configured, which is the path a developer
   uses locally, so the Docker detection and the pinned `mysql:8.4` image get exercised as well. It
   runs only on the default branch and on demand, because a container image is the one thing the cache
