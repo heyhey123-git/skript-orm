@@ -63,11 +63,12 @@ command /adduser <text> <integer>:
 2. 把 jar 与 Skript 一并放进 `plugins/`。
 3. 启动一次服务端，再把连接和建表写进脚本，`/sk reload` 即可。这两件事都由脚本完成，没有配置文件要改。
 
-## 三条规矩
+## 几条规矩
 
 - **想要几条连接就有几条。** `create a connection` 让那个库成为默认连接，`named "logs"` 再留住一条，`in connection "logs":` 或 `use connection "logs"` 决定一条语句用哪一条。
 - **碰数据的操作都是 section。** 写入、读取、更新、删除各有各的语法和主体，读取必定等结果。
 - **一个事务就是一个 section。** `database transaction:` 在主体结束时提交，主体里有语句失败时回滚，运行期间独占一条连接。
+- **写入会报出影响的行数。** `and store affected rows in {_rows}` 把行数留下，脚本因此分得清“本来就在”和“刚刚写入”，也能发现读到的行在它眼皮底下被改过。见 [影响行数](docs/affected-rows.zh-CN.md)。
 - **失败是一个值。** 写了 `and wait` 的操作结束之后，`last database error` 里就是出错原因。一切顺利时它保持为空。
 
 ## 文档

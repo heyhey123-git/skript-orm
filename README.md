@@ -74,6 +74,9 @@ and hands results back as ordinary Skript variables and values.
   syntaxes with their own bodies, and a read always waits for its result.
 - **A transaction is one section.** `database transaction:` commits when its body ends, rolls back when
   a statement in it fails, and holds one connection for as long as it runs.
+- **A write says how many rows it affected.** `and store affected rows in {_rows}` keeps the count, so a
+  script can tell "it was already there" from "it was written", or notice that the row it read moved
+  under it. See [Affected rows](docs/affected-rows.md).
 - **A failure is a value.** After an operation written with `and wait`, `last database error` holds
   what went wrong, and an operation that worked leaves it unset.
 
