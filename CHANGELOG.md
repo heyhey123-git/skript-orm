@@ -44,6 +44,15 @@ console while `last database error` stays silent.
 
 ### Fixed
 
+- **A whole number that did not fit its column was stored as a different number.** Skript converts a
+  number into whatever type it is asked for, and every one of those conversions narrows: an `int` column
+  turned `5000000000` into `705032704` (the low 32 bits), a `tinyint` column turned `300` into `44`, and
+  the database was handed a value that fitted, so nothing anywhere reported it. A number column is now
+  read as a number and narrowed by the plugin, which refuses a value the column cannot hold with a
+  message naming the column and its range — in a `values` block, in a variable and in a `where` value
+  alike. A fraction written into a whole-number column is still cut towards zero, and `float` still keeps
+  four bytes: only the case that was silently wrong changed. See
+  [Types](docs/types.md#what-a-mismatch-looks-like).
 - **A failure the database itself reported did not end the transaction it happened in.** Only a statement
   refused before it was sent made a transaction rollback-only, so a constraint violation, a value the
   server refused, or a dialect refusing a statement let the body carry on, a later statement cleared the

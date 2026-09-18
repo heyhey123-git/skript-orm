@@ -274,6 +274,49 @@ every 5 seconds:
     if last database error is not set:
         log "SKRIPTORM_SELFTEST=FAIL sqlite an explicit rollback dropped the failure that caused it"
 
+    # A number the column cannot hold is refused rather than stored as something else. SQLite is the
+    # right place for this: its columns are dynamically typed, so it would happily keep the wrong number
+    # and the only thing that can object is the check the plugin makes before binding.
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and wait:
+            values:
+                id: 96
+                name: "too-big"
+                age: 5000000000
+    if last database error does not contain "does not fit column 'age'":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite accepted a number no int column can hold: %last database error%"
+
+    in connection "sqlite":
+        set {_row::id} to 97
+        set {_row::name} to "from-a-variable"
+        set {_row::age} to 5000000000
+    in connection "sqlite":
+        insert one {_row::*} into table "orm_sqlite_probe" and wait
+    if last database error does not contain "does not fit column 'age'":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite accepted a variable number no int column can hold: %last database error%"
+
+    in connection "sqlite":
+        select many entities from table "orm_sqlite_probe" and store the results in {sqlite::numeric::where::*}:
+            where all:
+                age > 5000000000
+    if last database error does not contain "does not fit column 'age'":
+        log "SKRIPTORM_SELFTEST=FAIL sqlite compared a where value no int column can hold: %last database error%"
+
+    # A fraction is still cut towards zero, which is what Skript does everywhere else: only the case
+    # that used to be silently wrong changed.
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and wait:
+            values:
+                id: 96
+                name: "fraction"
+                age: 1.7
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite refused a fraction it used to cut: %last database error%"
+    in connection "sqlite":
+        select one entity from table "orm_sqlite_probe" by id 96 and store the result in {sqlite::numeric::fraction::*}
+    if {sqlite::numeric::fraction::age} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite cut a fraction to '%{sqlite::numeric::fraction::age}%' instead of 1"
+
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
     set {sqlite::failed} to false

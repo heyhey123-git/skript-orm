@@ -101,8 +101,10 @@ insert entity if absent into table "users" and wait:
 
 `if absent` inserts only when the database considers the row missing, and does nothing when it is there.
 On MySQL this is `INSERT IGNORE`, so a duplicate key is silently skipped rather than turned into an
-update: an existing row keeps its old values. Which one to reach for is a matter of what "already
-there" should mean:
+update: an existing row keeps its old values. `INSERT IGNORE` does more than skip a duplicate, though —
+MySQL turns other errors into warnings as well, so a value too long for its column is stored cut short
+rather than refused. Use `insert one` or `upsert` where a value that does not fit has to be reported.
+Which one to reach for is a matter of what "already there" should mean:
 
 | Want | Use |
 | --- | --- |

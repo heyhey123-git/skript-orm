@@ -114,5 +114,19 @@ a way to build a compound, and the plugin reads and writes compounds through SkB
 ## What a mismatch looks like
 
 A value the column cannot hold fails the operation rather than being stored approximately, and
-`last database error` says which column and what was expected. See
-[Errors and waiting](errors-and-waiting.md).
+`last database error` says which column and what was expected. Three things are worth knowing about how
+literally to take that:
+
+- **A whole number outside the column's range is checked before it is sent.** `tinyint` holds −128 to
+  127, `int` −2147483648 to 2147483647, `bigint` 64 bits, and a value past the end of its column is
+  reported instead of being cut down to one that fits. A **fraction written into a whole-number column is
+  still cut towards zero**, which is what Skript does with `1.7` everywhere else: an `int` column and
+  `1.7` store `1`.
+- **`float` keeps four bytes and `double` is exact to 2^53.** `0.1` written to a `float` column comes back
+  as `0.10000000149011612`, and a `bigint`-sized number written to a `double` column loses its low bits.
+  Those two are what the column type is, not a mistake the plugin can catch.
+- **`insert entity if absent` on MySQL is the exception.** It is `INSERT IGNORE`, which turns errors into
+  warnings, so a value too long for its column is stored cut short instead of being refused. Use
+  `insert one` or `upsert` where a value that does not fit has to be reported.
+
+See [Errors and waiting](errors-and-waiting.md).

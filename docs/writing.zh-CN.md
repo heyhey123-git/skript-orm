@@ -87,7 +87,7 @@ insert entity if absent into table "users" and wait:
         name: "Alice"
 ```
 
-`if absent` 只在数据库认为该行不存在时插入，已经存在就按兵不动。在 MySQL 上这是 `INSERT IGNORE`，主键冲突会被静默跳过，不会变成更新，已有的行原封不动。该用哪个，看你心里“已经存在”是什么意思：
+`if absent` 只在数据库认为该行不存在时插入，已经存在就按兵不动。在 MySQL 上这是 `INSERT IGNORE`，主键冲突会被静默跳过，不会变成更新，已有的行原封不动。但 `INSERT IGNORE` 不只是跳过重复键：MySQL 会把其它错误也降级成警告，所以超长的值会被截短存进去，而不是被拒绝。需要"放不下就报错"时，用 `insert one` 或 `upsert`。该用哪个，看你心里“已经存在”是什么意思：
 
 | 想要 | 用 |
 | --- | --- |

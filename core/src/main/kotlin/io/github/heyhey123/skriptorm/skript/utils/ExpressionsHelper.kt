@@ -5,6 +5,7 @@ import ch.njol.skript.lang.ParseContext
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.UnparsedLiteral
 import io.github.heyhey123.skriptorm.table.Column
+import io.github.heyhey123.skriptorm.table.NumericValues
 import io.github.heyhey123.skriptorm.table.Table
 
 object ExpressionsHelper {
@@ -33,13 +34,24 @@ object ExpressionsHelper {
             ?: throw IllegalArgumentException("Column '$columnName' does not exist in table '${table.name}'")
 
     /**
-     * Parses [valueStr] as the domain type of [columnName].
+     * Parses [valueStr] for the column [columnName] names.
+     *
+     * A number column is parsed as a number rather than as the exact type the column stores. Skript's
+     * conversion into that type narrows: an `int` column turns `5000000000` into `705032704` and a
+     * `tinyint` column turns `300` into `44`, both without a word, and a value that has been narrowed
+     * cannot be told apart from one that was written that way. [NumericValues.narrow] does the narrowing
+     * later instead, where the column is known and a value that does not fit can be refused.
      *
      * @return the parsed expression, or `null` when Skript cannot parse it
      * @throws IllegalArgumentException if [columnName] is not in [table]
      */
     fun parseExpression(table: Table, columnName: String, valueStr: String): Expression<*>? {
-        val type = requireColumn(table, columnName).type.domainType
+        val column = requireColumn(table, columnName)
+        val type = if (NumericValues.isNumeric(column.type.domainType)) {
+            Number::class.java
+        } else {
+            column.type.domainType
+        }
         return SkriptParser(valueStr, SkriptParser.ALL_FLAGS, ParseContext.DEFAULT).parseExpression(type)
     }
 

@@ -2,6 +2,8 @@ package io.github.heyhey123.skriptorm.skript.utils
 
 import ch.njol.skript.lang.Variable
 import io.github.heyhey123.skriptorm.skript.utils.VariableValuesReader.fillMissingColumns
+import io.github.heyhey123.skriptorm.table.Column
+import io.github.heyhey123.skriptorm.table.NumericValues
 import io.github.heyhey123.skriptorm.table.Table
 import io.github.heyhey123.skriptorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
@@ -104,7 +106,7 @@ object VariableValuesReader {
                 ?: throw IllegalArgumentException(
                     "Column '$columnName' does not exist in table '${table.name}'."
                 )
-            row[columnName] = convert(variable, columnName, column.type.domainType, value)
+            row[columnName] = convert(variable, column, value)
         }
         return row
     }
@@ -142,8 +144,7 @@ object VariableValuesReader {
     @Suppress("UNCHECKED_CAST")
     private fun convert(
         variable: Variable<*>,
-        columnName: String,
-        domainType: Class<*>,
+        column: Column<*>,
         value: Any?
     ): Any? {
         if (value == null) return null
@@ -155,9 +156,20 @@ object VariableValuesReader {
         val compound = NbtSupport.normalize(value)
         if (NbtSupport.isNbt(compound)) return compound
 
+        val domainType = column.type.domainType
+        if (NumericValues.isNumeric(domainType)) {
+            // Read as a number and narrowed here rather than by Skript's converter, which would turn a
+            // value the column cannot hold into one it can without saying so. See [NumericValues].
+            val number = Converters.convert(value, Number::class.java)
+                ?: throw IllegalArgumentException(
+                    "The value of '${column.name}' in $variable cannot be read as a number."
+                )
+            return NumericValues.narrow(column, number)
+        }
+
         return Converters.convert(value, domainType as Class<Any>)
             ?: throw IllegalArgumentException(
-                "The value of '$columnName' in $variable cannot be converted to ${domainType.simpleName}."
+                "The value of '${column.name}' in $variable cannot be converted to ${domainType.simpleName}."
             )
     }
 }

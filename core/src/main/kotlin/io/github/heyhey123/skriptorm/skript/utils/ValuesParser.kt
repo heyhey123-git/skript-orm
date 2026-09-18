@@ -4,6 +4,7 @@ import ch.njol.skript.config.Node
 import ch.njol.skript.config.SectionNode
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.skript.utils.ValuesParser.requireValuesHeader
+import io.github.heyhey123.skriptorm.table.NumericValues
 import io.github.heyhey123.skriptorm.table.Table
 import io.github.heyhey123.skriptorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
@@ -52,11 +53,14 @@ data class ParsedValues(
     fun resolve(event: Event?): Map<String, Any?> {
         val resolvedMap = mutableMapOf<String, Any?>()
         for ((columnName, expression) in values) {
-            ExpressionsHelper.requireColumn(table, columnName)
+            val column = ExpressionsHelper.requireColumn(table, columnName)
             // Normalised for the same reason as a where clause: a compound SkBee hands over belongs to
             // a live object and only means what it meant when the script named it, and the query layer
             // is asynchronous.
-            resolvedMap[columnName] = NbtSupport.normalize(expression?.getSingle(event))
+            val value = NbtSupport.normalize(expression?.getSingle(event))
+            // A number is narrowed here rather than by the expression, which was parsed as a number for
+            // this reason: a column that cannot hold it says so instead of storing what fits.
+            resolvedMap[columnName] = if (value is Number) NumericValues.narrow(column, value) else value
         }
         return resolvedMap
     }

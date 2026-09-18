@@ -8,6 +8,7 @@ import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper.parseExpressionNonNull
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper.parseNullableExpression
 import io.github.heyhey123.skriptorm.skript.utils.WhereParser.collectFromSection
+import io.github.heyhey123.skriptorm.table.NumericValues
 import io.github.heyhey123.skriptorm.table.Table
 import io.github.heyhey123.skriptorm.type.nbt.NbtSupport
 import org.bukkit.event.Event
@@ -26,11 +27,15 @@ sealed class ParsedCondition {
         valueExpr: Expression<*>?,
         event: Event?
     ): Any? {
-        ExpressionsHelper.requireColumn(table, columnName)
+        val column = ExpressionsHelper.requireColumn(table, columnName)
         // A compound from SkBee belongs to a live object and only means what it meant when the script
         // named it. Normalising it here, while the event is at hand, is what lets the query layer run
         // later and elsewhere.
-        return NbtSupport.normalize(valueExpr?.getSingle(event))
+        val value = NbtSupport.normalize(valueExpr?.getSingle(event))
+        // The comparison value is narrowed like a written one, and for the same reason: parsed as a
+        // number, it is still the number the script wrote here, so a value the column cannot hold is
+        // refused rather than quietly compared as something else.
+        return if (value is Number) NumericValues.narrow(column, value) else value
     }
 
     data class Equals(
