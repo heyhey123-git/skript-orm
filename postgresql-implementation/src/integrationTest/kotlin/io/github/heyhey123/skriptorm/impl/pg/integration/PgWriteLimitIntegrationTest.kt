@@ -62,7 +62,11 @@ class PgWriteLimitIntegrationTest : PgIntegrationTestBase() {
 
         assertEquals(1L, result.affectedCount)
         assertEquals(3L, rawRowCount())
-        assertEquals(listOf(10, 20), allUsers().mapNotNull { it.age })
+        // The filter is applied before the limit, so one of the two rows it matches is gone and both
+        // rows below it are untouched. Which of the two the limit reached is the database's business,
+        // so only the counts are asserted.
+        assertEquals(listOf(10, 20), allUsers().mapNotNull { it.age }.filter { it < 30 })
+        assertEquals(1, allUsers().mapNotNull { it.age }.count { it >= 30 })
     }
 
     @Test
