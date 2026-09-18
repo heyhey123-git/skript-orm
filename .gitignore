@@ -60,8 +60,9 @@ bin/
 ### Local working files ###
 # Not repository content, and not meant to travel: the images are what gets uploaded, so the script
 # that renders them is only a copy that can disagree with them; the skill is what the agent reads from
-# this machine; the forum page text is pasted into skUnity rather than published from here. Remove a
-# line to start tracking that file.
+# this machine; the forum pages are pasted into skUnity and MINEBBS rather than published from here.
+# Remove a line to start tracking that file.
 scripts/make-icons.py
 .dsh/
-docs/skunity-resource.bbcode.txt
+docs/minebbs-*
+docs/skunity-*
