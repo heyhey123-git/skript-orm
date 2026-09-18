@@ -147,8 +147,7 @@ class TransactionTest {
         assertTrue(transaction.isFinished, "the watchdog did not end the transaction")
         assertEquals(Transaction.State.ABORTED, transaction.state)
         assertNotNull(transaction.failure)
-        assertEquals(1, database.rollbacks.get())
-        assertEquals(1, database.releases.get())
+        awaitUnwound(database, rollbacks = 1, releases = 1)
     }
 
     @Test
@@ -201,6 +200,27 @@ class TransactionTest {
     }
 
     // ---------------------------------------------------------------- helpers
+
+    /**
+     * Waits for the effects of an ending transaction, rather than reading them the moment its state
+     * changes.
+     *
+     * Ending one is two steps in [Transaction.finish]: the terminal state is set first, and only then is
+     * the connection released, which is what bumps these counters. A test that waits for the state and
+     * immediately asserts the counters is therefore reading them mid-flight; it passed for as long as the
+     * release happened to land first. A transaction the watchdog ends is the one case where nothing else
+     * in the test orders those two steps for us.
+     */
+    private suspend fun awaitUnwound(database: TransactionalDatabase, rollbacks: Int, releases: Int) {
+        val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
+        while (System.nanoTime() < deadline &&
+            (database.rollbacks.get() != rollbacks || database.releases.get() != releases)
+        ) {
+            delay(5)
+        }
+        assertEquals(rollbacks, database.rollbacks.get())
+        assertEquals(releases, database.releases.get())
+    }
 
     private suspend fun connected(): TransactionalDatabase {
         val database = TransactionalDatabase()
