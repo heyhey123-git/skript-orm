@@ -240,9 +240,10 @@ dependencies {
 // A database for the server test, read from the same keys the integration suite of that implementation
 // reads, so one `-P` set configures both layers. Which implementation is `skriptorm.test.server.type`,
 // the name the scripts write after `database`: `MySQL` by default, because that is what these scripts
-// were written against and what the released jar registers beside `"JDBC"`, or `PostgreSQL`, which is
-// what its own job runs. Without a url the run has no database, which is the default and how it runs
-// locally; with one, the element scripts run against it and a round trip joins them.
+// were written against and what the released jar registers beside `"JDBC"`, or `PostgreSQL` or
+// `MongoDB`, which is what their own jobs run. Without a url the run has no database, which is the
+// default and how it runs locally; with one, the element scripts run against it and a round trip joins
+// them.
 
 /**
  * What the server test needs to know about one implementation.
@@ -252,8 +253,16 @@ dependencies {
  * @property module the build module that registers its type name, when that is not part of the jar the
  *   run installs, so the test can say which one to bundle.
  * @property username the account a fresh install of that server has.
+ * @property transactions whether a `database transaction` section can open one. Where it cannot, the
+ *   section refuses, skips its body and carries on, so the run reaches the same scripts with different
+ *   messages instead of different scripts.
  */
-data class ServerTestImplementation(val keys: String, val module: String?, val username: String)
+data class ServerTestImplementation(
+    val keys: String,
+    val module: String?,
+    val username: String,
+    val transactions: Boolean = true
+)
 
 val serverTestImplementations = mapOf(
     "MySQL" to ServerTestImplementation(keys = "mysql", module = null, username = "root"),
@@ -261,6 +270,14 @@ val serverTestImplementations = mapOf(
         keys = "postgres",
         module = "postgresql-implementation",
         username = "postgres"
+    ),
+    // No username, because a MongoDB that CI starts has none to give. The type name is the name a script
+    // writes and the same word as the product, so its keys are `skriptorm.test.mongo.*`.
+    "MongoDB" to ServerTestImplementation(
+        keys = "mongo",
+        module = "mongodb-implementation",
+        username = "",
+        transactions = false
     )
 )
 
@@ -392,6 +409,10 @@ tasks.named<RunServer>("runServer") {
 // carries the assertions that matter. Keeping the list here rather than in the scripts means a script
 // added to one without the other fails the test instead of passing unnoticed.
 val serverTestExpectedMessage = if (serverTestUsesDatabase) "" else "No database connected."
+
+// What a section reports where the implementation has no transactions. The wording is core's, the one
+// `Database.beginTransaction` refuses with, so this is a copy of a message rather than of a decision.
+val serverTestNoTransactionsMessage = "This database implementation does not support transactions."
 // The names only a run with a database reaches, in a map of their own: the scripts that report them are
 // copied only when a database is configured, while the consistency check below has to know them in both
 // modes.
@@ -446,6 +467,21 @@ val serverTestDatabaseChecks = mapOf(
         "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
 )
 
+// What those same transaction lines report on an implementation that has no transactions at all. The
+// section refuses to open one, skips its body and carries on with the statement after it, so the script
+// still reaches its end and reports the same names — with the refusal instead of a commit, and with no
+// rows for the reads, since nothing the bodies would have written ran.
+val serverTestNoTransactionChecks = mapOf(
+    "transaction commit" to serverTestNoTransactionsMessage,
+    "transaction failed" to serverTestNoTransactionsMessage,
+    "transaction rows" to "row1=<none> row2=<none>",
+    "transaction rollback" to serverTestNoTransactionsMessage,
+    "transaction rollback rows" to "row1=<none> row2=<none>",
+    "transaction timeout" to serverTestNoTransactionsMessage,
+    "transaction timeout rows" to "row1=<none> row2=<none>",
+    "transaction refuse" to serverTestNoTransactionsMessage
+)
+
 val serverTestChecks = buildMap {
     put("register table", serverTestExpectedMessage)
     // This one names an implementation that is not installed, so it reports the same in both modes.
@@ -484,7 +520,9 @@ val serverTestChecks = buildMap {
     // it does not hold, in both modes.
     put("sqlite round trip", "ok")
     if (serverTestUsesDatabase) {
-        putAll(serverTestDatabaseChecks)
+        // The transaction lines are the one place the same script reports different things depending on
+        // what the implementation can do, so which map is expected here is the implementation's answer.
+        putAll(if (serverTestImplementation.transactions) serverTestDatabaseChecks else serverTestNoTransactionChecks)
     }
 }
 

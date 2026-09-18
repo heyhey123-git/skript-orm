@@ -420,21 +420,24 @@ inside `values` and `where`: those happen after the database lookup, so a run wi
 reaches them.
 
 Which implementation those keys describe is `skriptorm.test.server.type`, the name the scripts write after
-`database`. It defaults to `MySQL`; `PostgreSQL` runs the same scripts against the PostgreSQL
-implementation, which is what its CI job does. The name also decides which keys the credentials come
+`database`. It defaults to `MySQL`; `PostgreSQL` and `MongoDB` run the same scripts against those two
+implementations, which is what their own CI jobs do. The name also decides which keys the credentials come
 from, so one `-P` set configures both the integration tests and this layer, and a name belonging to
 neither fails the build instead of quietly running without a database.
 
-Two consequences shape those scripts. Every element reports whatever its step produced once a
+Three consequences shape those scripts. Every element reports whatever its step produced once a
 connection exists, so in this mode their expected messages are empty and only their presence is
-checked; the round trip is what carries the assertions. And the setup and round trip scripts keep a
+checked; the round trip is what carries the assertions. The setup and round trip scripts keep a
 start guard *as well as* the marker, because the two are not the same thing: their steps wait on the
 database, so without the guard a second firing would begin while the first is still working and
-register the same table twice.
+register the same table twice. And an implementation without transactions gets the same transaction
+script: the section refuses to open one, skips its body and carries on, so the script reaches its end and
+reports the refusal instead of a commit — which is what `MongoDB` expects, and the only place two modes
+expect different messages for the same script.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs six jobs:
+`.github/workflows/ci.yml` runs seven jobs:
 
 - `test` runs the unit tests — including `:mongodb-implementation:test` — and the Skript tests plus
   `ktlintCheck`, and needs nothing else.
@@ -455,6 +458,12 @@ register the same table twice.
 - `mongo-testcontainers` runs the MongoDB integration suite with no server configured, in the same way
   and for the same reason, with the pinned `mongo:8` image. Like `mysql-testcontainers`, it runs only
   on the default branch and on manual runs.
+- `mongo-server` runs the Skript server test against MongoDB, which is a service container of the job
+  rather than a Testcontainers one: the process under test is the Paper server the build starts, and it
+  needs an address that is already answering before the run begins, so the job waits for the server with
+  `mongosh` the way the PostgreSQL job waits with `pg_isready`. It is the only job whose transaction lines
+  expect the refusal a database without transactions reports. Runs on the default branch and on manual
+  runs, like the other container jobs.
 - `skript-server` boots the Paper server described above and checks what the plugin did there. It
   needs neither Docker nor a database, so it runs on every change. The server jar it downloads lands
   in the Gradle user home, which the Gradle state cache already covers, so the job needs no cache of
@@ -462,8 +471,8 @@ register the same table twice.
 
 Every job installs the toolchain through `.github/actions/prepare-build`, and the Skript server test is
 annotated through `.github/actions/annotate-server-test`. Both live under `.github/actions/` for the same
-reason: six jobs repeating the JDK, the cache and the wrapper make the jobs hard to compare and the
-version easy to bump in five places out of six. The checkout stays in each job rather than in the
+reason: seven jobs repeating the JDK, the cache and the wrapper make the jobs hard to compare and the
+version easy to bump in six places out of seven. The checkout stays in each job rather than in the
 action, because a local action is read from the workspace and so cannot be the step that creates it.
 
 Two more workflows do the packaging. Neither decides whether the code is correct; `ci.yml` does that.

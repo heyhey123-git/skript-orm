@@ -289,6 +289,69 @@ jobs:
           path: '**/build/reports/tests/**'
           if-no-files-found: ignore
 
+  # The addon itself against MongoDB, on the same scripts the MySQL and PostgreSQL jobs drive: the
+  # element scripts, the round trip, named connections and the transaction lines, which here expect the
+  # refusal a database without transactions reports rather than a commit.
+  #
+  # MongoDB is a service container rather than a Testcontainers one, because the process under test is
+  # the Paper server this build starts, not the test JVM: it needs an address that is up before the run
+  # begins. Like the other container jobs, this pulls an image GitHub cannot cache, so it is restricted
+  # to the default branch and to manual runs.
+  mongo-server:
+    name: Skript server test against MongoDB
+    if: >-
+      github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - 27017:27017
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/prepare-build
+        with:
+          gradle-cache-read-only: true
+
+      # A service container is started for the job, not for the step, so this asks the server itself
+      # whether it is answering before the run is pointed at it — the same reason the PostgreSQL job
+      # waits with `pg_isready`. The last command needs a working server, so the step fails if it never
+      # came up rather than leaving every script to report a connection it could not make.
+      - name: Wait for MongoDB
+        run: |
+          for attempt in $(seq 1 30); do
+            if docker exec ${{ job.services.mongodb.id }} mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null | grep -q 1; then
+              break
+            fi
+            sleep 2
+          done
+          docker exec ${{ job.services.mongodb.id }} mongosh --quiet --eval 'db.runCommand({ ping: 1 })'
+
+      # A bare host and port, which is one of the forms a script may write, and the published port of
+      # the container rather than a name only the runner's Docker network can resolve.
+      - name: Run the Skript server test against MongoDB
+        run: |
+          ./gradlew serverTest --stacktrace \
+            -Pskriptorm.test.server.type=MongoDB \
+            -Pskriptorm.test.mongo.url=127.0.0.1:27017
+
+      - name: Annotate the server test
+        if: failure()
+        uses: ./.github/actions/annotate-server-test
+
+      - name: Upload the server log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: mongo-server-log
+          # The whole directory, so the harness's problem list travels with the log.
+          path: build/server-test/logs/
+          if-no-files-found: ignore
+
   # Boots a real Paper server carrying Skript and the built plugin, and checks what the addon did
   # there. It is the only layer that can see element registration and the parse phase of a real
   # script, and it needs nothing from the runner image: no Docker, no database.
