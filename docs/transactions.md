@@ -103,7 +103,10 @@ database transaction with timeout 2 minutes:
 - It comes after `on connection`, in that order:
   `database transaction on connection "logs" with timeout 2 minutes:`.
 - The clock starts when the transaction opens, because opening it is what takes the connection — not at
-  its first statement.
+  its first statement — and it does not pause: statements, the script's own work between them and a
+  `wait` all count towards it. A large or slow body is rolled back even when every statement in it is
+  quick, because what the deadline bounds is how long a connection and its locks are held, not how fast
+  any one statement is.
 - A value that is not positive, or an expression that resolved to nothing, is reported as
   `The transaction timeout has to be positive.` and `The transaction timeout is not set.`, and no
   transaction is opened.
@@ -115,10 +118,20 @@ When it expires, the transaction is rolled back and the next statement inside it
 write a long `wait` inside a transaction: it holds a connection and any row locks the body has taken
 while it waits.
 
-A statement inside a transaction is not given the whole timeout but what is left of it, so the last
-statement cannot outlive the transaction by another full timeout. While a transaction is open, that
-remaining time is the only limit on its statements: the connection's `statement timeout` applies to
-statements outside a transaction, not inside one.
+A statement inside a transaction is not given the whole timeout but what is left of it, rounded up to a
+second and never below one, as the limit the driver enforces. The last statement of a transaction
+therefore cannot outlive it by another full timeout, and a statement that runs into the deadline is
+cancelled rather than left holding the connection. The connection's `statement timeout` does not apply
+inside a transaction: the remaining transaction time is the only limit there is.
+
+Nothing can interrupt a statement that is already running, because the rollback needs the same connection
+and waits for it to come back. That is why the statement is the one that gives up first. A connection
+that stopped answering altogether is the case where the deadline can slip, and the `socketTimeout` in the
+[url](connections.md#statement-timeout) is what bounds it.
+
+A transaction that legitimately needs longer says so, and one that is slow because it holds a lot of work
+is better off split: what is inside it is what the transaction protects, so slow reads and long
+computation can move out of the body while the statements that have to happen together stay in it.
 
 ## What it does not do
 
