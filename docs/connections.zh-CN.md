@@ -13,7 +13,7 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` 是实现的名称。jar 里注册了三个：`"MySQL"`、`"PostgreSQL"` 与 `"JDBC"`，见下面的“实现名称”。
+- `"MySQL"` 是实现的名称。jar 里注册了四个：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
 - 块里其它字面量属性会原样交给实现。日后有实现需要更多参数，也不必新添语法。
 - 这个 section 必定等待：下一行执行时，连接要么可用，要么已经失败。这里既不需要 `and wait`，也不接受它。
@@ -32,16 +32,17 @@ if last database error is set:
 
 ## 实现名称
 
-引号里那个词是**类型名**，不是数据库产品的名字：它决定用哪套代码拼 SQL、读结果，而且是**大小写敏感的精确匹配**。jar 里注册了三个：
+引号里那个词是**类型名**，不是数据库产品的名字：它决定用哪套代码拼语句、读结果，而且是**大小写敏感的精确匹配**。jar 里注册了四个：
 
 | 类型名 | 它带来什么 |
 | --- | --- |
 | `"MySQL"` | MySQL 方言——反引号标识符、`INSERT IGNORE`、`ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`、`AUTO_INCREMENT`、`LIMIT` 分页——以及由插件自动找到的 MySQL 驱动（`com.mysql.cj.jdbc.Driver`，或更老的 `com.mysql.jdbc.Driver`）。脚本要用的几乎总是这一个。 |
 | `"PostgreSQL"` | PostgreSQL 方言——`ON CONFLICT`、`EXCLUDED`、`GENERATED … AS IDENTITY`，以及因为 PostgreSQL 没有 `UPDATE ... LIMIT` 而改用 `ctid` 写出的行数限制——加上插件在首次启动时替它下载的驱动。 |
+| `"MongoDB"` | MongoDB，通过插件为它下载的阻塞式 MongoDB Java 驱动访问。它底下没有 SQL，所以好几条语句的回答是刻意不同的，[兼容性](compatibility.zh-CN.md#mongodb) 一一列出；它自己的属性见下面一节。 |
 | `"JDBC"` | 由**你自己**在 `driver` 属性里指定驱动，配一个写通用 SQL 的方言：`"双引号"` 标识符、取一行用 `LIMIT 1`、分页用 `LIMIT ? OFFSET ?`——这正是 MySQL、MariaDB、SQLite、PostgreSQL、H2 都接受的写法。凡是通用写法表达不了的——`insert ... if absent`、`upsert ... by id`、写操作加 limit、`auto increment`——它宁可拒绝也不猜。 |
 
-后两个的区别就在于驱动从哪来。`"PostgreSQL"` 指的是本插件会替你取好、备好的驱动；`"JDBC"` 指的是必须已经
-在服务端 classpath 上的类，这也正是它的用途。要连 SQLite 用的就是后者，因为 Paper 自带它的驱动：
+驱动从哪来，区分的是这几种类型。`"PostgreSQL"` 与 `"MongoDB"` 指的是本插件会替你取好、备好的驱动；`"JDBC"`
+指的是必须已经在服务端 classpath 上的类，这也正是它的用途。要连 SQLite 用的就是后者，因为 Paper 自带它的驱动：
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -49,9 +50,9 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-只有 `"JDBC"` 需要你给出类名，也只有它对应着「这个 jar 一个驱动都不带」。PostgreSQL 连接不需要类名，什么都不需要：
-它的驱动会在首次启动时取来，[兼容性](compatibility.zh-CN.md#jar-里有什么) 讲了这件事，也讲了连不上它来源镜像的
-服务端该做些什么。
+只有 `"JDBC"` 需要你给出类名，四种类型里没有任何一种的驱动会打进这个 jar。`"PostgreSQL"` 或 `"MongoDB"`
+连接不需要类名，什么都不需要：两个驱动都会在首次启动时取来，[兼容性](compatibility.zh-CN.md#jar-里有什么)
+讲了这件事，也讲了连不上它来源镜像的服务端该做些什么。
 
 Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）：
 
@@ -61,9 +62,32 @@ Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）：
   就能用上这个类型支持的全部操作。方言拒绝的那些在这里同样被拒绝——没有 auto increment、没有
   `insert ... if absent`、没有 `upsert`、写操作不能加 limit——所以表的主键由脚本自己给。
 
-所以 `"mysql"` 会被拒绝，报 `Database 'mysql' is not supported.`；`"MariaDB"`、`"MongoDB"`、
-`"SQLite"` 同样会被拒绝——它们是产品，不是类型名。连接**底下**连的是什么产品是一回事，
-脚本**写**的是上面三个类型名之一，这是另一回事。[兼容性](compatibility.zh-CN.md) 里那份产品清单说的是前者。
+所以 `"mysql"` 会被拒绝，报 `Database 'mysql' is not supported.`；`"MariaDB"`、`"SQLite"` 同样会被拒绝
+——它们是产品，不是类型名。`"MongoDB"` 两样都是，正如 `"MySQL"`。连接**底下**连的是什么产品是一回事，
+脚本**写**的是上面四个类型名之一，这是另一回事。[兼容性](compatibility.zh-CN.md) 里那份产品清单说的是前者。
+
+## MongoDB 属性
+
+MongoDB 连接用的还是同一个块，只是 `url` 的含义不同：
+
+```sk
+create a connection to database "MongoDB" with properties:
+    url: "mongodb://localhost:27017"
+    username: "admin"
+    password: "p@ss:w/rd"
+    database: "logs"
+    auth database: "admin"
+```
+
+- `url` 可以只是 `host:port`，也可以是完整的连接串，以 `mongodb://` 或 `mongodb+srv://` 开头；完整的连接串会连
+  选项一起原样交给驱动，例如 `mongodb://host:27017/logs?retryWrites=false`。
+- `username` 与 `password` 和 SQL 实现一样是分开的两个属性，以字符串交给驱动，而不是拼进 url。所以含有 `@`、
+  `:`、`/`、`%` 的密码就只是密码，不需要转义。
+- `database` 指定要用的数据库，`mongodb://host:27017/mydb` 这样的 url 也指定了一个。写出来的 `database`
+  优先于 url 里的那个；两边都没有时用 `skript-orm`。
+- `auth database` 指定凭据所属的数据库，用于账号放在别处的服务端。默认就是正在使用的那个数据库。
+- **没有事务。** MongoDB 没有事务，所以这条连接上的 `database transaction` section 会失败，报
+  `This database implementation does not support transactions.`；见 [兼容性](compatibility.zh-CN.md#mongodb)。
 
 ## 给连接起名
 
@@ -188,7 +212,9 @@ create a connection to database "MySQL" with properties:
 - 它存在的原因是：一条永远不结束的语句会一直占着池子里的一条连接，直到服务器重启，而没有别的东西会终结它。
 - 它能保证的是**脚本不再等**，不是服务端停了：取消由驱动发起，MySQL 的做法是另开一条连接把那个查询杀掉。
 - 它只管一条语句。从池里等一条空闲连接、以及 `commit` / `rollback` 等锁，都不在其中；那些由服务端自己的上限和 url 上的 `socketTimeout` 兜着。
+- 在 MongoDB 上，同一个属性会变成驱动的 socket 读取超时，而这条连接的 `closeWaitTimeout` 是这个超时加五秒，和 SQL 那边完全一样。不同的是超时后两边各自怎么做：MySQL 从另一条连接把语句杀掉，MongoDB 的驱动则只是不再等响应——服务端会把已经收到的语句做完。无论哪边，这个属性限制的都是**脚本等多久**，而不是服务端做什么。
 - MySQL 的 `innodb_lock_wait_timeout` 默认 50 秒，比这个长，所以等锁的语句通常先被这个超时取消，报出来的是超时而不是锁等待。想让数据库自己说话，就把这个值调到 50 以上。
+- 这个值必须是整秒。别的写法会被拒绝，报 `Connection property 'statement timeout' must be a whole number of seconds, but was 'x'.`；负数则报 `Connection property 'statement timeout' must not be negative, but was -1.`。
 
 事务内的语句拿到的是**事务剩余的时间**，而不是这整个超时。见 [事务](transactions.zh-CN.md)。
 

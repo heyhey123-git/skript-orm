@@ -35,10 +35,42 @@ register a database table "users":
 括号里的大小只对本身有大小概念的类型有意义：`string`、`uuid`、`location`。后两者的默认值本来就和内容匹配，
 所以通常只给 `string` 写大小。
 
+### MongoDB
+
+上面那张表的“MySQL 存储”是 SQL 类型，`"MySQL"`、`"JDBC"` 与 `"PostgreSQL"` 建出来的就是它。`"MongoDB"`
+是底下没有 SQL 的那个类型名：文档里存的是 BSON，没有任何东西会变成 SQL 列，同一批逻辑类型的对应关系如下。
+这一实现其它不同之处在 [兼容性](compatibility.zh-CN.md#mongodb)。
+
+| 类型 | BSON |
+| --- | --- |
+| `boolean` | boolean |
+| `tinyint` | int32——一个字节加宽成整数 |
+| `int` | int32 |
+| `bigint` | int64 |
+| `double` | double |
+| `float` | double——float 加宽而来 |
+| `string` | string |
+| `uuid` | binary——它两半的 16 个字节 |
+| `itemstack` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
+| `location` | binary——与 SQL 实现存进 `VARBINARY` 的序列化内容相同 |
+| `bukkitserializable` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
+| `nbtcompound` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
+| `date` | int64——epoch 毫秒 |
+| `time` | int32——ticks（0…24000） |
+| `timespan` | int64——毫秒 |
+
+`size` 与 `nullable` 在这里只是声明：集合没有 schema，没有任何东西强制它们。注册真正建立的是主键上的唯一索引
+与 `auto increment` 背后的计数器，而集合由 MongoDB 在写入第一份文档时自行创建。
+
+**在 MongoDB 上，`date` 列保留的是精确时刻。** BSON 没有“只有日期”的类型，所以这一列就是上面的 epoch 毫秒，
+时分秒**不会**被丢掉。它是唯一一个在各实现之间含义不同的类型；语句层面的差异都写在
+[兼容性](compatibility.zh-CN.md#mongodb) 里。下一节讲的是 SQL 实现。
+
 ## 两个容易意外的点
 
-**`date` 列只保留日期，不保留时间。** 它存为 SQL `DATE`，时分秒会被丢掉。需要精确时刻的脚本应该存
-`bigint`（epoch 毫秒）或者 `timespan`。
+**`date` 列只保留日期，不保留时间——这是 SQL 实现的行为。** 在它们那里，这一列存为 SQL `DATE`，时分秒会被
+丢掉；需要精确时刻的脚本应该存 `bigint`（epoch 毫秒）或者 `timespan`。MongoDB 是例外，原因见上面的
+[MongoDB](#mongodb) 一节。
 
 **`time` 列是“Minecraft 一天中的时刻”**，也就是 Skript `time` 类型携带的那个数字（0…24000），不是墙上时间。
 日历值用 `date`，时长用 `timespan`。

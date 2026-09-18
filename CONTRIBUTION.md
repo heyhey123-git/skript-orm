@@ -3,8 +3,8 @@
 [中文版](CONTRIBUTION.zh-CN.md)
 
 Skript ORM is a Skript addon that exposes database operations as Skript elements. It is in early
-development: both the public API and the internal structure may still change. Unit tests and an
-opt-in MySQL integration suite cover the current behaviour (see §8).
+development: both the public API and the internal structure may still change. Unit tests and opt-in
+integration suites for MySQL, PostgreSQL and MongoDB cover the current behaviour (see §8).
 
 The guiding principles are **moderate abstraction**, **readability over cleverness**, and **a small
 surface that is pleasant to use**. When a change and a principle disagree, the principle wins.
@@ -21,11 +21,15 @@ surface that is pleasant to use**. When a change and a principle disagree, the p
 | `mongodb-implementation`      | MongoDB behaviour                                        |
 
 The root project builds the shaded plugin jar. It bundles every implementation module — the generic JDBC
-one and the PostgreSQL one — and **no JDBC driver**: Paper downloads the driver a module needs on the first
-start, into the server's `libraries/` directory, from the `libraries` entry in `plugin.yml`. That keeps the
-jar the size of the plugin and the driver the library its authors published, at the cost of a server that
-must be able to reach the server's mirror of Maven Central once. `-PbundleModules=a,b` builds a jar for
-another combination, which is how a module that is not released yet is tried:
+one, the PostgreSQL one, and the MongoDB one — and **no database driver**: the `libraries` entry in
+`plugin.yml` is generated from the modules the jar bundles, so a module that needs a driver names it
+there, and Paper downloads that driver on the first start into the server's `libraries/` directory. In
+the default build the list is `org.postgresql:postgresql:42.7.11` and
+`org.mongodb:mongodb-driver-sync:5.6.1`, while a combination of modules that need no driver writes
+`libraries: []`. That keeps the jar the size of the plugin and the driver the library its authors
+published, at the cost of a server that must be able to reach the server's mirror of Maven Central once.
+`-PbundleModules=a,b` builds a jar for another combination, which is how a module that is not released
+yet is tried:
 
 ```bash
 ./gradlew build                                  # shadow jar into build/dist
@@ -263,10 +267,11 @@ the top reads **Project**.
 
 There are four layers, run by four separate Gradle tasks.
 
-**Unit tests** (`core`, `generic-jdbc-implementation`) run on every build, need no network and no
-Docker, and cover contracts rather than line coverage: SQL rendering, parameter binding, cursor
-resource ownership, snapshot semantics, identifier validation, and the global `Database` lifecycle.
-JDBC interfaces are mocked with MockK.
+**Unit tests** (`core`, `generic-jdbc-implementation`, `mongodb-implementation`) run on every build,
+need no network and no Docker, and cover contracts rather than line coverage: SQL rendering, parameter
+binding, cursor resource ownership, snapshot semantics, identifier validation, and the global
+`Database` lifecycle. JDBC interfaces are mocked with MockK, and the MongoDB module's unit tests need
+no server either.
 
 ```bash
 ./gradlew test
@@ -323,6 +328,29 @@ when `-Pskriptorm.test.postgres.url` is set, with the same `SKRIPTORM_TEST_POSTG
 equivalents as the MySQL suite. The tests drop and recreate their tables, so that database must be
 dedicated to testing, and it has to accept a password over TCP. The SQL itself needs no server and is
 pinned by `PgJdbcDialectTest`, which is part of the ordinary `test` task.
+
+**MongoDB tests** (`mongodb-implementation`) split the same way: the converter half is plain unit tests
+that run anywhere, and the opt-in half needs a real MongoDB:
+
+```bash
+./gradlew :mongodb-implementation:integrationTest
+```
+
+With no server configured, the suite starts a standalone `mongo:8` container through Testcontainers.
+That is deliberately not the replica set `MongoDBContainer` sets up, because nothing here uses sessions
+or transactions, and a standalone container is the shape a script's own server is likely to have. To
+reuse a server you already have, point the tests at it instead; that database must be dedicated to
+testing, because the tests drop and recreate the collections they use:
+
+```bash
+./gradlew :mongodb-implementation:integrationTest \
+  -Pskriptorm.test.mongo.url="mongodb://localhost:27017/skriptorm_test"
+```
+
+`-Pskriptorm.test.mongo.username`, `-Pskriptorm.test.mongo.password`,
+`-Pskriptorm.test.mongo.database` and `-Pskriptorm.test.mongo.image` are optional and override the
+defaults. When neither Docker nor an external server is available, the MongoDB tests abort with a reason
+instead of passing silently.
 
 The MySQL test classpath is deliberately the plugin runtime without a server: it includes Paper and
 Skript, because those are the classes the JDBC type registry resolves when it initializes.
@@ -392,8 +420,8 @@ inside `values` and `where`: those happen after the database lookup, so a run wi
 reaches them.
 
 Which implementation those keys describe is `skriptorm.test.server.type`, the name the scripts write after
-`database`. It defaults to `MySQL`; `PostgreSQL` runs the same scripts against the other implementation
-the repository has, which is what its CI job does. The name also decides which keys the credentials come
+`database`. It defaults to `MySQL`; `PostgreSQL` runs the same scripts against the PostgreSQL
+implementation, which is what its CI job does. The name also decides which keys the credentials come
 from, so one `-P` set configures both the integration tests and this layer, and a name belonging to
 neither fails the build instead of quietly running without a database.
 
@@ -406,9 +434,10 @@ register the same table twice.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs five jobs:
+`.github/workflows/ci.yml` runs six jobs:
 
-- `test` runs the unit and Skript tests plus `ktlintCheck`, and needs nothing else.
+- `test` runs the unit tests — including `:mongodb-implementation:test` — and the Skript tests plus
+  `ktlintCheck`, and needs nothing else.
 - `mysql-installed` runs the JDBC integration tests against the MySQL that the runner image already
   installs, which it starts with `systemctl`. That costs no image pull at all, and it puts the
   version the image ships (8.0 today) next to the 8.4 the other job pins, so the suite covers two
@@ -423,6 +452,9 @@ register the same table twice.
   uses locally, so the Docker detection and the pinned `mysql:8.4` image get exercised as well. It
   runs only on the default branch and on demand, because a container image is the one thing the cache
   cannot help with.
+- `mongo-testcontainers` runs the MongoDB integration suite with no server configured, in the same way
+  and for the same reason, with the pinned `mongo:8` image. Like `mysql-testcontainers`, it runs only
+  on the default branch and on manual runs.
 - `skript-server` boots the Paper server described above and checks what the plugin did there. It
   needs neither Docker nor a database, so it runs on every change. The server jar it downloads lands
   in the Gradle user home, which the Gradle state cache already covers, so the job needs no cache of
@@ -430,8 +462,8 @@ register the same table twice.
 
 Every job installs the toolchain through `.github/actions/prepare-build`, and the Skript server test is
 annotated through `.github/actions/annotate-server-test`. Both live under `.github/actions/` for the same
-reason: five jobs repeating the JDK, the cache and the wrapper make the jobs hard to compare and the
-version easy to bump in four places out of five. The checkout stays in each job rather than in the
+reason: six jobs repeating the JDK, the cache and the wrapper make the jobs hard to compare and the
+version easy to bump in five places out of six. The checkout stays in each job rather than in the
 action, because a local action is read from the workspace and so cannot be the step that creates it.
 
 Two more workflows do the packaging. Neither decides whether the code is correct; `ci.yml` does that.
@@ -500,14 +532,14 @@ stops a run from repeating the installation. Do not add `cache: gradle` to `setu
 `actions/cache` entry for the Gradle User Home — the action's documentation warns that both interfere
 with it.
 
-The cache provider is `enhanced`, the action's default. It builds a cache key per job, so the three
-jobs do not compete for one entry. The first CI run used `basic`, the MIT provider, and showed why
-that matters: `basic` keys the cache only on the build files, so all three jobs computed the same key
-and every job but the first failed to save it, reporting "Unable to reserve cache ... another job may
-be creating this cache". The one entry that did get saved held only the dependencies of whichever job
-finished first, so the other jobs re-downloaded theirs on every run. `enhanced` is a proprietary
-component, free for public repositories and in preview for private ones; `cache-provider: basic` is
-the one-line fallback if that trade-off ever becomes unacceptable.
+The cache provider is `enhanced`, the action's default. It builds a cache key per job, so the jobs do
+not compete for one entry. The first CI run used `basic`, the MIT provider, and showed why that matters:
+`basic` keys the cache only on the build files, so every job computed the same key and every job but the
+first failed to save it, reporting "Unable to reserve cache ... another job may be creating this cache".
+The one entry that did get saved held only the dependencies of whichever job finished first, so the
+other jobs re-downloaded theirs on every run. `enhanced` is a proprietary component, free for public
+repositories and in preview for private ones; `cache-provider: basic` is the one-line fallback if that
+trade-off ever becomes unacceptable.
 
 Caches are written only from the default branch, and every run restores from it. Each job's summary
 reports what was restored and saved.
@@ -517,13 +549,13 @@ Two things are deliberately not cached:
 - **The Gradle build cache.** Enabling `org.gradle.caching` would also make `Test` tasks cacheable,
   and a test answered from a cache is not a test that ran. Compiling this project is cheap next to
   the downloads.
-- **The MySQL container image.** GitHub cannot cache Docker images, so `mysql-testcontainers` pulls
-  `mysql:8.4` on every run it takes part in. This is why the other database job starts the MySQL the
-  runner image already has instead of using a service container: that job pulls nothing, and it is
-  also restricted to the default branch so that pull requests pay one pull rather than two.
-  `mysql-testcontainers` is additionally marked `cache-read-only`, because it resolves the same
-  dependencies as `mysql-installed`, so letting it write would only duplicate a large entry and risk
-  evicting the shared ones.
+- **The database container images.** GitHub cannot cache Docker images, so `mysql-testcontainers`
+  pulls `mysql:8.4` on every run it takes part in, and `mongo-testcontainers` pulls `mongo:8` the same
+  way. This is why the other database job starts the MySQL the runner image already has instead of
+  using a service container: that job pulls nothing, and it is also restricted to the default branch
+  so that pull requests pay one pull rather than two. `mysql-testcontainers` is additionally marked
+  `cache-read-only`, because it resolves the same dependencies as `mysql-installed`, so letting it
+  write would only duplicate a large entry and risk evicting the shared ones.
 
 Note that a `docker save` tarball cached with `actions/cache` is not a way out: the tarball is
 uncompressed and therefore larger than the pull it replaces, it competes for the same cache budget as

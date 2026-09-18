@@ -21,8 +21,8 @@ on load:
         stop
 ```
 
-- `"MySQL"` 是某个实现的类型名。jar 里注册了三个：`"MySQL"`、`"PostgreSQL"` 与 `"JDBC"`，而且是精确匹配，所以
-  数据库**产品**的名字不在其中；见 [连接](connections.zh-CN.md) 里的“实现名称”一节。
+- `"MySQL"` 是某个实现的类型名。jar 里注册了四个：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
+  而且是精确匹配，所以单是数据库**产品**的名字不在其中；见 [连接](connections.zh-CN.md) 里的“实现名称”一节。
 - `url` 必填。`username` 与 `password` 可以是空字符串，供不需要账号的服务器使用。
 - 这个 section 必定等待，所以同一 trigger 里它之后的语句，跑在已经连上的库上。若另一个脚本先跑，它会看到 `No database connected.`。连接写在 `on load` 里，正是为了免去这层先后之忧。
 - 账号密码就写在脚本文件里，这个文件的可见范围，得跟数据库账号一样收着。

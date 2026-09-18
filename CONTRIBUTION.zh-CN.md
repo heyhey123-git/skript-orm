@@ -3,7 +3,7 @@
 [English version](CONTRIBUTION.md)
 
 Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：公开 API 和内部结构
-都仍可能调整。单元测试与可选的 MySQL 集成测试覆盖了当前行为（见第 8 节）。
+都仍可能调整。单元测试与可选的 MySQL、PostgreSQL、MongoDB 集成测试覆盖了当前行为（见第 8 节）。
 
 我们遵循三个原则：**适度抽象**、**可读性优于技巧**、**对外接口小而友好**。当某处改动与原则冲突时，
 以原则为准。
@@ -19,10 +19,13 @@ Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 | `postgresql-implementation`   | PostgreSQL 专属 JDBC 行为    |
 | `mongodb-implementation`      | MongoDB 行为               |
 
-根项目负责产出 shadow 插件 jar。它会打包**每一个实现模块**——通用 JDBC 那一个和 PostgreSQL 那一个——并且
-**不带任何 JDBC 驱动**：Paper 会在首次启动时，依据 `plugin.yml` 里的 `libraries` 条目，把某个模块需要的驱动
-下载到服务端的 `libraries/` 目录。这样 jar 就只有插件本身的体积，驱动也仍是其作者发布的那份库，代价是服务端必须
-能连上一次它自己的 Maven Central 镜像。`-PbundleModules=a,b` 则按别的组合构建 jar，尚未发布的模块就是靠它来试的：
+根项目负责产出 shadow 插件 jar。它会打包**每一个实现模块**——通用 JDBC 那一个、PostgreSQL 那一个，还有
+MongoDB 那一个——并且**不带任何数据库驱动**：`plugin.yml` 里的 `libraries` 条目由 jar 打包的模块在构建时
+生成，某个模块需要驱动就在那里写上它，Paper 会在首次启动时把驱动下载到服务端的 `libraries/` 目录。默认构建里
+这份清单是 `org.postgresql:postgresql:42.7.11` 与 `org.mongodb:mongodb-driver-sync:5.6.1`，而不需要任何
+驱动的模块组合会写出 `libraries: []`。这样 jar 就只有插件本身的体积，驱动也仍是其作者发布的那份库，代价是服务端
+必须能连上一次它自己的 Maven Central 镜像。`-PbundleModules=a,b` 则按别的组合构建 jar，尚未发布的模块就是靠
+它来试的：
 
 ```bash
 ./gradlew build                                  # shadow jar 输出到 build/dist
@@ -226,9 +229,9 @@ Code* 与 `./gradlew ktlintCheck` 的结果一致。
 
 测试分为四层，由四个独立的 Gradle 任务运行。
 
-**单元测试**（`core`、`generic-jdbc-implementation`）随每次构建运行，不需要网络和 Docker，覆盖的是契约
-而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验，以及全局 `Database` 生命周期。
-JDBC 接口用 MockK 模拟。
+**单元测试**（`core`、`generic-jdbc-implementation`、`mongodb-implementation`）随每次构建运行，不需要网络和
+Docker，覆盖的是契约而不是行覆盖率：SQL 渲染、参数绑定、游标资源归属、快照语义、标识符校验，以及全局 `Database`
+生命周期。JDBC 接口用 MockK 模拟；MongoDB 模块的单元测试同样不需要服务端。
 
 ```bash
 ./gradlew test
@@ -267,6 +270,38 @@ classpath 上的部分：
 同样的设置也可以从环境变量读取：`SKRIPTORM_TEST_MYSQL_URL`、`SKRIPTORM_TEST_MYSQL_USERNAME`、
 `SKRIPTORM_TEST_MYSQL_PASSWORD`、`SKRIPTORM_TEST_MYSQL_DRIVER`、`SKRIPTORM_TEST_MYSQL_IMAGE`。当既没有
 Docker 也没有外部服务器时，MySQL 测试会带着原因中止，而不是静默通过。
+
+**PostgreSQL 测试**（`postgresql-implementation`）以同样的方式对着真实 PostgreSQL 服务端运行，而且它们是
+唯一能判断方言写出的 SQL 是否为 PostgreSQL 所接受的层次：
+
+```bash
+./gradlew :postgresql-implementation:integrationTest
+```
+
+每个测试 JVM 会启动一个 `postgres:17-alpine` 容器；设置了 `-Pskriptorm.test.postgres.url` 时改用已有的
+服务端，环境变量与 MySQL 那套 `SKRIPTORM_TEST_POSTGRES_*` 对应。测试会删除并重建自己使用的表，因此该数据库必须
+专用于测试，并且要允许通过 TCP 用密码登录。SQL 本身不需要服务端，由 `PgJdbcDialectTest` 固定，它属于普通的
+`test` 任务。
+
+**MongoDB 测试**（`mongodb-implementation`）也分成两半：转换器那一半是普通的单元测试，任何环境都能跑；可选的
+那一半需要真实的 MongoDB：
+
+```bash
+./gradlew :mongodb-implementation:integrationTest
+```
+
+不配置服务端时，这套测试会通过 Testcontainers 启动一个独立的 `mongo:8` 容器。它刻意不是
+`MongoDBContainer` 会搭起的那套副本集，因为这里没有任何地方用到会话或事务，而且独立容器更接近脚本自己的服务端
+该有的样子。若想复用已有的 MongoDB，可以把测试指向它；该数据库必须专用于测试，因为测试会删除并重建自己使用的集合：
+
+```bash
+./gradlew :mongodb-implementation:integrationTest \
+  -Pskriptorm.test.mongo.url="mongodb://localhost:27017/skriptorm_test"
+```
+
+`-Pskriptorm.test.mongo.username`、`-Pskriptorm.test.mongo.password`、
+`-Pskriptorm.test.mongo.database` 与 `-Pskriptorm.test.mongo.image` 都是可选项，用来覆盖默认值。当既没有
+Docker 也没有外部服务器时，MongoDB 测试会带着原因中止，而不是静默通过。
 
 集成测试的 classpath 刻意等同于“没有服务端的插件运行时”：包含 Paper 与 Skript，因为 JDBC 类型注册表在初始化
 时会解析这些类；一旦这一点不再成立，`JdbcRuntimeClasspathIntegrationTest` 会立刻报错。NBT 正是这个运行时用来
@@ -316,11 +351,16 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 `prepareServerTest` 负责写入运行目录 `build/server-test`：`server.properties`、测试脚本，以及 `eula.txt`。
 写入最后这个文件意味着为这个一次性测试服务端接受 Minecraft EULA——这也是由任务而非开发者去做的原因。
 
-同一批元素脚本也可以对着数据库跑。传入 JDBC 测试使用的那组 MySQL 属性（`-Pskriptorm.test.mysql.url`、
-`username`、`password`）后，会额外铺上 `server-test/database/`：一个由 `prepareServerTest` 写入凭据的 setup
-脚本（连接并注册它自己的表），以及一个 roundtrip 脚本（写入一行、读回、比对）。此时元素脚本面对的是真实连接
-——这也是唯一能覆盖 `values` / `where` 里「脚本值 → 列」转换的方式：转换发生在数据库查找之后，没有数据库的
-运行永远走不到那里。
+同一批元素脚本也可以对着数据库跑。传入某个实现的集成测试所用的属性——MySQL 的
+`-Pskriptorm.test.mysql.url`、`username`、`password`，或与之对应的 `skriptorm.test.postgres.*`——后，
+会额外铺上 `server-test/database/`：一个由 `prepareServerTest` 写入凭据的 setup 脚本（连接并注册它自己的表），
+以及一个 roundtrip 脚本（写入一行、读回、比对）。此时元素脚本面对的是真实连接——这也是唯一能覆盖 `values` /
+`where` 里「脚本值 → 列」转换的方式：转换发生在数据库查找之后，没有数据库的运行永远走不到那里。
+
+这些键描述的是哪个实现，由 `skriptorm.test.server.type` 决定，也就是脚本写在 `database` 后面的那个名字。它默认
+是 `MySQL`；`PostgreSQL` 会让同一批脚本对着 PostgreSQL 实现跑，这正是它那个 CI job 做的事。这个名字同时也决定
+凭据从哪组键读取，所以一套 `-P` 就同时配置了集成测试与这一层；不属于任何一边的名字会让构建失败，而不是悄悄在没有
+数据库的情况下运行。
 
 这带来两个写法上的后果。有连接之后，每个元素报告的内容取决于它走到了哪一步，所以该模式下它们的期望消息为空、
 只检查「是否出现」，真正的断言由 roundtrip 承担。另外 setup 与 roundtrip 脚本同时保留「启动守卫」和「完成
@@ -329,15 +369,20 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 
 ### 持续集成
 
-`.github/workflows/ci.yml` 运行四个 job：
+`.github/workflows/ci.yml` 运行六个 job：
 
-- `test`：跑单元测试、Skript 测试与 `ktlintCheck`，不需要任何外部依赖。
+- `test`：跑单元测试（包括 `:mongodb-implementation:test`）、Skript 测试与 `ktlintCheck`，不需要任何外部依赖。
 - `mysql-installed`：对着 runner 镜像**已经装好**的 MySQL 跑 JDBC 集成测试，用 `systemctl` 启动它。这样
   完全不产生镜像拉取，并且把镜像自带的版本（目前是 8.0）与另一个 job 固定的 8.4 并排放进矩阵，一次拉取覆盖
   两个服务端版本。连接信息通过 `-P` 属性而不是环境变量传入，因为 Gradle 属性每次调用都会重新传递，即使
   守护进程是更早启动的。
+- `postgres-installed`：对 PostgreSQL 做同样的事——runner 镜像也装了它——然后对着同一个服务端跑 Skript 服务端
+  测试：`postgresql-implementation` 的测试是 PostgreSQL 方言与服务端唯一的碰面处，而服务端测试是插件在 MySQL
+  之外的实现上端到端跑一遍的唯一场合。
 - `mysql-testcontainers`：不配置任何服务器，跑同一套测试。这正是开发者本地的路径，因此 Docker 探测与固定的
   `mysql:8.4` 镜像也会被一并验证。它只在默认分支和手动触发时运行，因为容器镜像是缓存唯一帮不上忙的东西。
+- `mongo-testcontainers`：同样不配置任何服务器，跑 MongoDB 集成测试，验证 Docker 探测与固定的 `mongo:8`
+  镜像。和 `mysql-testcontainers` 一样，它只在默认分支和手动触发时运行。
 - `skript-server`：启动上面描述的那个 Paper 服务端，检查插件在其中的表现。它既不需要 Docker 也不需要数据库，
   所以每次改动都会运行。它下载的服务端 jar 落在 Gradle 用户目录里，而 Gradle 状态缓存已经覆盖了那里，因此
   这个 job 不需要自己的缓存。
@@ -394,8 +439,8 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 `cache: gradle`，也不要为 Gradle User Home 另加 `actions/cache` —— 该 action 的文档明确说明两者都会与它的
 缓存机制冲突。
 
-缓存提供方为 `enhanced`，也就是该 action 的默认值。它按 job 生成缓存键，所以三个 job 不会争抢同一条条目。
-第一次 CI 用的是 `basic`（MIT 实现），而它恰好暴露了这一点：`basic` 只用构建文件计算键，于是三个 job 算出
+缓存提供方为 `enhanced`，也就是该 action 的默认值。它按 job 生成缓存键，所以各个 job 不会争抢同一条条目。
+第一次 CI 用的是 `basic`（MIT 实现），而它恰好暴露了这一点：`basic` 只用构建文件计算键，于是每个 job 都算出
 同一个键，除第一个之外全部保存失败，报 "Unable to reserve cache ... another job may be creating this
 cache"。最终存下来的那条只包含最先结束的那个 job 的依赖，其他 job 每次都要重新下载自己那部分。`enhanced`
 是专有组件，对公开仓库免费、对私有仓库处于预览阶段；如果这个取舍以后变得不可接受，改回
@@ -407,11 +452,11 @@ cache"。最终存下来的那条只包含最先结束的那个 job 的依赖，
 
 - **Gradle 构建缓存。** 开启 `org.gradle.caching` 也会让 `Test` 任务可被缓存，而“从缓存得到的测试结果”并不
   等于“测试真的跑过”。本项目的编译耗时相对于下载量而言微不足道。
-- **MySQL 容器镜像。** GitHub 无法缓存 Docker 镜像，所以 `mysql-testcontainers` 每次参与运行都会拉取
-  `mysql:8.4`。这正是另一个数据库 job 改用 runner 镜像自带 MySQL、而不是 service 容器的原因：那个 job 一次
-  都不拉取；它还被限制为只在默认分支运行，好让 PR 只付一次拉取而不是两次。`mysql-testcontainers` 另外被标记
-  为 `cache-read-only`：它与 `mysql-installed` 解析同一批依赖，让它写入只会多出一份大条目，并可能挤掉共享
-  条目。
+- **数据库容器镜像。** GitHub 无法缓存 Docker 镜像，所以 `mysql-testcontainers` 每次参与运行都会拉取
+  `mysql:8.4`，`mongo-testcontainers` 同样每次都会拉取 `mongo:8`。这正是另一个数据库 job 改用 runner 镜像自带
+  MySQL、而不是 service 容器的原因：那个 job 一次都不拉取；它还被限制为只在默认分支运行，好让 PR 只付一次拉取
+  而不是两次。`mysql-testcontainers` 另外被标记为 `cache-read-only`：它与 `mysql-installed` 解析同一批依赖，
+  让它写入只会多出一份大条目，并可能挤掉共享条目。
 
 顺带说明：用 `actions/cache` 缓存 `docker save` 出来的 tar 并不是出路——tar 未压缩，比它替代的那次拉取更大，
 还会和 Gradle 条目抢同一份缓存配额，并且每个 job 都得加 shell 胶水。

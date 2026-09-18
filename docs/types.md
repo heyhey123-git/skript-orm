@@ -37,11 +37,46 @@ A size in brackets is only meaningful for the types that have one: `string`, `uu
 `uuid` and `location` have defaults that are already right for their contents, so a size is usually
 only written for `string`.
 
+### On MongoDB
+
+The "Stored as" column above is the SQL type, and it is what `"MySQL"`, `"JDBC"` and `"PostgreSQL"`
+create. `"MongoDB"` is the type name with no SQL under it: a document holds BSON, nothing becomes a SQL
+column, and the same logical types map like this. The rest of what that implementation does differently
+is on [Compatibility](compatibility.md#mongodb).
+
+| Type | BSON |
+| --- | --- |
+| `boolean` | boolean |
+| `tinyint` | int32 — the byte widened to a whole number |
+| `int` | int32 |
+| `bigint` | int64 |
+| `double` | double |
+| `float` | double — the float widened |
+| `string` | string |
+| `uuid` | binary — the 16 bytes of its two halves |
+| `itemstack` | binary — the same serialized payload the SQL implementations store in a `BLOB` |
+| `location` | binary — the same serialized payload the SQL implementations store in a `VARBINARY` |
+| `bukkitserializable` | binary — the same serialized payload the SQL implementations store in a `BLOB` |
+| `nbtcompound` | binary — the same serialized payload the SQL implementations store in a `BLOB` |
+| `date` | int64 — the epoch milliseconds |
+| `time` | int32 — the ticks (0…24000) |
+| `timespan` | int64 — the milliseconds |
+
+`size` and `nullable` are declarations only here: a collection has no schema, and nothing enforces them.
+What registration actually creates is the unique index on the primary key and the counter behind `auto
+increment`, and MongoDB creates the collection itself with the first document written.
+
+**A `date` column keeps the exact moment on MongoDB.** BSON has no date-only type, so the column is the
+epoch milliseconds above and the time of day is *not* dropped. It is the one type whose meaning differs
+between the implementations; everything the statements do differently is on
+[Compatibility](compatibility.md#mongodb). The next section describes the SQL implementations.
+
 ## Two ways a value can surprise you
 
-**A `date` column keeps the day, not the time.** It is stored as a SQL `DATE`, so the hour, minute and
-second are dropped. A script that needs the exact moment should store a `bigint` of epoch milliseconds
-or a `timespan` instead.
+**A `date` column keeps the day, not the time — on the SQL implementations.** There it is stored as a
+SQL `DATE`, so the hour, minute and second are dropped, and a script that needs the exact moment should
+store a `bigint` of epoch milliseconds or a `timespan` instead. MongoDB is the exception, for the reason
+[above](#on-mongodb).
 
 **A `time` column is a Minecraft time of day**, the same number Skript's `time` type carries (0…24000),
 not a wall clock reading. Use `date` for a calendar value and `timespan` for a duration.

@@ -47,6 +47,17 @@ if last database error is set:
     password: "123456"
 """
 )
+@Example(
+    """# MongoDB reads a host and port or a whole connection string, and takes the database to use
+# from `database` rather than from the url. `auth database` names where the credentials belong.
+create a connection to database "MongoDB" with properties:
+    url: "localhost:27017"
+    database: "mydb"
+    auth database: "admin"
+    username: "app"
+    password: "secret"
+"""
+)
 @Since("1.0.0")
 class SecCreateConnection : Section() {
 

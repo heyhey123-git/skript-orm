@@ -14,8 +14,8 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` names the implementation. The jar registers `"MySQL"` and `"JDBC"`; see
-  [The implementation name](#the-implementation-name) below.
+- `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"PostgreSQL"`, `"MongoDB"` and
+  `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
 - Any other literal property in the block is handed to the implementation untouched, so a future
   implementation can ask for more without new syntax.
@@ -39,17 +39,20 @@ this.
 ## The implementation name
 
 The quoted word is a **type name**, not the name of a database product: it selects the code that builds
-the SQL and reads the rows back, and it is matched exactly, case-sensitively. The jar registers three:
+the statements and reads the rows back, and it is matched exactly, case-sensitively. The jar registers
+four:
 
 | Type name | What it brings |
 | --- | --- |
 | `"MySQL"` | MySQL's dialect — backtick identifiers, `INSERT IGNORE`, `ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
 | `"PostgreSQL"` | PostgreSQL's dialect — `ON CONFLICT`, `EXCLUDED`, `GENERATED … AS IDENTITY`, and a row limit written through `ctid` because PostgreSQL has no `UPDATE ... LIMIT` — and the driver the plugin downloads for it on the first start. |
+| `"MongoDB"` | MongoDB, through the blocking MongoDB Java driver the plugin downloads for it. There is no SQL under it, so several statements answer differently on purpose; [Compatibility](compatibility.md#mongodb) lists them, and its properties are below. |
 | `"JDBC"` | A driver *you* name in a `driver` property, plus a dialect that writes portable SQL: `"double quoted"` identifiers, `LIMIT 1` to take a single row, and `LIMIT ? OFFSET ?` to page — row limiting in the one form MySQL, MariaDB, SQLite, PostgreSQL and H2 all take. Whatever has no portable form — `insert ... if absent`, `upsert ... by id`, a limit on a write, `auto increment` — is refused rather than guessed at. |
 
-Where the driver comes from is the difference between the last two. `"PostgreSQL"` names a driver this
-plugin fetches and keeps ready; `"JDBC"` names a class that has to be on the server's classpath already,
-which is what it is for. The second is how SQLite is reached, since Paper carries its driver:
+Where the driver comes from is the difference between the types. `"PostgreSQL"` and `"MongoDB"` name
+drivers this plugin fetches and keeps ready; `"JDBC"` names a class that has to be on the server's
+classpath already, which is what it is for. `"JDBC"` is how SQLite is reached, since Paper carries its
+driver:
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -57,10 +60,10 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-Only `"JDBC"` asks you for a class name, and only for it does this jar bundle no driver at all. What the
-PostgreSQL connection needs instead of a class name is nothing: its driver is fetched on the first start,
-which [Compatibility](compatibility.md#what-is-inside-the-jar) explains — including what a server that
-cannot reach the mirror it comes from has to do about it.
+Only `"JDBC"` asks you for a class name, and the jar bundles no driver for any of the four. What a
+`"PostgreSQL"` or `"MongoDB"` connection needs instead of a class name is nothing: both drivers are
+fetched on the first start, which [Compatibility](compatibility.md#what-is-inside-the-jar) explains —
+including what a server that cannot reach the mirror it comes from has to do about it.
 
 Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
 
@@ -72,9 +75,37 @@ Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
   the dialect refuses stays refused, which on SQLite means no auto increment, no `insert ... if absent`,
   no `upsert` and no limit on a write, so a table's key is one the script supplies.
 
-So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"`, `"MongoDB"`
-and `"SQLite"`: those are products, not types. What a connection reaches is a product; what a script
-names is one of the three types above, and [Compatibility](compatibility.md) keeps the two lists apart.
+So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"` and `"SQLite"`:
+those are products, not types. `"MongoDB"` is both, the way `"MySQL"` is. What a connection reaches is a
+product; what a script names is one of the four types above, and [Compatibility](compatibility.md) keeps
+the two lists apart.
+
+## MongoDB properties
+
+A MongoDB connection takes the same block, with its own meaning for `url`:
+
+```sk
+create a connection to database "MongoDB" with properties:
+    url: "mongodb://localhost:27017"
+    username: "admin"
+    password: "p@ss:w/rd"
+    database: "logs"
+    auth database: "admin"
+```
+
+- `url` is either a bare `host:port` or a whole connection string beginning with `mongodb://` or
+  `mongodb+srv://`, and a full string keeps its options: `mongodb://host:27017/logs?retryWrites=false` is
+  handed over as written.
+- `username` and `password` are separate properties, as they are for the SQL implementations, and are
+  given to the driver as strings rather than pasted into the url. A password containing `@`, `:`, `/` or
+  `%` is therefore just a password, and needs no escaping.
+- `database` names the database to use, and a `mongodb://host:27017/mydb` url names one too. The declared
+  `database` wins over the one in the url; with neither, `skript-orm` is used.
+- `auth database` names the database the credentials belong to, for a server whose users live elsewhere.
+  It defaults to the database being used.
+- **Transactions are not available.** MongoDB has none, so a `database transaction` section on this
+  connection fails with `This database implementation does not support transactions.`; see
+  [Compatibility](compatibility.md#mongodb).
 
 ## Naming one
 
@@ -222,9 +253,17 @@ create a connection to database "MySQL" with properties:
   cancels the statement, and MySQL does that by killing the query from another connection.
 - It covers one statement. Waiting for a free connection, and `commit`/`rollback` waiting on a lock, are
   not covered by it; those are bounded by the server's own limits and by `socketTimeout` in the url.
+- On MongoDB the same property becomes the driver's socket read timeout, and the connection's
+  `closeWaitTimeout` is that timeout plus five seconds, exactly as it is on the SQL side. What differs is
+  what the two sides do when it expires: MySQL cancels the statement from another connection, while
+  MongoDB's driver only stops waiting for the response — the server finishes the statement it was sent.
+  Either way the property bounds how long a script waits, not what the server does.
 - MySQL's `innodb_lock_wait_timeout` defaults to 50 seconds, longer than this, so a statement waiting on
   a lock is cancelled by this timeout first and reports a timeout rather than a lock wait. Raise this
   value past 50 if you would rather read MySQL's own message.
+- The value must be a whole number of seconds. Anything else is refused with `Connection property
+  'statement timeout' must be a whole number of seconds, but was 'x'.`, and a negative value with
+  `Connection property 'statement timeout' must not be negative, but was -1.`
 
 Inside a transaction, a statement gets what is left of the transaction's own timeout instead; see
 [Transactions](transactions.md).
