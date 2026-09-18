@@ -197,7 +197,7 @@ abstract class SecSelectBase : Section() {
                     val queryFailure = failure
                     if (queryFailure != null) {
                         VariableModifier.clear(resultVar, actualEvent)
-                        SkriptDatabaseErrors.set(actualEvent, queryFailure)
+                        DatabaseWork.recordFailure(actualEvent, queryFailure)
                         ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${queryFailure.message}")
                     } else {
                         SkriptDatabaseErrors.clear(actualEvent)

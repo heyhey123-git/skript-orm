@@ -100,7 +100,11 @@ class SecInConnection : ScopedBodySection() {
         }
 
         DatabaseWork.clearErrorForStatement(actualEvent)
-        ConnectionScope.push(actualEvent, connection, this)
+        // Naming the connection a transaction is already running on is allowed, and the frame carries
+        // that transaction: the block runs on the same connection, so the statements inside it belong to
+        // the transaction like the ones around it. A frame without it would send them through the pool,
+        // where they would commit on their own and survive a rollback.
+        ConnectionScope.push(actualEvent, connection, this, transaction = transaction)
         return walk(actualEvent, true)
     }
 

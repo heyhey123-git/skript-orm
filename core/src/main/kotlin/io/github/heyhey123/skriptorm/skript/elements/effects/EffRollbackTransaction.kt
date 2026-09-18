@@ -98,6 +98,10 @@ class EffRollbackTransaction : Effect() {
             event = actualEvent,
             continuation = target.next,
             query = { transaction.rollback() },
+            // The rollback succeeds even when the statement that caused it failed, and that failure is
+            // the only account of why the script rolled back: clearing it on the way out would leave the
+            // script reading nothing, the same reason the automatic rollback of a failed body keeps it.
+            clearErrorOnSuccess = false,
             onFailure = { error ->
                 report(actualEvent, trigger, "The database transaction could not be rolled back: ${error.message}")
             }

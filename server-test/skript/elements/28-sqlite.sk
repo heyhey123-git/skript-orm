@@ -211,6 +211,69 @@ every 5 seconds:
     if {_local_rows} is not 0:
         log "SKRIPTORM_SELFTEST=FAIL sqlite affected rows read '%{_local_rows}%' from a local variable, instead of 0"
 
+    # A failure the database itself reports has to end a transaction the way a refusal does: the
+    # statements after it do nothing, the body rolls back, and the cause stays readable. The suite only
+    # had the refusal case (a missing table), which never reaches the database at all.
+    in connection "sqlite":
+        database transaction:
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 96
+                    name: "before-the-failure"
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 4
+                    name: "duplicate"
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 97
+                    name: "after-the-failure"
+    if last database error is not set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite transaction dropped the failure that rolled it back"
+    in connection "sqlite":
+        select many entities from table "orm_sqlite_probe" and store the results in {sqlite::tx::*}:
+            where all:
+                id >= 96
+    if {sqlite::tx::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite transaction kept a row its failure should have undone"
+
+    # Naming the connection the transaction already runs on keeps the statements inside it: the frame the
+    # switch pushes carries the transaction, so a statement under it still rolls back with the rest.
+    # Without that, it ran on a pooled connection, committed on the spot and survived the rollback.
+    in connection "sqlite":
+        database transaction:
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 96
+                    name: "outer"
+            in connection "sqlite":
+                insert one entity into table "orm_sqlite_probe" and wait:
+                    values:
+                        id: 97
+                        name: "inner"
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 4
+                    name: "duplicate"
+    in connection "sqlite":
+        select many entities from table "orm_sqlite_probe" and store the results in {sqlite::tx::switch::*}:
+            where all:
+                id >= 96
+    if {sqlite::tx::switch::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite a switch to the same connection left the transaction"
+
+    # The cause of a rollback survives the rollback a script asks for, the same way it survives the
+    # automatic one, so `last database error` after the section still says what went wrong.
+    in connection "sqlite":
+        database transaction:
+            insert one entity into table "orm_sqlite_probe" and wait:
+                values:
+                    id: 4
+                    name: "duplicate"
+            rollback database transaction
+    if last database error is not set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite an explicit rollback dropped the failure that caused it"
+
     # What the reads actually returned. Rows come back keyed by a one-based row index first, so a
     # `select many` is read as `{sqlite::many::1::name}` even when it matched one row.
     set {sqlite::failed} to false

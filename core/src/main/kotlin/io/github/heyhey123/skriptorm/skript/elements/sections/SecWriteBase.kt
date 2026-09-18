@@ -359,7 +359,7 @@ abstract class SecWriteBase : Section() {
                 try {
                     if (event != null) {
                         if (failure != null) {
-                            SkriptDatabaseErrors.set(event, failure)
+                            DatabaseWork.recordFailure(event, failure)
                         } else {
                             SkriptDatabaseErrors.clear(event)
                         }

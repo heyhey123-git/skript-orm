@@ -42,6 +42,24 @@ console while `last database error` stays silent.
   used to be logged only. `and wait` is still accepted on every statement and does nothing, so no script
   has to change; it can simply be left out from here on.
 
+### Fixed
+
+- **A failure the database itself reported did not end the transaction it happened in.** Only a statement
+  refused before it was sent made a transaction rollback-only, so a constraint violation, a value the
+  server refused, or a dialect refusing a statement let the body carry on, a later statement cleared the
+  failure out of `last database error`, and the body ended by committing the half of it that had worked.
+  Any statement failure now makes the transaction rollback-only: the statements after it do nothing, the
+  body rolls back, and the cause stays readable.
+- **Naming the connection a transaction is already running on took the statements after it out of the
+  transaction.** The switch was meant to be a no-op and was not: the frame it pushed carried no
+  transaction, so the statements under it ran on a pooled connection and committed on their own — and with
+  `use connection` the transaction itself was then left for the watchdog to end, dropping the work the
+  body had already done. The frame carries the transaction now, which is what makes the switch the no-op
+  it claims to be.
+- **`rollback database transaction` cleared `last database error`.** The automatic rollback of a failed
+  body keeps the cause; the rollback a script writes does the same now, so the line after the section
+  still says what went wrong.
+
 ### Documentation
 
 - A bilingual page for the row count, and the waiting material rewritten around it: the two troubleshooting

@@ -118,6 +118,25 @@ internal object DatabaseWork {
     }
 
     /**
+     * Records a failure that came back from the database, the way [report] records one that never left.
+     *
+     * Both have to make the transaction in effect rollback-only. A failure the server reported is at
+     * least as good a reason to undo the group: the server may have ended the transaction on its own
+     * (PostgreSQL refuses every statement after an error until the transaction ends), and leaving the
+     * transaction active would let the body carry on, a later statement clear the error slot, and the
+     * body end by committing whatever the earlier statements wrote.
+     *
+     * Marking is only half of it: the statements after a failure are skipped because the transaction is
+     * no longer active, which is what keeps a number they would have written from outliving them.
+     */
+    fun recordFailure(event: Event?, error: Throwable) {
+        event?.let {
+            ConnectionScope.transaction(it)?.markFailed(error)
+            SkriptDatabaseErrors.set(it, error)
+        }
+    }
+
+    /**
      * Clears the event's error slot for a statement that is about to run, except inside a transaction.
      *
      * A transaction keeps the failure that made it rollback-only. The statements after that failure are
@@ -191,7 +210,7 @@ internal object DatabaseWork {
 
                     val error = failure
                     if (error != null) {
-                        SkriptDatabaseErrors.set(event, error)
+                        recordFailure(event, error)
                         onFailure(error)
                     } else {
                         if (clearErrorOnSuccess) SkriptDatabaseErrors.clear(event)
