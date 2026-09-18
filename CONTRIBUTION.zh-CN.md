@@ -404,8 +404,17 @@ Minecraft 服务端的两个特性决定了脚本的写法：
 上跑与 `ci.yml` 相同的测试层（包括真实服务端测试），检查构建出的 jar 是否携带要发布的版本号，在它旁边写一份
 `sha256`，最后在该提交上创建标签与 release。它被限制在默认分支；要在分支上发布，删掉那一个条件即可。
 
-所以发一次版要先动仓库三处：`gradle.properties` 里的版本号、push、然后手动触发。这正是目的所在——仓库里的
-`1.0-SNAPSHOT` 意味着「不是正式版」，工作流也是这么理解的。
+release 里写什么，取决于 `CHANGELOG.md` 里对应版本的那一节；如果那一节不存在，它会在构建之前就被拒绝，而不是
+发出一个没有说明的版本。把那一节取出来的是 `./gradlew releaseNotes`——工作流发布的就是它写出的内容，而要修改
+一个已经发出去的 release 的说明，人跑的也是同一个任务：
+
+```bash
+./gradlew releaseNotes
+gh release edit v1.1.0 --notes-file build/release-notes.md
+```
+
+所以发一次版要先动仓库四处：`gradle.properties` 里的版本号、对应的 CHANGELOG 一节、push、然后手动触发。这正是
+目的所在——仓库里的 `1.0-SNAPSHOT` 意味着「不是正式版」，工作流也是这么理解的。
 
 #### CI 什么时候运行
 

@@ -93,6 +93,7 @@ and hands results back as ordinary Skript variables and values.
 | [Troubleshooting](docs/troubleshooting.md) | The traps: silent schema changes, invisible NULLs, NBT without SkBee. |
 | [Cookbook](docs/cookbook.md) | Recipes for the things scripts usually need. |
 | [Compatibility](docs/compatibility.md) | Versions, the type names a script can write, what ships in the jar, and what is not supported. |
+| [Changelog](CHANGELOG.md) | What each release changed, which is also what its release page says. |
 
 ## Building from source
 

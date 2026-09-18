@@ -86,6 +86,7 @@ command /adduser <text> <integer>:
 | [排雷](docs/troubleshooting.zh-CN.md) | 会踩的坑：静默的改表、看不见的 NULL、没有 SkBee 时的 NBT。 |
 | [菜谱](docs/cookbook.zh-CN.md) | 脚本里最常用的几种写法，整段可抄。 |
 | [兼容性](docs/compatibility.zh-CN.md) | 版本、脚本能写的类型名、jar 里打包了什么、不支持什么。 |
+| [更新日志](CHANGELOG.md) | 每个版本改了什么，也就是它 release 页面上写的内容。 |
 
 ## 从源码构建
 

@@ -490,9 +490,19 @@ carries the version being released, writes a `sha256` beside it, and creates the
 at that exact commit. It is limited to the default branch; releasing from a branch is removing that
 one condition.
 
-A release is therefore three repository changes first: the version in `gradle.properties`, the push,
-then the dispatch. That is the point — `1.0-SNAPSHOT` in the repository means "not a release", and the
-workflow reads it that way.
+What the release says about itself is the section `CHANGELOG.md` holds for that version, and a version
+without one is refused before the build rather than published undescribed. `./gradlew releaseNotes` is
+what takes that section out of the file — the workflow publishes what it writes, and a person correcting a
+release that is already published runs the same task:
+
+```bash
+./gradlew releaseNotes
+gh release edit v1.1.0 --notes-file build/release-notes.md
+```
+
+A release is therefore four repository changes first: the version in `gradle.properties`, the changelog
+section for it, the push, then the dispatch. That is the point — `1.0-SNAPSHOT` in the repository means
+"not a release", and the workflow reads it that way.
 
 #### When CI runs
 

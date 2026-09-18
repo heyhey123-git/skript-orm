@@ -2,6 +2,11 @@ name: Release
 
 # Manual, and only from the default branch. The tag it creates points at the commit this run built
 # and tested, so a release cannot end up naming a commit that was never verified.
+#
+# What the release says about itself comes from CHANGELOG.md: this workflow publishes the section for the
+# version in gradle.properties and refuses to publish without one, so a version cannot go out undescribed.
+# Editing the notes of a release that is already published is `./gradlew releaseNotes` followed by
+# `gh release edit v<version> --notes-file build/release-notes.md`.
 on:
   workflow_dispatch:
 
@@ -53,6 +58,12 @@ jobs:
             echo "::error::tag v$version already exists."
             exit 1
           fi
+          # Asked here rather than only where the notes are written, so a release with nothing written
+          # about it fails before the build instead of after it.
+          if ! grep -q "^## \[$version\]" CHANGELOG.md; then
+            echo "::error::CHANGELOG.md has no '## [$version]' section. Write what this release changes first."
+            exit 1
+          fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
       # The same layers ci.yml runs, on the exact commit about to be tagged, including the real Paper
@@ -70,6 +81,12 @@ jobs:
           fi
           sha256sum "$jar" | tee "$jar.sha256"
 
+      # The release body comes from CHANGELOG.md, through the same task a person runs to correct a release
+      # that is already published: one extraction, so the file and the release page cannot disagree. It
+      # fails on a missing or empty section, which is what the version check above asks for early.
+      - name: Write the release notes
+        run: ./gradlew releaseNotes --stacktrace
+
       - name: Publish the release
         run: |
           gh release create "v${{ steps.version.outputs.version }}" \
@@ -77,7 +94,7 @@ jobs:
             "build/dist/skriptorm-${{ steps.version.outputs.version }}.jar.sha256" \
             --target "$GITHUB_SHA" \
             --title "v${{ steps.version.outputs.version }}" \
-            --generate-notes
+            --notes-file build/release-notes.md
 
       - name: Summarize
         run: |
