@@ -1,0 +1,40 @@
+name: Prepare the build
+description: >-
+  Installs the toolchain every job here needs: JDK 25, which is the Java version Paper 26.2 runs on, and
+  the Gradle User Home cache. Both live here rather than in each job, so the jobs cannot drift apart and
+  a version bump is one edit.
+
+  Checking out stays in the workflow rather than here: a local action is read from the workspace, so it
+  cannot be the step that creates it.
+
+inputs:
+  gradle-cache-read-only:
+    description: >-
+      Restores the Gradle cache without writing to it. A job that resolves exactly the same dependencies
+      as another one only needs to read the entry that job wrote, and restored caches are the only ones
+      a read-only job should spend budget on.
+    default: 'false'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up JDK 25
+      uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '25'
+
+    # Restores the Gradle User Home: the wrapper distribution, every resolved dependency, and the API
+    # jars Gradle generates on first use. This is what stops a run from repeating the installation. See
+    # the continuous integration section of CONTRIBUTION.md for what is deliberately not cached.
+    - name: Set up Gradle
+      uses: gradle/actions/setup-gradle@v6
+      with:
+        cache-provider: enhanced
+        cache-read-only: ${{ inputs.gradle-cache-read-only }}
+
+    # The wrapper is committed from Windows, where the executable bit is not tracked, so it may arrive
+    # without one.
+    - name: Make the wrapper executable
+      shell: bash
+      run: chmod +x ./gradlew

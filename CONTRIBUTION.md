@@ -394,7 +394,7 @@ register the same table twice.
 
 ### Continuous integration
 
-`.github/workflows/ci.yml` runs four jobs:
+`.github/workflows/ci.yml` runs five jobs:
 
 - `test` runs the unit and Skript tests plus `ktlintCheck`, and needs nothing else.
 - `mysql-installed` runs the JDBC integration tests against the MySQL that the runner image already
@@ -403,6 +403,8 @@ register the same table twice.
   servers for one pull. The connection details are passed as `-P` properties rather than environment
   variables, because a Gradle property is delivered with every invocation even when the daemon was
   started earlier.
+- `postgres-installed` does the same for PostgreSQL, which the runner image also installs: the
+  `postgresql-implementation` tests are the only place the PostgreSQL dialect meets a server.
 - `mysql-testcontainers` runs the same suite with no server configured, which is the path a developer
   uses locally, so the Docker detection and the pinned `mysql:8.4` image get exercised as well. It
   runs only on the default branch and on demand, because a container image is the one thing the cache
@@ -411,6 +413,12 @@ register the same table twice.
   needs neither Docker nor a database, so it runs on every change. The server jar it downloads lands
   in the Gradle user home, which the Gradle state cache already covers, so the job needs no cache of
   its own.
+
+Every job installs the toolchain through `.github/actions/prepare-build`, and the Skript server test is
+annotated through `.github/actions/annotate-server-test`. Both live under `.github/actions/` for the same
+reason: five jobs repeating the JDK, the cache and the wrapper make the jobs hard to compare and the
+version easy to bump in four places out of five. The checkout stays in each job rather than in the
+action, because a local action is read from the workspace and so cannot be the step that creates it.
 
 Two more workflows do the packaging. Neither decides whether the code is correct; `ci.yml` does that.
 

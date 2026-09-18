@@ -35,6 +35,8 @@ concurrency:
 jobs:
 
   # Everything that needs no database. This is the job a pull request should be able to rely on.
+  # Every job below checks the repository out and installs the toolchain through the same action, so this
+  # file only says what makes each one different: which server it starts, what it runs, and what it keeps.
   test:
     name: Unit and Skript tests
     runs-on: ubuntu-latest
@@ -43,25 +45,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      # Restores the Gradle User Home: the wrapper distribution, every resolved dependency, and the
-      # API jars Gradle generates on first use. This is what stops a run from repeating the
-      # installation. See the continuous integration section of CONTRIBUTION.md for what is
-      # deliberately not cached.
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: enhanced
-
-      # The wrapper is committed from Windows, where the executable bit is not tracked, so it may
-      # arrive without it.
-      - name: Make the wrapper executable
-        run: chmod +x ./gradlew
+      - uses: ./.github/actions/prepare-build
 
       - name: Run unit and Skript tests
         run: ./gradlew :core:test :core:integrationTest :generic-jdbc-implementation:test --stacktrace
@@ -76,8 +60,8 @@ jobs:
         run: ./gradlew ktlintCheck --stacktrace
 
   # The JDBC integration tests against the MySQL the runner image already installs. Starting that
-  # server costs no image pull at all, and it puts the version the image ships (8.0 today) next to
-  # the 8.4 the Testcontainers job pins, so the suite covers two servers for one pull.
+  # server costs no image pull at all, and it puts the version the image ships (8.0 today) next to the
+  # 8.4 the Testcontainers job pins, so the suite covers two servers for one pull.
   mysql-installed:
     name: JDBC tests against the runner's MySQL
     runs-on: ubuntu-latest
@@ -86,19 +70,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: enhanced
-
-      - name: Make the wrapper executable
-        run: chmod +x ./gradlew
+      - uses: ./.github/actions/prepare-build
 
       # The image installs MySQL and leaves it stopped. The loop waits for the server to accept a
       # connection; the last command needs working credentials, so the step fails if they do not.
@@ -142,28 +114,9 @@ jobs:
             -Pskriptorm.test.mysql.username=root \
             -Pskriptorm.test.mysql.password=root
 
-      # The same as the other job's step: the harness writes its problems beside the log, and this
-      # turns them, plus anything the server itself complained about, into annotations.
       - name: Annotate the server test
         if: failure()
-        run: |
-          problems=build/server-test/logs/test-problems.txt
-          if [ -f "$problems" ]; then
-            # These already carry the evidence, and annotations are capped, so do not spend the
-            # budget on the log as well.
-            while IFS= read -r line; do
-              echo "::error::$line"
-            done < "$problems"
-            exit 0
-          fi
-          # No problems file means the harness never got to write one, so the server itself is what
-          # went wrong; fall back to whatever it complained about.
-          log=build/server-test/logs/latest.log
-          if [ -f "$log" ]; then
-            grep -E 'SKRIPTORM_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-          fi
+        uses: ./.github/actions/annotate-server-test
 
       - name: Upload test reports
         if: always()
@@ -193,19 +146,7 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: enhanced
-
-      - name: Make the wrapper executable
-        run: chmod +x ./gradlew
+      - uses: ./.github/actions/prepare-build
 
       # The image installs PostgreSQL and leaves the cluster stopped. Over TCP the default
       # `pg_hba.conf` asks for a password, so the one the JDBC url uses is set first; the unix socket
@@ -264,22 +205,9 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
+      - uses: ./.github/actions/prepare-build
         with:
-          distribution: temurin
-          java-version: '25'
-
-      # Read-only: this job resolves the same dependencies as the job above, so restoring is enough
-      # and there is no reason to spend cache budget writing a second entry.
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: enhanced
-          cache-read-only: true
-
-      - name: Make the wrapper executable
-        run: chmod +x ./gradlew
+          gradle-cache-read-only: true
 
       - name: Run the JDBC integration tests
         run: ./gradlew :generic-jdbc-implementation:integrationTest --stacktrace
@@ -310,49 +238,16 @@ jobs:
       - name: Check out
         uses: actions/checkout@v6
 
-      - name: Set up JDK 25
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '25'
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: enhanced
-
-      # The Paper jar run-paper downloads lands under the Gradle user home, which the step above
+      # The Paper jar run-paper downloads lands under the Gradle user home, which the shared setup
       # already caches in full, so there is nothing to cache here separately.
-
-      - name: Make the wrapper executable
-        run: chmod +x ./gradlew
+      - uses: ./.github/actions/prepare-build
 
       - name: Run the Skript server test
         run: ./gradlew serverTest --stacktrace
 
-      # A failing step's log needs admin rights to read, while annotations are public. The harness
-      # writes its own problems to a file for exactly this reason; the server log is added for the
-      # cases where the server, rather than an assertion, is what went wrong.
       - name: Annotate the server test
         if: failure()
-        run: |
-          problems=build/server-test/logs/test-problems.txt
-          if [ -f "$problems" ]; then
-            # These already carry the evidence, and annotations are capped, so do not spend the
-            # budget on the log as well.
-            while IFS= read -r line; do
-              echo "::error::$line"
-            done < "$problems"
-            exit 0
-          fi
-          # No problems file means the harness never got to write one, so the server itself is what
-          # went wrong; fall back to whatever it complained about.
-          log=build/server-test/logs/latest.log
-          if [ -f "$log" ]; then
-            grep -E 'SKRIPTORM_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do
-              echo "::error::$line"
-            done
-          fi
+        uses: ./.github/actions/annotate-server-test
 
       - name: Upload the server log
         if: always()
