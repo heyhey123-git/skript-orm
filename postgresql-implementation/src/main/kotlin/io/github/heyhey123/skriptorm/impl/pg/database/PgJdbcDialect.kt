@@ -1,23 +1,18 @@
 package io.github.heyhey123.skriptorm.impl.pg.database
 
 import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
-import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcPageParameter
-import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcPageSql
 
-/** PostgreSQL-specific SQL rendering; query execution remains in the generic JDBC implementation. */
+/**
+ * PostgreSQL-specific SQL rendering; query execution remains in the generic JDBC implementation.
+ *
+ * `select one` and `select page` are not overridden. The dialect's defaults are `LIMIT 1` and
+ * `ORDER BY … LIMIT ? OFFSET ?`, which is what PostgreSQL reads, so repeating them here would be two
+ * copies of one statement waiting to drift apart — the earlier ones did exactly that and were identical.
+ */
 object PgJdbcDialect : JdbcDialect {
 
     override fun renderIdentifier(identifier: String): String =
         "\"${identifier.replace("\"", "\"\"")}\""
-
-    override fun selectOne(table: String, whereClause: String?): String =
-        "${select(table, whereClause)} LIMIT 1"
-
-    override fun selectPage(table: String, orderBy: String, whereClause: String?): JdbcPageSql =
-        JdbcPageSql(
-            sql = "${select(table, whereClause)} ORDER BY ${quoteIdentifier(orderBy)} LIMIT ? OFFSET ?",
-            parameterOrder = listOf(JdbcPageParameter.LIMIT, JdbcPageParameter.OFFSET)
-        )
 
     override fun insertIfAbsent(table: String, columns: List<String>): String =
         "${insert(table, columns)} ON CONFLICT DO NOTHING"
