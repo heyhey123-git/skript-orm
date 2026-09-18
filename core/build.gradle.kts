@@ -54,9 +54,12 @@ val driverLibraries: String = requireNotNull(project.findProperty("skriptOrmDriv
 }
 
 tasks.processResources {
-    // Declared as an input because the expansions below are not: without it Gradle sees unchanged
-    // resources, skips the task, and the file keeps whatever driver list it was first written with — a
-    // jar built with another `-PbundleModules` would then ask Paper for the wrong drivers.
+    // Both expansions are declared as inputs, because neither is: Gradle does not track the values of
+    // `expand`, and `version` comes from `gradle.properties`, which is not a file any task watches. Without
+    // these, a version bump leaves the task up to date and the jar is named for the new version while
+    // `plugin.yml` inside it still reports the old one — which is exactly what happened the first time this
+    // version was raised, and what the server test caught by looking for "Enabling skript-orm v1.1.0".
+    inputs.property("version", version)
     inputs.property("driverLibraries", driverLibraries)
 
     filesMatching("plugin.yml") {
