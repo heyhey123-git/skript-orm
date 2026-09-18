@@ -46,6 +46,8 @@ console while `last database error` stays silent.
 
 - A bilingual page for the row count, and the waiting material rewritten around it: the two troubleshooting
   entries about silent write failures are gone, along with the behaviour they described.
+- The transaction timeout is written up in full: the spellings it accepts, the value it needs, when its
+  clock starts, and that it belongs to the transaction rather than to the connection.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.1.0...v1.2.0
 

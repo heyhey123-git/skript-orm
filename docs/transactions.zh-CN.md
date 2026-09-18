@@ -18,7 +18,7 @@ if last database error is set:
     send "转账已回滚: %last database error%"
 ```
 
-这个 section 用的是当前生效的连接，和别的语句一样。`database transaction on connection "logs":` 改成指定某条具名连接，`with timeout 5 seconds` 则改变它能开多久。
+这个 section 用的是当前生效的连接，和别的语句一样。`database transaction on connection "logs":` 改成指定某条具名连接，`with timeout 5 seconds` 则改变它能开多久——见[超时](#超时)。
 
 ## 它怎样结束
 
@@ -71,10 +71,19 @@ database transaction:
 
 一个事务从头到尾占着连接池里的一条连接，所以永远不结束的事务就是池子永远拿不回来的那条。默认超时是 30 秒，它是为"脚本中途停了"准备的：主体里出错时，Skript 会直接结束整条 trigger 而不通知 section；而一个 `wait` 想停多久就停多久。
 
+想要别的时长，就写在开事务的那条语句上：
+
 ```sk
 database transaction with timeout 2 minutes:
     ...
 ```
+
+- 它是一段 Skript 时间（`2 minutes`、`500 milliseconds`），而且必须是正数。
+- `with a timeout of 2 minutes` 是同一个子句：`a` 和 `of` 都可以省。
+- 它写在 `on connection` 之后，顺序固定：`database transaction on connection "logs" with timeout 2 minutes:`。
+- 计时从事务开启时开始，因为占住连接的是"开启"这个动作，而不是主体里的第一条语句。
+- 值不是正数、或者表达式算出来是空的，会分别报 `The transaction timeout has to be positive.` 与 `The transaction timeout is not set.`，并且不会开启事务。
+- 它是逐事务写的。连接能给自己的语句设超时（见[语句超时](connections.zh-CN.md)），但没有"连接级的事务超时"：想要更长超时的脚本，就在开事务的地方自己写。
 
 超时之后事务被回滚，事务内接下来的语句会报告原因。不要在事务里写很长的 `wait`：等待期间连接被占着，主体已经拿到的行锁也一直握着。
 

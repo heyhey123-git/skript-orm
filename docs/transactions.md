@@ -22,7 +22,7 @@ if last database error is set:
 
 The section uses the connection in effect, the same way every other statement does. `database
 transaction on connection "logs":` pins a named one instead, and `with timeout 5 seconds` changes how
-long it may stay open.
+long it may stay open — see [The timeout](#the-timeout).
 
 ## How it ends
 
@@ -91,10 +91,25 @@ finished is one the pool never gets back. The default timeout is 30 seconds, and
 where the script stops mid-body: an error inside the body ends the trigger without telling the section,
 and a `wait` parks it for as long as it likes.
 
+Write the timeout on the section that wants another one:
+
 ```sk
 database transaction with timeout 2 minutes:
     ...
 ```
+
+- It takes a Skript timespan (`2 minutes`, `500 milliseconds`), and it has to be positive.
+- `with a timeout of 2 minutes` is the same clause: the `a` and the `of` are optional.
+- It comes after `on connection`, in that order:
+  `database transaction on connection "logs" with timeout 2 minutes:`.
+- The clock starts when the transaction opens, because opening it is what takes the connection — not at
+  its first statement.
+- A value that is not positive, or an expression that resolved to nothing, is reported as
+  `The transaction timeout has to be positive.` and `The transaction timeout is not set.`, and no
+  transaction is opened.
+- It is written per transaction. A connection sets a timeout for its statements
+  (`statement timeout`), but there is no connection-wide transaction timeout: a script that wants a
+  longer one says so where it opens the transaction.
 
 When it expires, the transaction is rolled back and the next statement inside it reports why. Do not
 write a long `wait` inside a transaction: it holds a connection and any row locks the body has taken
