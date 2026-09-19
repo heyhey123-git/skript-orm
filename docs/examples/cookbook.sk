@@ -1,7 +1,22 @@
 # The recipes from docs/cookbook.md, kept here so the server test parses them. They are written as
 # commands rather than as `on load` and `on join` triggers for the same reason as the other examples:
 # this file is only read, never run, and a trigger that fired would act on the test server.
+#
+# Two things therefore differ from the pages that show these recipes, and they are the two a reader
+# comparing the two ends up asking about:
+#
+#   - Every recipe is wrapped in a `command /example-…`, because a command nobody types never runs. The
+#     names cannot be the ones the page uses: every file in this directory is loaded on the same test
+#     server, so two of them cannot define the same command. `/example-adduser` is already
+#     getting-started.sk's, which is why the cookbook's own adduser command is `/example-adduser-with-id`.
+#   - The messages are the ones from docs/cookbook.md, the English page, because that is the page this
+#     file is the copy of. docs/cookbook.zh-CN.md carries the same recipes with Chinese messages.
+#
+# A recipe that needs a connection or a registered table does not repeat them here: getting-started.sk
+# registers the `users` table in `/example-connect`, and only one script may create the connection.
 
+# Recipe "Know the id of a row you just created". The plugin hands back no generated id, so the counter
+# keeps one in a global and `upsert` writes the row under it.
 command /example-adduser-with-id <text>:
     trigger:
         if {users::next-id} is not set:
@@ -15,6 +30,8 @@ command /example-adduser-with-id <text>:
             stop
         send "Stored %arg-1% as id {users::next-id}." to sender
 
+# Recipe "One row per player": the uuid is the primary key, so the player is the identity and `upsert`
+# keeps exactly one row per player. The page shows this as `on join:`; the body is the same.
 command /example-join:
     trigger:
         upsert one entity in table "players" by id uuid of player and wait:
@@ -24,6 +41,8 @@ command /example-join:
         if last database error is set:
             send "Could not save your data: %last database error%" to console
 
+# Recipe "Read, change, store back". Only the columns in the values block are written, so the rest of
+# the row is left alone.
 command /example-addage <integer>:
     trigger:
         select one entity from table "players" and store the result in {_row::*}:
@@ -44,6 +63,8 @@ command /example-addage <integer>:
             stop
         send "Your age is now %{_new-age}%." to sender
 
+# Recipe "Copy rows between tables". What `select many` fills is already the shape `insert many` reads,
+# and the insert waits, so the delete cannot run before it.
 command /example-archive:
     trigger:
         select many entities from table "users" and store the results in {_rows::*}:
@@ -59,6 +80,8 @@ command /example-archive:
             where all:
                 active = false
 
+# Recipe "Build rows in a script and insert them". The row index is one-based, exactly like the keys a
+# read produces.
 command /example-insert-built-rows:
     trigger:
         set {_rows::1::name} to "Alice"
@@ -68,6 +91,7 @@ command /example-insert-built-rows:
 
         insert many {_rows::*} into table "users" and wait
 
+# Recipe "Walk every page". There is no count query, so the script pages until a page comes back empty.
 command /example-walk-pages:
     trigger:
         set {_page} to 1
@@ -75,6 +99,10 @@ command /example-walk-pages:
             select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
                 where all:
                     active = true
+            # Walk the row indices, testing the primary key: every row is a sub-list, so a row index is
+            # done when the next row's key is unset. The key and not another column, because a NULL
+            # column leaves its key unset too and would end the walk at that row. `{_row} is 1` after the
+            # walk means the page was empty.
             set {_row} to 1
             while {_page-rows::%{_row}%::id} is set:
                 send "%{_page-rows::%{_row}%::name}%" to console
@@ -83,6 +111,7 @@ command /example-walk-pages:
                 exit loop
             add 1 to {_page}
 
+# Recipe "Store an item's NBT", which needs SkBee and the `tools` table the page registers above it.
 command /example-savetool:
     trigger:
         insert one entity into table "tools" and wait:
@@ -93,6 +122,8 @@ command /example-savetool:
             stop
         send "Saved." to sender
 
+# Recipe "Delete old rows in batches". The delete reports how many rows it removed, so a batch that comes
+# back short is the end of the work and the loop stops there instead of running all ten times.
 command /example-prune:
     trigger:
         set {_cutoff} to now - 30 days
@@ -109,6 +140,9 @@ command /example-prune:
                 exit loop
         send "Pruned %{_pruned}% old rows." to sender
 
+# Recipe "Use the table from a second script", the `users.sk` half: the connection and the tables belong
+# to one script, and this one only asks whether that script got there. The page's `database.sk` half is
+# getting-started.sk's `/example-connect`, plus the `{database::ready}` flag it sets.
 command /example-second-script:
     trigger:
         if {database::ready} is not true:

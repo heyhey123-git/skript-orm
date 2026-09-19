@@ -5,6 +5,12 @@
 Whole recipes, using only the syntax in the rest of the documentation. Each one is written as a script
 you can paste and adapt.
 
+Every recipe is also in [`docs/examples/cookbook.sk`](examples/cookbook.sk), where CI parses it on a real
+server, so a recipe cannot teach syntax the plugin does not have. That copy differs in two ways on
+purpose: each recipe is wrapped in a `command /example-…` that nobody runs, and its command names are
+unique across the example files because they are all loaded on one server; and its messages are the ones
+written here.
+
 ## Know the id of a row you just created
 
 The plugin does not return a generated id, so let the script own the value and use `upsert`:
