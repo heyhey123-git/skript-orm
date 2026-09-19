@@ -416,6 +416,16 @@ gh release edit v1.2.0 --notes-file build/release-notes.md
 所以发一次版要先动仓库四处：`gradle.properties` 里的版本号、对应的 CHANGELOG 一节、push、然后手动触发。这正是
 目的所在——仓库里的 `1.0-SNAPSHOT` 意味着「不是正式版」，工作流也是这么理解的。
 
+`skripthub.yml` 在发版之后把语法文档发布到 SkriptHub。它等的是 `release.yml` 跑完，而不是 release 事件：
+用仓库自带 token 创建的 release 不会自己启动新的工作流，`workflow_run` 补上了这一环，并给出这次 release 构建
+与打标签所用的那个提交——也正是文档据此生成的那个提交。它在该提交上用 `./gradlew gendocs` 生成 JSON，把文件
+留成 artifact 供 dashboard 的 JSON Syntax Import 使用，然后通过 `scripts/publish-skripthub.mjs` 写出变化的部分：
+脚本把生成的文件和 SkriptHub 上的内容做差分，只动 pattern、description 或 since 版本变了的条目。示例和前置插件
+不在它写的范围内（那些归导入工具），所以示例有差异时会在运行摘要里报出来，而不是留给读者去发现。token 是名为
+`skripthub` 的 environment 里的 secret `SKRIPTHUB_TOKEN`：它能写公开页面，所以 job 声明了该 environment，别的
+工作流读不到，而该 environment 的 deployment branch 规则是默认分支——正是这个 job 唯一该跑的场合。没有这个
+secret 时，运行会在第一步停下并说明要加什么。
+
 #### CI 什么时候运行
 
 `push` 与 `pull_request` 会忽略那些不可能影响构建的改动：Markdown、`.gitignore` 和 `.idea/`。其余任何改动

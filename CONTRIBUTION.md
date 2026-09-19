@@ -510,6 +510,20 @@ A release is therefore four repository changes first: the version in `gradle.pro
 section for it, the push, then the dispatch. That is the point — `1.0-SNAPSHOT` in the repository means
 "not a release", and the workflow reads it that way.
 
+`skripthub.yml` publishes the syntax documentation to SkriptHub after a release. It waits for the
+completion of `release.yml` rather than for the release event, because a release created with the
+repository's own token starts no workflow run of its own; `workflow_run` closes that gap and names the
+commit the release was built and tagged from. It generates the JSON with `./gradlew gendocs` on that
+commit, keeps it as an artifact for the dashboard's JSON Syntax Import, and then writes what changed
+through `scripts/publish-skripthub.mjs`, which diffs the generated file against what SkriptHub holds and
+touches only the elements whose pattern, description or since version moved. Examples and supporting
+plugins are not part of that write — they belong to the import — so a difference in an example is reported
+in the run summary instead of being left for a reader to find. The token is the environment secret
+`SKRIPTHUB_TOKEN` of an environment named `skripthub`, because it can write to a public page: the job names
+that environment, so no other workflow can read it, and the environment's deployment branch rule is the
+default branch, which is the only branch the job is meant to run from. A run without the secret stops at
+the first step and says what to add.
+
 #### When CI runs
 
 `push` and `pull_request` ignore changes that cannot affect the build: Markdown, `.gitignore`, and
