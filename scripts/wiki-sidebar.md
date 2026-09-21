@@ -23,10 +23,13 @@
 
 ---
 
-**English** — the same pages, the English half of the repository
+**skript-orm (English)**
 
 - [Home](Home-EN)
 - [Getting started](Getting-Started-EN)
+
+**Reference**
+
 - [Connections](Connections-EN)
 - [Tables](Tables-EN)
 - [Writing rows](Writing-Rows-EN)
@@ -36,6 +39,9 @@
 - [Errors and waiting](Errors-And-Waiting-EN)
 - [Transactions](Transactions-EN)
 - [Types](Types-EN)
+
+**When something goes wrong**
+
 - [Troubleshooting](Troubleshooting-EN)
 - [Cookbook](Cookbook-EN)
 - [Compatibility](Compatibility-EN)
@@ -43,3 +49,5 @@
 ---
 
 内容以[仓库](https://github.com/heyhey123-git/skript-orm)里的 `docs/` 为准，请不要在这里直接改。
+
+These pages are published from `docs/` in the [repository](https://github.com/heyhey123-git/skript-orm); please do not edit them here.
