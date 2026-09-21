@@ -1,6 +1,8 @@
 # skript-orm
 
-![skript-orm: an ORM for Skript](docs/assets/banner.png)
+<!-- Absolute rather than relative: this page is also the wiki's home, where a relative path would
+     point at a file the wiki does not carry. -->
+![skript-orm: an ORM for Skript](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
 
 An ORM for Skript: describe a table once, then read and write rows with Skript syntax instead of
 writing SQL.

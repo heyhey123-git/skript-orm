@@ -34,10 +34,11 @@ MongoDB 那一个——并且**不带任何数据库驱动**：`plugin.yml` 里�
 
 ### wiki 镜像
 
-`docs/` 是源，仓库 wiki 只承载其中的中文部分，作为阅读副本。改动页面的 push 会触发
-`.github/workflows/wiki.yml`，它用 `scripts/publish-wiki.ps1` 渲染页面，再提交到 wiki 仓库。页面名以及页与页
-之间的每条链接都来自那份脚本开头的映射表，所以新增一页就是在表里加一行、再到侧栏加一行。wiki 不手工编辑，
-下一次同步会覆盖掉改动。
+`docs/` 是源，仓库 wiki 把它作为阅读副本承载下来，两种语言并存、中文在前。改动页面的 push 会触发
+`.github/workflows/wiki.yml`，它用 `scripts/publish-wiki.ps1` 渲染页面，再提交到 wiki 仓库。哪些文件变成哪些
+页面写在 `scripts/wiki-pages.tsv` 里，侧栏是 `scripts/wiki-sidebar.md`：同一主题的中文页用朴素的名字，英文页在后面
+加 `-EN`，侧栏先列中文；两个文件对不上时，发布脚本会拒绝写出任何东西。每页顶部的语言切换行就是一对页面之间的链接，
+所以一对里的两个文件都得列进去。wiki 不手工编辑，下一次同步会覆盖掉改动。
 
 这个 workflow 需要一个已经存在的 wiki。在新的克隆上，先打开一次 wiki 并手工建一页，否则
 `<repository>.wiki` 没有东西可以检出。

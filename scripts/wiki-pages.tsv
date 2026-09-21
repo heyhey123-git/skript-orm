@@ -1,9 +1,15 @@
-# The Chinese documentation as wiki pages: the file in the repository, a tab, and the page it becomes.
+# The documentation as wiki pages: the file in the repository, a tab, and the page it becomes.
 #
-# The page name is what a reader sees in the address bar and what a link between pages has to name, so
-# this is the one place to look when a page is added, removed or renamed. A page name may not contain a
-# space. Order here is the order the sidebar lists the pages in; the sidebar itself is wiki-sidebar.md,
-# and both files have to agree, which the publishing script checks before it writes anything.
+# Both languages are published, Chinese first: the Chinese page takes the plain name and the English one is
+# the same name with `-EN`, so a page is two lines here and two in wiki-sidebar.md. The page name is what a
+# reader sees in the address bar and what a link between pages has to name, so this is the one place to
+# look when a page is added, removed or renamed. A page name may not contain a space. Order here is the
+# order the sidebar lists the pages in; the sidebar itself is wiki-sidebar.md, and both files have to
+# agree, which the publishing script checks before it writes anything.
+#
+# Each page carries the `简体中文 | English` line its source has, and the script turns it into a link to the
+# other file of the pair: that is why both have to be listed here, and a page without a counterpart would
+# send its reader to the repository instead.
 README.zh-CN.md	Home
 docs/getting-started.zh-CN.md	Getting-Started
 docs/connections.zh-CN.md	Connections
@@ -18,3 +24,19 @@ docs/types.zh-CN.md	Types
 docs/troubleshooting.zh-CN.md	Troubleshooting
 docs/cookbook.zh-CN.md	Cookbook
 docs/compatibility.zh-CN.md	Compatibility
+
+# English: the same pages, in the same order.
+README.md	Home-EN
+docs/getting-started.md	Getting-Started-EN
+docs/connections.md	Connections-EN
+docs/tables.md	Tables-EN
+docs/writing.md	Writing-Rows-EN
+docs/reading.md	Reading-Rows-EN
+docs/updating-and-deleting.md	Updating-And-Deleting-EN
+docs/affected-rows.md	Affected-Rows-EN
+docs/errors-and-waiting.md	Errors-And-Waiting-EN
+docs/transactions.md	Transactions-EN
+docs/types.md	Types-EN
+docs/troubleshooting.md	Troubleshooting-EN
+docs/cookbook.md	Cookbook-EN
+docs/compatibility.md	Compatibility-EN

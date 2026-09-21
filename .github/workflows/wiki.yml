@@ -1,8 +1,9 @@
 name: Wiki
 
-# The Chinese documentation is mirrored to the repository wiki, which is a git repository of its own.
-# Only that half is published: the repository is where both languages live, and the wiki is the reading
-# copy for the people the plugin is written for.
+# The documentation is mirrored to the repository wiki, which is a git repository of its own. Both
+# languages are published there, Chinese first: the page of a topic has the plain name and its English
+# half adds `-EN`, and the language switch at the top of each page links the two. The repository is where
+# both languages are written; the wiki is the reading copy.
 #
 # CI ignores a change to a Markdown file, so this workflow has to name what it watches. It runs on the
 # branch the wiki follows, not on pull requests: a pull request must not be able to publish anything.
@@ -12,8 +13,11 @@ on:
       - 'master'
     paths:
       - 'docs/**'
+      - 'README.md'
       - 'README.zh-CN.md'
       - 'scripts/publish-wiki.ps1'
+      - 'scripts/wiki-pages.tsv'
+      - 'scripts/wiki-sidebar.md'
       - '.github/workflows/wiki.yml'
   workflow_dispatch:
 

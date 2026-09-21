@@ -1,12 +1,12 @@
 #!/usr/bin/env pwsh
 #
-# Renders the Chinese documentation as GitHub wiki pages.
+# Renders the documentation as GitHub wiki pages, in both languages and with the Chinese pages first.
 #
 # The wiki is a git repository of its own, its pages are plain files named after the page, and a link
-# between two pages names the page rather than a path. The Chinese pages therefore cannot be copied
-# across unchanged: the language switch belongs to a repository that carries both languages, every link
-# to another page has to become that page's name, and a link to anything the wiki does not carry has to
-# point back at the repository instead.
+# between two pages names the page rather than a path. The documentation pages therefore cannot be copied
+# across unchanged: every link to another page has to become that page's name, a link to anything the wiki
+# does not carry has to point back at the repository instead, and the language switch line at the top of
+# each page has to become the link to the page that carries the other language.
 #
 # This file is deliberately plain ASCII, and everything a reader sees as Chinese lives in the two data
 # files beside it:
@@ -119,18 +119,10 @@ function Convert-Page {
         $directory = @($sourceParts[0..($sourceParts.Count - 2)])
     }
 
-    $normalised = $Text -replace "`r`n", "`n"
-    $kept = foreach ($line in $normalised -split "`n") {
-        # The switch between the two languages sits at the top and says `... | [English](...)`. It is
-        # for the repository, which carries both languages, and has no meaning on a wiki with one.
-        if ($line -match '\[English\]\(' -and $line -match '\|') {
-            continue
-        }
-        $line
-    }
-
-    # Dropping that line leaves the blank line that followed it behind.
-    $body = ($kept -join "`n") -replace "`n{3,}", "`n`n"
+    # The language switch sits at the top of the page, one language in bold and the other a link, and it
+    # stays: both languages are pages in this wiki, so the link rewriting below turns its link into the
+    # page that carries the other language.
+    $body = $Text -replace "`r`n", "`n"
 
     return [regex]::Replace($body, '\]\(([^)]+)\)', {
             param($match)

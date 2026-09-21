@@ -38,11 +38,14 @@ yet is tried:
 
 ### The wiki mirror
 
-`docs/` is the source, and the repository wiki carries the Chinese half of it as a reading copy. A push
-that changes a page runs `.github/workflows/wiki.yml`, which renders the pages with
-`scripts/publish-wiki.ps1` and commits them to the wiki repository. Page names, and every link between
-pages, come from the table at the top of that script, so a new page is one entry there and one line in
-the sidebar. The wiki is not edited by hand: the next run replaces whatever is there.
+`docs/` is the source, and the repository wiki carries it as a reading copy in both languages, Chinese
+first. A push that changes a page runs `.github/workflows/wiki.yml`, which renders the pages with
+`scripts/publish-wiki.ps1` and commits them to the wiki repository. `scripts/wiki-pages.tsv` is the table
+of which file becomes which page and `scripts/wiki-sidebar.md` is the sidebar: the Chinese page of a topic
+takes the plain name, the English one adds `-EN`, Chinese is listed first, and the publishing script
+refuses to write anything unless the two files agree. The language switch at the top of each page is the
+link between the two of a pair, which is why both have to be listed. The wiki is not edited by hand: the
+next run replaces whatever is there.
 
 That workflow needs a wiki that already exists. On a fresh clone, open the wiki once and create a page,
 or a checkout of `<repository>.wiki` has nothing to check out.

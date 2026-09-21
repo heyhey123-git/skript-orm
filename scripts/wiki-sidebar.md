@@ -23,4 +23,23 @@
 
 ---
 
+**English** — the same pages, the English half of the repository
+
+- [Home](Home-EN)
+- [Getting started](Getting-Started-EN)
+- [Connections](Connections-EN)
+- [Tables](Tables-EN)
+- [Writing rows](Writing-Rows-EN)
+- [Reading rows](Reading-Rows-EN)
+- [Updating and deleting](Updating-And-Deleting-EN)
+- [Affected rows](Affected-Rows-EN)
+- [Errors and waiting](Errors-And-Waiting-EN)
+- [Transactions](Transactions-EN)
+- [Types](Types-EN)
+- [Troubleshooting](Troubleshooting-EN)
+- [Cookbook](Cookbook-EN)
+- [Compatibility](Compatibility-EN)
+
+---
+
 内容以[仓库](https://github.com/heyhey123-git/skript-orm)里的 `docs/` 为准，请不要在这里直接改。
