@@ -2,8 +2,7 @@
 
 **简体中文** | [English](reading.md)
 
-读取行有四条语句：`select one`、`select many`、`select page`、`select entity ... by id`。它们都会等结果，
-所以紧跟其后的语句已经拿到数据了。
+读取行有四条语句：`select one`、`select many`、`select page`、`select entity ... by id`。它们都会等待查询完成，后续语句可直接读取结果。
 
 ## 查一行
 
@@ -14,8 +13,7 @@ select one entity from table "users" and store the result in {_user::*}:
 send "name: %{_user::name}%, age: %{_user::age}%"
 ```
 
-行里的每一列会成为变量的一个键，键名就是列名。`where` 块可以省略；省略时从表里取一行。取到哪一行由数据库决定，
-所以需要可预期的读取就要指定主键或唯一列。
+每一列对应变量中的一个键，键名就是列名。`where` 块可以省略，此时由数据库决定返回哪一行。要明确指定某一行，请按主键或唯一列查询。
 
 ## 查多行
 
@@ -26,9 +24,9 @@ select many entities from table "users" and store the results in {_users::*}:
 send "第一个: %{_users::1::name}%"
 ```
 
-行以从 1 开始的行号加列名为键，例如 `{_users::1::name}`。哪怕只匹配到一行，行号也还在，所以 `select many` 的结果读法始终如一。`rowIndex::column` 形状的结果没有现成的计数表达式：`size of {_users::*}` 只数第一层的值，而每一行都是子列表。行数要从行号本身取，或者自己记一个计数器。
+结果以从 1 开始的行号和列名为键，例如 `{_users::1::name}`。即使只匹配到一行，也会保留行号，因此 `select many` 的结果结构始终一致。`rowIndex::column` 结构没有现成的行数表达式：`size of {_users::*}` 只统计第一层的值，而每行都是子列表。请根据行号键统计行数，或自行维护计数器。
 
-`select many` 没有 `ORDER BY`，所以哪一行成为 `::1` 是数据库说了算。顺序重要时请在脚本里自己排；本页只有 `select page` 自带顺序。
+`select many` 不带 `ORDER BY`，因此哪一行位于 `::1` 由数据库决定。需要固定顺序时，请在脚本中排序；本页只有 `select page` 保证返回顺序。
 
 ## 分页
 
@@ -38,11 +36,11 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
         active = true
 ```
 
-- 页码与每页大小都从 1 开始：`page 1` 是第一页，大小 20 表示二十行。
-- 键是**页内**的，所以 `{_page::1::name}` 是**这一页**的第一行，不是整张表的第一行。
-- 行按**主键升序**返回，这也是分页必须有已注册主键的原因：这是各后端都能认同的顺序。
-- 超出末页的页是空的，不会报错。
-- 一页是那个顺序上的**偏移，不是快照**：两次读页之间插入或删除一行，它后面的所有行都会挪位，于是某一行可能被读到两次、或被跳过。表在被写入时，请改用主键游标（`id > {_last}`）遍历。
+- 页码与每页大小都必须至少为 1：`page 1` 是第一页，大小 20 表示每页二十行。
+- 行号从每页重新开始，`{_page::1::name}` 是**当前页**的第一行，不是整张表的第一行。
+- 结果按**主键升序**返回。因此，分页需要已注册的主键，以便各后端采用一致的排序方式。
+- 页码超出末页时返回空结果，不会报错。
+- 分页使用排序后的**偏移量，不是快照**。两次读取之间插入或删除行，可能使后续行的位置变化，造成重复读取或遗漏。遍历正在写入的表时，可考虑主键游标条件（`id > {_last}`），但必须同时保证按主键稳定排序；仅加这个条件并不足够，`select many` 本身不提供 `ORDER BY`。
 
 ## 按 id 查
 
@@ -50,11 +48,11 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-它不接受 `where` 块：直接按已注册的主键查找。没有这个值的行时什么都不存。它同样没有正文，所以也不写冒号，理由见 [写入行](writing.zh-CN.md)；不带 `where` 块的 `select one`、`select many` 与 `select page` 也一样。
+这条语句直接按已注册的主键查找，不接受 `where` 块；没有匹配的行时，不存储任何结果。它没有正文，因此不加冒号，详见 [写入行](writing.zh-CN.md)。不带 `where` 块的 `select one`、`select many` 与 `select page` 也一样。
 
 ## where 块
 
-`where` 块里一行一个条件，放在 `where all:` 或 `where any:` 之下。前者要求条条成立，后者只要有一条成立。两种表头都可以取反：`where not all:` 要的是"至少有一条不成立"，`where no any:`（或 `where not any:`）要的是"没有一条成立"。
+`where` 块在 `where all:` 或 `where any:` 下每行写一个条件。前者要求全部成立，后者要求至少一条成立。两者都可以取反：`where not all:` 表示“至少一条不成立”，`where no any:`（或 `where not any:`）表示“全部不成立”。
 
 ```sk
 select many entities from table "users" and store the results in {_users::*}:
@@ -72,21 +70,21 @@ select many entities from table "users" and store the results in {_users::*}:
 | `column < value`、`column <= value` | 小于、小于等于。 |
 | `column between a and b` | 闭区间。 |
 
-值那一边是表达式，所以 `arg-1`、`{_cutoff}`、`now` 都能用，并在块执行时求值。
+值可以使用表达式，例如 `arg-1`、`{_cutoff}`、`now`，在块执行时求值。
 
 ## 空结果与 NULL 列
 
-从脚本看这两者长得一样，都表现为某个键没有被设置：
+以下两种情况都会表现为某个键未设置：
 
-- `select one` **没有匹配的行**，于是什么都没存。
-- 匹配到的行里**该列是 NULL**。
+- `select one` **没有匹配的行**，因此没有存储结果。
+- 匹配到的行中，**该列为 NULL**。
 
-结果变量在其它情况下会怎样，也值得知道：
+失败也会影响结果变量：
 
-- **语句失败**（数据库拒绝了查询，或结果读不出来）：变量被清空，原因在 `last database error` 里。
-- **语句在发出之前就被拒绝**（没有连接、表不存在、`where` 的值列放不下、页码为 0 之类）：变量**同样被清空**。一次读取要么留下这一次的结果，要么什么都不留，绝不会留下上一次的。
+- **语句执行失败**，例如数据库拒绝查询或无法读取结果：变量会被清空，原因记录在 `last database error` 中。
+- **语句在发送前被拒绝**，例如没有连接、表不存在、`where` 中的值不适合列类型或页码为 0：变量**同样会被清空**。每次读取只保留本次结果或空变量，不会残留上次结果。
 
-要区分它们，就看一个不可能为 NULL 的列，比如主键：
+确认查询成功后，可以检查主键等不可能为 NULL 的列，区分“没有行”和“列为 NULL”：
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -99,9 +97,8 @@ if {_user::age} is not set:
     send "这个用户没有存年龄。" to sender
 ```
 
-语句到底跑没跑，看的是 `last database error`：变量为空本身只意味着"没有这一行，或者这一列是 NULL"，所以才需要上面那两次检查。
+请先用 `last database error` 判断查询是否成功。查询成功时，上面的两次检查才能区分“没有这一行”和“该列为 NULL”；空变量本身不能排除查询失败。
 
 ## 失败
 
-读取一定会等，也一定会暴露失败，所以紧跟其后的 `last database error` 就是出错原因；给读取加 `and wait` 照收，但没有
-任何区别，因为它本来就会等。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+读取总会等待完成，并报告失败原因。可在下一条语句中读取 `last database error`。读取也接受 `and wait`，但不会改变行为。见 [错误与等待](errors-and-waiting.zh-CN.md)。

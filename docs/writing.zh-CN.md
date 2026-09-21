@@ -2,12 +2,11 @@
 
 **简体中文** | [English](writing.md)
 
-写入行有五条语句：`insert one`、`insert many`、`insert entity if absent`、`upsert one entity`，以及用于
-已有行的 `update`。它们描述行的方式是一样的。
+写入行有五条语句：`insert one`、`insert many`、`insert entity if absent`、`upsert one entity`，以及用于更新已有行的 `update`。它们使用相同的方式指定行数据。
 
 ## values 块
 
-值写成 `column: expression` 行，可以直接写在 section 主体里，也可以放在 `values:` 块里：
+值写成 `column: expression`，可以直接放在 section 主体里，也可以放在 `values:` 块里：
 
 ```sk
 insert one entity into table "users" and wait:
@@ -17,12 +16,12 @@ insert one entity into table "users" and wait:
         joined: now
 ```
 
-- 右边可以是任何 Skript 表达式，变量、参数、函数都行。
-- 每行必须在同一行里写成 `column: expression`。只有需要多行的操作（见 `insert many`）才允许嵌套块。
-- **没写的列不会出现在语句里**。插入时，数据库默认值就此生效，自增主键正是这样保持自动的；而在 `update` 与 `upsert by id` 里，没写的列保持它原来的值。想存 SQL NULL，就写 `null`；见 [类型](types.zh-CN.md)。
-- **写了列名、但表达式解析出空值，同样按 SQL NULL 写入。** `name: {_nick}` 在 `{_nick}` 未设置时，和"整行不写 `name`"不是一回事：键在那儿、只是没有值，于是语句写入 NULL（`not null` 列则直接失败）。只有把这一行整个省掉，才会保留原来的值。
-- **列表变量带不动 SQL NULL。** Skript 会把设为 null 的键删掉，而查询结果里 NULL 列本来就没有键，所以"从查询结果里抄一行、再从变量写回去"时，这些列在变量里根本不存在：`insert` 会给它们数据库默认值（`not null` 又没有默认值的列会直接失败），`update` 则原样不动。想写 NULL，只能用带字面量 `null` 的 `values` 块。
-- 列名不存在时，在发出任何语句之前就会失败。
+- 右侧可以是任意 Skript 表达式，包括变量、参数和函数。
+- 每个 `column: expression` 必须写在同一行。只有接受多行数据的位置才允许嵌套块，见 `insert many`。
+- **省略的列不会出现在语句里**。插入时由数据库提供默认值，自增主键也因此能自动生成；在 `update` 与 `upsert by id` 更新已有行时，省略的列保留原值。要存 SQL NULL，请写 `null`，见 [类型](types.zh-CN.md)。
+- **列名已写出，但表达式求值为空时，会写入 SQL NULL。** `{_nick}` 未设置时，`name: {_nick}` 并不等于省略 `name`：前者会写入 NULL，若该列为 `not null` 则写入失败。更新时，只有省略整行才能保留该列原值。
+- **列表变量不能保存 SQL NULL。** Skript 会删除被设为 null 的键，查询结果中的 NULL 列也没有对应的键。因此，从查询结果复制一行再通过变量写回时，这些列会被省略：`insert` 使用数据库默认值（`not null` 且没有默认值时会失败），`update` 则保留原值。要明确写入 NULL，请使用带有字面量 `null` 的 `values` 块。
+- 列名不存在时，语句会在发送到数据库之前失败。
 
 ## 插入一行
 
@@ -35,7 +34,7 @@ if last database error is set:
     send "写入失败: %last database error%" to console
 ```
 
-同一个 section 也可以从“形状像查询结果的变量”取这一行：
+同一个 section 也可以从符合查询结果结构的变量中读取行数据：
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -44,13 +43,13 @@ select one entity from table "users" and store the result in {_user::*}:
 insert one {_user::*} into table "archived_users"
 ```
 
-这样的变量必须正好是一行；装着多行的变量在这里会被拒绝，它属于 `insert many`。
+变量必须恰好包含一行；多行数据会被拒绝，请改用 `insert many`。
 
-最后那一行下面没有内容可缩进，所以不写冒号；Skript 会把不带冒号的一行当作 effect 读。Skript 警告的是空 section，两种写法效果相同：有正文要缩进就带冒号，没有正文就不带。[读取行](reading.zh-CN.md) 与 [更新与删除](updating-and-deleting.zh-CN.md) 两页也是这个规则。
+最后一条语句没有需要缩进的正文，因此不加冒号，Skript 会将它解析为 effect。带冒号却没有正文会触发空 section 警告。两种形式执行相同的操作：有正文时加冒号，没有正文时省略。[读取行](reading.zh-CN.md) 与 [更新与删除](updating-and-deleting.zh-CN.md) 中的示例也遵循这个规则。
 
 ## 插入多行
 
-`values:` 下的每个嵌套块是一行：
+`values:` 下的每个嵌套块代表一行：
 
 ```sk
 insert many entities into table "users" and wait:
@@ -63,18 +62,18 @@ insert many entities into table "users" and wait:
             age: 30
 ```
 
-行也可以来自变量：
+也可以从变量中读取多行：
 
 ```sk
 insert many {_rows::*} into table "archived_users" and wait
 ```
 
-各行可以写不同的列，但有两条规则：
+各行的列集合需要遵循以下规则：
 
-- **`values` 块**里每一行必须写同一组列。一条语句只能绑定一组列，所以某行少写了别的行有的列，运行时会被拒绝：`Batch row 2 does not contain the same columns as the first row.`
-- 装着多行的**列表变量**则会补齐到共同的列集合，某行缺的列按 NULL 写入。查询结果因此可以直接插回去。MongoDB 两种写法都接受参差的行。
+- **`values` 块**中的每一行必须包含相同的列。一条语句只能绑定一组列；如果某行缺少其他行包含的列，运行时会报错：`Batch row 2 does not contain the same columns as the first row.`
+- 包含多行的**列表变量**会按所有行的列集合补齐，缺少的列写入 NULL，因此查询结果可以直接用于插入。MongoDB 对这两种写法都允许各行包含不同的列。
 
-变量未设置或里面什么都没有时，语句会失败并报 `{_rows::*} is not set.`，而不是"写入 0 行"——而没匹配到任何行的 `select many` 恰恰会把结果变量留空，所以把它的结果喂给 `insert many` 之前要先检查一下。见 [读取行](reading.zh-CN.md)。
+变量未设置或为空时，语句会报 `{_rows::*} is not set.`，而不是成功写入 0 行。`select many` 没有匹配结果时也会留下空变量，因此将结果传给 `insert many` 前，请先检查变量是否有值。见 [读取行](reading.zh-CN.md)。
 
 ## 有则更新、无则插入
 
@@ -85,7 +84,7 @@ upsert one entity in table "users" by id {_id} and wait:
         age: 26
 ```
 
-`upsert` 写入给定主键值的行：已经存在就更新它。主键写在 `by id` 里，**不要**写进 `values` 块：`values` 里出现主键会被拒绝，报 `The primary key must not be included in upsert values.`，因为正是主键决定这一行是插入还是更新。在 MySQL 上这是 `INSERT ... ON DUPLICATE KEY UPDATE`。
+`upsert` 写入指定主键的行，已有该行则更新。主键应写在 `by id` 中，**不能**放进 `values` 块，否则会报 `The primary key must not be included in upsert values.`。主键用于确定插入还是更新；MySQL 使用 `INSERT ... ON DUPLICATE KEY UPDATE` 实现这一操作。
 
 ```sk
 insert entity if absent into table "users" and wait:
@@ -94,25 +93,25 @@ insert entity if absent into table "users" and wait:
         name: "Alice"
 ```
 
-`if absent` 只在数据库认为该行不存在时插入，已经存在就按兵不动：已有的行保持原值，而 `upsert` 会覆盖它。在 MySQL 上，插入照常发出，只有"键已被占用"这一个错误会被当成"这一行在"；其它错误——值比列还长、往 `not null` 列写 `null`——都会像别的写入一样让语句失败。该用哪个，看你心里“已经存在”是什么意思：
+`if absent` 只在数据库判定该行不存在时插入，已有行则保留原值，不像 `upsert` 那样覆盖。在 MySQL 上，它会尝试正常插入，仅将重复键错误视为“行已存在”；值超出列长度、向 `not null` 列写入 `null` 等其他错误仍会导致语句失败。按需求选择即可：
 
 | 想要 | 用 |
 | --- | --- |
-| 没有就建、有就拿这些值覆盖 | `upsert` |
-| 只在缺失时建，已有行别动 | `insert entity if absent` |
-| 想知道到底建没建 | `insert entity if absent ... and store affected rows in {_rows}`：`1` 表示确实写进去了，`0` 表示已有键占着它。读回来比对也行，但只有 `if absent` 会把旧行原样留着给你比 |
+| 不存在则创建，存在则用给定值更新 | `upsert` |
+| 仅在不存在时创建，保留已有行 | `insert entity if absent` |
+| 判断是否创建了新行 | `insert entity if absent ... and store affected rows in {_rows}`：`1` 表示已插入，`0` 表示键已存在。也可以读回数据比较，但只有 `if absent` 会保留已有行供比较 |
 
-两者都取决于实现自己的冲突规则，它们的描述里也是这么写的。上文说的是 MySQL 的行为。
+两者都遵循具体实现的冲突规则，语法说明中也有注明。以上介绍的是 MySQL 的行为。
 
 ## 等待
 
-写入会等自己的活儿干完：它之后的语句在改动被数据库接收后才执行，失败能在 `last database error` 里读到。等待停住的是这条 trigger，不是服务器主线程，所以语句在飞的时候别的玩家、别的脚本照常运行。
+写入完成后，后续语句才会执行；失败原因可通过 `last database error` 读取。等待只暂停当前 trigger，不阻塞服务器主线程，其他玩家和脚本仍可正常运行。
 
-`and wait` 在这些语句上仍然照收，只是不起作用：现在每条语句都会等，写入也不例外；它曾经是写入用来要求这一点的写法，所以本页示例都还留着它。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+这些语句仍接受 `and wait`，但它不再改变行为：现在所有语句都会等待完成，包括写入。这个子句曾用于要求写入等待，本页示例为兼容旧写法而保留。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 写入了多少行
 
-这些语句都可以把影响的行数留在变量里：写上 `and store affected rows in {_rows}`：
+这些语句都支持 `and store affected rows in {_rows}`，将影响行数存入变量：
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
@@ -120,4 +119,4 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
         name: "Alice"
 ```
 
-对 `insert entity if absent` 来说，这个数就是"到底写没写进去"：`1` 写了，`0` 是已有键占着。脚本也靠它写出"只在读到的值仍然是当时那个值时才生效"的条件。至于别的语句，这个数字是各后端自己的说法——`upsert` 在 MySQL 上插入记 `1`、更新记 `2`，而 PostgreSQL 与 MongoDB 两种情况都记 `1`——所以拿它分支之前先看[影响行数](affected-rows.zh-CN.md)。
+对 `insert entity if absent`，`1` 表示已插入，`0` 表示键已存在。影响行数也可用于条件更新，判断写入时数据是否仍与先前读取的一致。其他语句的计数规则因后端而异：例如，MySQL 的 `upsert` 插入记 `1`、更新记 `2`，而 PostgreSQL 与 MongoDB 两种情况都记 `1`。用这个数字判断下一步操作前，请先阅读[影响行数](affected-rows.zh-CN.md)。

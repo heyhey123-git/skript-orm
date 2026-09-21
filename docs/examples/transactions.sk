@@ -1,8 +1,6 @@
-# The script from docs/transactions.md, kept here so the server test parses it.
-#
-# A syntax error in the documentation then fails a build instead of reaching a reader. Nothing in this
-# file is ever run: the examples only have to parse. That is why the tables it mentions are never
-# registered here, and why the commands are never invoked.
+# Examples for docs/transactions.md. The server test parses these commands but does not run them.
+# They check syntax only. To use them in a script, first register the tables and load any required
+# values, including the account balances in the transfer example.
 
 command /example-transfer <number> <text> <text>:
     trigger:

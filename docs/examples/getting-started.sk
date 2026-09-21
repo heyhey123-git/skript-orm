@@ -1,12 +1,8 @@
-# The script from docs/getting-started.md, kept here so the server test parses it.
+# Examples for docs/getting-started.md. The server test parses these commands but does not run them.
+# This catches syntax errors in this file; it does not test the examples' runtime behavior.
 #
-# A syntax error in the documentation then fails a build instead of reaching a reader. Nothing in this
-# file is ever run: the examples only have to parse. That is why the connection sits in a command
-# rather than in `on load`, where the page shows it. The test server has scripts of its own with a
-# connection of their own, and a second `create a connection` would replace it out from under them.
-#
-# The columns these commands mention are declared on the command that registers the table below, so the
-# file reads as one script even though the server test never executes it.
+# Connection setup uses a command instead of the page's `on load` event so loading this file does not
+# replace the test server's connection. The table definition below supplies the columns used here.
 
 command /example-connect:
     trigger:

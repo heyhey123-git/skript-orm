@@ -21,9 +21,9 @@ case-sensitively, and the released jar registers four:
 
 | Type name | What it is |
 | --- | --- |
-| `"MySQL"` | MySQL's dialect, with the MySQL driver found for the server. The product and the type name happen to be the same word here, which is the only reason the two lists on this page can be confused. |
+| `"MySQL"` | MySQL's dialect with the server's existing MySQL driver. The product and type share a name, but serve different purposes in this documentation. |
 | `"PostgreSQL"` | PostgreSQL's dialect, with the driver the plugin downloads for it. See [What is inside the jar](#what-is-inside-the-jar). |
-| `"MongoDB"` | MongoDB, reached through the blocking MongoDB Java driver the plugin downloads for it. There is no SQL under this one, so a few statements behave differently on purpose — see [MongoDB](#mongodb). |
+| `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [MongoDB](#mongodb). |
 | `"JDBC"` | A driver you name yourself in a `driver` property, and a dialect that writes portable SQL (`"double quoted"` identifiers, `LIMIT 1` for one row, `LIMIT ? OFFSET ?` for paging), refusing whatever has no portable form. |
 
 Any other name is refused when the section runs, with `Database '<name>' is not supported.` There is no
@@ -32,9 +32,9 @@ about them. `"MongoDB"` is both, the way `"MySQL"` is.
 
 ## What is inside the jar
 
-The released jar bundles the plugin, its Kotlin runtime, the connection pool, and every implementation
-module of this repository — the MySQL dialect and the generic JDBC one, the PostgreSQL module, and the
-MongoDB one. It carries **no database driver at all**, and that is deliberate:
+The released jar bundles the plugin, its Kotlin runtime, the connection pool, and all implementation
+modules in this repository: MySQL, generic JDBC, PostgreSQL, and MongoDB.
+**Database drivers are not bundled.** They are provided as follows:
 
 - MySQL and the generic type use the driver the server already has. Paper ships MySQL Connector/J and
   makes it visible to plugins, so there is nothing to install for it, and `"JDBC"` is for a driver the
@@ -49,11 +49,10 @@ MongoDB one. It carries **no database driver at all**, and that is deliberate:
   property, or Google's mirror of Central by default. After that first start the drivers are in
   `libraries/` and are used from there, so the download happens once per server.
 
-That entry is a promise: Paper treats a library it cannot resolve as fatal, so a server that cannot reach
-the mirror does not load this plugin at all. The way out is the mirror setting above — worth knowing that
-it applies to every plugin's downloads on that server, not only this one — or putting the directory in
-place by hand, where copying the whole `libraries/` directory from a server that has started once is the
-reliable form of that.
+Paper treats an unresolved library as a fatal error and will not load the plugin. If the server cannot
+reach the mirror, change the setting above; note that it affects library downloads for **all plugins**
+on that server. Alternatively, prepare the dependencies manually by copying the entire `libraries/`
+directory from a server that has already started successfully.
 
 This is also why no driver is shaded into the jar. A rewritten copy and a downloaded one would be two
 drivers, and the downloaded one is the library its authors published: it keeps its own service files, its
@@ -76,8 +75,8 @@ supported, for two reasons:
 - SkBee bundles the NBT library under its own package rather than providing the standalone NBT API's
   classes, so the two cannot be mixed.
 
-The plugin therefore does not compile against, or depend on, any NBT implementation. It looks SkBee's
-classes up by name once, while the plugin enables, and links them, which is why:
+The plugin has no compile-time or mandatory runtime dependency on an NBT implementation.
+During startup, it looks up and links SkBee's classes by name. As a result:
 
 - **The standalone NBT API plugin is not supported**, and installing it neither helps nor conflicts.
 - **No SkBee version is pinned, but NBT is linked against a fixed set of names.** A version that still
@@ -92,22 +91,22 @@ requirement: the plugin enables with or without it.
 
 ## Database products
 
-None of these names is a type name: this table is about what a connection can reach, and the type names
-are the four under "The type names a script can write".
+This table lists database products a connection can access, rather than accepted type names.
+Use one of the four types listed under "The type names a script can write", even when the product
+and type happen to share a name.
 
 | | |
 | --- | --- |
 | MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
-| MariaDB | Untested. Write `"MySQL"` — the statement shapes are MySQL's (`ON DUPLICATE KEY UPDATE`, `LIMIT` on updates and deletes) — and it may well work, but nothing checks it. |
+| MariaDB | Untested. Try `"MySQL"`, which generates MySQL syntax such as `ON DUPLICATE KEY UPDATE` and `LIMIT` on updates and deletes. It may work, but this has not been verified. |
 | PostgreSQL | Supported. Write `"PostgreSQL"`; the driver is downloaded on the first start. Tested in CI against a real server, and the addon is driven against it on a real Paper server as well. |
 | MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start. Its transactions are not implemented here, so a `database transaction` section reports the refusal. Tested in CI against MongoDB 8. |
-| SQLite and others | SQLite works through `"JDBC"` and the driver Paper already carries: nothing the dialect writes is foreign to it, and the server test runs a round trip of inserts, reads, paging, an update and a delete against it in both of its modes. Everything that dialect refuses stays refused — no auto increment, no `insert ... if absent`, no `upsert`, no limit on a write — and the others need a driver the server does not carry. |
+| SQLite and others | SQLite works through `"JDBC"` and Paper's included driver. It accepts the SQL this dialect generates; server tests cover inserts, reads, paging, updates and deletes in both test modes. The dialect still excludes auto increment, `insert ... if absent`, `upsert`, and write limits. Other products require a driver not included with the server. |
 
 ## MongoDB
 
-`"MongoDB"` is a product name and a type name at once, the way `"MySQL"` is, and the syntax on the other
-pages holds for it too. The SQL implementations' assumptions are what do not survive the move, so what
-this implementation does with each statement is worth stating in one place.
+Like `"MySQL"`, `"MongoDB"` is both a product name and a type name. The syntax documented elsewhere
+also applies, but some SQL-specific assumptions do not. The main differences are listed below.
 
 - **Every declared column type works.** A uuid is stored as BSON binary, date, time and timespan as
   numbers, and itemstack, location, bukkit-serializable and nbt as BSON binary. No type is dropped for
@@ -116,12 +115,12 @@ this implementation does with each statement is worth stating in one place.
   `skript_orm_sequences`. That name is therefore reserved: a table may not be called that. The counter is
   created when the table is registered, and raised to the highest key the collection already holds, so a
   key that was stored before the table was registered is never handed out a second time.
-- **A statement that brings its own key raises the counter past it.** An insert with an explicit key and an
-  `upsert by id` both tell the counter what they wrote, which is what MySQL's `AUTO_INCREMENT` does with an
-  explicit insert, and what a PostgreSQL sequence needs a manual `setval` for. A key is therefore never
-  issued twice, whatever mix of explicit and generated keys a script uses. Only a document written into the
-  collection by something that is not this plugin, after the table was registered, can still collide — and
-  the insert then fails with the server's duplicate-key error rather than overwriting it.
+- **Explicit keys also advance the counter.** Inserts with an explicit key and `upsert by id` update
+  the counter so later generated keys exceed that value. This matches MySQL's `AUTO_INCREMENT` behavior;
+  PostgreSQL sequences require a manual `setval` for the same effect. Mixing explicit and generated keys
+  through the plugin therefore does not allocate a key twice. Documents written by other programs after
+  registration can still cause a collision, in which case the insert fails with a duplicate-key error
+  rather than overwriting an existing document.
 - **`_id` is MongoDB's own field**, reserved for the identity of the document itself, so a table may not
   declare a column named `_id`. Registering one is refused with an explanation rather than failing later.
 - **`select page` requires a primary key**, and always orders by it, exactly as the JDBC and PostgreSQL
@@ -135,9 +134,9 @@ this implementation does with each statement is worth stating in one place.
   selects that many identifiers first and deletes those.
 - **A filter comparing against null follows MongoDB.** `column = null` matches a row where the column is
   null or absent, and `column != null` matches one where it is present and not null.
-- **Nothing else is enforced by the server.** Nullability and size are declarations, not constraints.
-  Registration creates the unique index on the primary key and the auto-increment counter, and MongoDB
-  creates the collection itself with the first document written.
+- **Nullability and size are declarations, not server-enforced constraints.** Registration creates the
+  primary-key unique index and the auto-increment counter. MongoDB creates collections as needed;
+  creating an index can create a collection before its first document is written.
 - **Transactions are not implemented.** `supportsTransactions` stays false for this implementation, so a
   `database transaction` section fails with `This database implementation does not support transactions.` —
   the same wording any implementation without transactions reports. MongoDB itself has multi-document
@@ -146,8 +145,7 @@ this implementation does with each statement is worth stating in one place.
 
 ## Behaviours that depend on the implementation
 
-The syntax is the same everywhere, but a few things are the implementation's decision and the
-documentation says so where it matters: conflict handling in `upsert` and `insert ... if absent`, whether
-a limit can be applied to an update or a delete, and what "an absent row" means. The pages name MySQL's
-behaviour explicitly rather than implying it is universal, and MongoDB's own answers are under
-[MongoDB](#mongodb) above.
+Shared syntax does not imply identical behavior. Conflict handling in `upsert` and `insert ... if absent`,
+limits on updates and deletes, and the meaning of an absent row depend on the implementation.
+The relevant pages identify MySQL-specific behavior rather than presenting it as universal.
+MongoDB differences are collected under [MongoDB](#mongodb) above.

@@ -1,7 +1,7 @@
 # skript-orm
 
-<!-- Absolute rather than relative: this page is also the wiki's home, where a relative path would
-     point at a file the wiki does not carry. -->
+<!-- Use an absolute image URL because this page also serves as the wiki home,
+     where the repository's relative image path is unavailable. -->
 ![skript-orm: an ORM for Skript](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
 
 An ORM for Skript: describe a table once, then read and write rows with Skript syntax instead of
@@ -57,30 +57,29 @@ and hands results back as ordinary Skript variables and values.
 | **MySQL** | The shipped implementation, tested against MySQL 8. Paper already ships the driver, so there is nothing to install for it. |
 | **PostgreSQL** | Also shipped, and tested in CI. Its driver is downloaded on the first start into the server's `libraries/`; see [Compatibility](docs/compatibility.md#what-is-inside-the-jar). |
 | **MongoDB** | Also shipped, and tested in CI against MongoDB 8. Its driver is downloaded on the first start, the same way PostgreSQL's is. |
-| **SkBee** | Optional, and only for `nbtcompound` columns. Scripts can only build an NBT compound when SkBee is installed in any case. |
+| **SkBee** | Optional; required only for `nbtcompound` columns. SkBee also provides the NBT compound objects used in scripts. |
 
 ## Install
 
 1. Download `skriptorm-<version>.jar` from the releases page, or build it yourself
    ([CONTRIBUTION.md](CONTRIBUTION.md)).
 2. Put the jar in `plugins/`, next to Skript.
-3. Start the server once, then write the connection and the table into a script and `/sk reload` it.
-   Both are things a script does, so no config file is involved.
+3. Start the server once, then add a connection and table definition to a script and load it with
+   `/sk reload`. Both are defined in Skript; no configuration file changes are needed.
 
 ## How it works
 
-- **As many connections as the script wants.** `create a connection` makes that database the default
-  one, `named "logs"` keeps another one alongside it, and `in connection "logs":` or
-  `use connection "logs"` says which one a statement uses.
-- **Everything that touches rows is a section.** Writing, reading, updating and deleting are separate
-  syntaxes with their own bodies, and a read always waits for its result.
-- **A transaction is one section.** `database transaction:` commits when its body ends, rolls back when
-  a statement in it fails, and holds one connection for as long as it runs.
-- **A write says how many rows it affected.** `and store affected rows in {_rows}` keeps the count, so a
-  script can tell "it was already there" from "it was written", or notice that the row it read moved
-  under it. See [Affected rows](docs/affected-rows.md).
-- **A failure is a value.** Every statement waits, so `last database error` holds what went wrong by the
-  time the next line runs, and a statement that worked leaves it unset.
+- **Multiple connections.** `create a connection` sets up the default connection; `named "logs"`
+  creates a named connection. Use `in connection "logs":` or `use connection "logs"` to select one.
+- **Skript syntax for each data operation.** Inserts, queries, updates and deletes have dedicated syntax.
+  Forms with a `values` or `where` body use sections. All statements wait for completion.
+- **One section per transaction.** `database transaction:` commits when its body ends, rolls back if
+  a statement fails, and holds one connection throughout.
+- **Affected-row counts.** `and store affected rows in {_rows}` saves the count. Its meaning depends
+  on the operation and database; conditional updates can use it to detect concurrent changes.
+  See [Affected rows](docs/affected-rows.md).
+- **Errors available to scripts.** Every statement waits, so `last database error` contains any error
+  from that operation before the next line runs. Successful statements leave it unset.
 
 ## Documentation
 
@@ -96,7 +95,7 @@ and hands results back as ordinary Skript variables and values.
 | [Errors and waiting](docs/errors-and-waiting.md) | What waits, `last database error`, and what a failure does. |
 | [Transactions](docs/transactions.md) | All-or-nothing groups of statements, and what ends them. |
 | [Types](docs/types.md) | What each column type accepts and how it is stored. |
-| [Troubleshooting](docs/troubleshooting.md) | The traps: silent schema changes, invisible NULLs, NBT without SkBee. |
+| [Troubleshooting](docs/troubleshooting.md) | Schema changes that do not take effect, missing NULL values, and NBT without SkBee. |
 | [Cookbook](docs/cookbook.md) | Recipes for the things scripts usually need. |
 | [Compatibility](docs/compatibility.md) | Versions, the type names a script can write, what ships in the jar, and what is not supported. |
 | [Changelog](CHANGELOG.md) | What each release changed, which is also what its release page says. |

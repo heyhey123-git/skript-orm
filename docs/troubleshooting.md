@@ -2,36 +2,25 @@
 
 [简体中文](troubleshooting.zh-CN.md) | **English**
 
-The traps in this plugin are mostly quiet ones: an operation that did nothing, a column that is there
-but unreadable, a schema that was never created. Each entry below is a symptom, what causes it, and what
-to do.
+Some problems are easy to miss: an operation has no effect, a declared column cannot be read, or a table was never created. Each entry below explains the symptom, its cause, and what to do next.
 
 ## "I added a column and nothing changed"
 
-The table is created with `CREATE TABLE IF NOT EXISTS`, and registering never alters a table that
-already exists. The plugin accepts the new column into its own description, the database does not grow
-one, and there is no warning.
+Tables are created with `CREATE TABLE IF NOT EXISTS`. Registration never alters an existing table: the new column is added to the plugin's definition, but not to the database, and no warning is issued.
 
-What you see afterwards: operations that mention the new column fail, and a read of the table may fail
-because the result has no such column.
+Operations that use the new column will then fail. Reading the table may also fail because the database result has no such column.
 
-Fix it by migrating the database yourself:
+Migrate the database yourself:
 
 ```sql
 ALTER TABLE users ADD COLUMN joined DATE NULL;
 ```
 
-In a development database, dropping the table and letting the plugin create it again is quicker. For a
-live database, keep the schema under whatever migration tooling you already use; the plugin is not one.
-See [Tables](tables.md).
+If the data in a development database is disposable, you can drop the table and let the plugin recreate it. For a live database, use your existing migration tools; the plugin does not handle migrations. See [Tables](tables.md).
 
 ## "Table 'users' is already registered."
 
-The registration is remembered per **connection**, and `create a connection` builds a new one every time it
-runs. So the refusal needs a registration that meets a connection something else still holds: a second
-script registering the same table name on the connection the first script made, or a reloaded script that
-registers without connecting again. A script that connects and registers together in `on load` never sees
-it, because the reload replaces the connection:
+Table registrations belong to a **connection**, and `create a connection` creates a new connection each time. This error means the same table name was registered twice on one connection, perhaps by a second script or after a reload without reconnecting. Connecting and registering together in `on load` replaces the connection on reload and avoids this kind of duplicate registration:
 
 ```sk
 on load:
@@ -48,25 +37,17 @@ See [Tables](tables.md).
 
 ## "Table 'users' not found."
 
-The table was never registered **on this connection**. Usual causes: the script that connects and
-registers never ran, it failed earlier (check `last database error` at that point), or the connection
-was replaced since, which starts with no tables registered.
+The table has not been registered **on the current connection**. The script responsible for connecting and registering may not have run, or it may have failed earlier; check `last database error` at the point of failure. Another possibility is that the connection was replaced, leaving the new connection with no registered tables.
 
 ## "No database connected."
 
-There is no connection in effect: nobody connected yet, the connection failed, or something
-disconnected. Since a failed connection leaves the previous one closed, a single bad credential can put
-the server in this state for every script. See [Connections](connections.md).
+There is no active connection: none was created, the connection attempt failed, or the connection was closed. A failed connection attempt also leaves the previous connection closed, so incorrect credentials can affect every script sharing that connection. See [Connections](connections.md).
 
-Once named connections exist but none of them is the default, the message says that instead and lists
-the names, because `use connection "logs"` or `make connection "logs" the default` is then the fix
-rather than another `create a connection`.
+If named connections exist but none is the default, the error says so and lists their names. Use `use connection "logs"` or `make connection "logs" the default`; there is no need to create another connection.
 
 ## A column reads as unset, and the row exists
 
-A NULL column leaves its key unset, because Skript deletes a list-variable key whose value is null. So
-`{_user::age} is not set` means "NULL or no row", not "zero". Check a column that cannot be NULL to tell
-the two apart:
+Skript deletes list-variable keys whose values are null, so a NULL column has no key in the result. `{_user::age} is not set` can mean "age is NULL" or "no row", not "age is zero". Check a column that cannot be NULL to distinguish the two:
 
 ```sk
 if {_user::id} is not set:
@@ -79,27 +60,19 @@ See [Types](types.md).
 
 ## `{_users::name}` is empty after `select many`
 
-`select many` keys rows by a one-based row index first: `{_users::1::name}`. A single matching row still
-has index 1. There is no count expression for a `rowIndex::column` result: `size of {_users::*}` counts
-first-layer values, and every row is a sub-list, so it does not count rows. Take the number of rows from
-the row keys themselves, or keep your own counter. See [Reading rows](reading.md).
+`select many` results start with a one-based row index, as in `{_users::1::name}`. Even a single matching row needs that index. There is no row-count expression for these results: `size of {_users::*}` counts first-layer values, but each row is a sub-list. Walk the row indices or keep your own counter. See [Reading rows](reading.md).
 
 ## A delete or update touched every row
 
-`delete entities` and `update entities` accept a missing `where` block and then act on every row the
-implementation allows. A forgotten `where` is not an error. Write the conditions, or use the `by id`
-form. See [Updating and deleting](updating-and-deleting.md).
+`delete entities` and `update entities` allow you to omit `where`, in which case they affect every row the implementation allows. Forgetting the condition is not an error. Add a filter or use `by id`. See [Updating and deleting](updating-and-deleting.md).
 
 ## "Data type 'nbtcompound' cannot be used: SkBee is not installed, and it is what provides NBT compounds."
 
-The column type depends on SkBee, and registering the table is refused rather than letting the first
-row fail later. Install SkBee, or use a different type. Note that without SkBee a script cannot build an
-NBT compound in the first place, so this only matters on a server where the column was meant to be used.
-See [Types](types.md).
+`nbtcompound` requires SkBee. Without it, table registration fails rather than waiting until the first write. Install SkBee or choose another type. Scripts also need SkBee to construct NBT compounds; servers that do not use this type are unaffected. See [Types](types.md).
 
 ## "Auto-increment column 'id' must also be a primary key."
 
-`auto increment` needs `primary key` on the same column, because the value has to identify the row:
+`auto increment` requires `primary key` on the same column because the value must identify the row:
 
 ```sk
     id: bigint, primary key, auto increment, not null
@@ -107,35 +80,23 @@ See [Types](types.md).
 
 ## The id after an insert is unknown
 
-The plugin does not hand back a generated id. Either write the value yourself and use `upsert`, or look
-the row up again by another column. See [Cookbook](cookbook.md).
+The plugin does not return generated ids. Either assign the id in your script and use `upsert`, or find the inserted row by another column. See [Cookbook](cookbook.md).
 
 ## A `date` column lost its time
 
-A `date` column is a SQL `DATE`, so the time of day is not stored. Use a `bigint` of epoch milliseconds
-or a `timespan` when the exact moment matters. A `time` column is a Minecraft time of day, not a wall
-clock reading either. See [Types](types.md).
+On SQL implementations, a `date` column stores SQL `DATE`, which discards the time of day. For an exact moment, store a Unix timestamp in a `bigint`, with a consistent choice of seconds or milliseconds, or use a `string` containing a timestamp with a time zone. `timespan` represents a duration, not a point in time. MongoDB's `date` column keeps epoch milliseconds instead. A `time` column represents a Minecraft time of day, not a wall-clock reading. See [Types](types.md).
 
 ## Paging skips or repeats rows
 
-A page is an offset into the primary-key order, not a snapshot of it. A row written or deleted while a
-script is walking the pages shifts everything behind it, so a row at a page boundary is seen twice or not
-at all. When the table is being written to, walk it with a key-set filter (`id > {_last}`) instead of with
-`select page`.
+A page is an offset into primary-key order, not a snapshot. Inserts or deletes during pagination can shift later rows, causing duplicates or omissions. A keyset filter (`id > {_last}`) requires a stable primary-key sort order. `select many` does not offer `ORDER BY`, so adding that filter alone is not a complete replacement for `select page`.
 
-Pagination orders by the registered primary key, so a table without one is refused, and pages are
-one-based. Keys inside a page restart at 1 (`{_page::1::name}`), which is easy to mistake for the first
-row of the table. See [Reading rows](reading.md).
+Pagination sorts by the registered primary key and rejects tables without one. Page numbers start at 1, and row indices restart at 1 within each page: `{_page::1::name}` is the first row on that page, not the first row in the table. See [Reading rows](reading.md).
 
 ## Skript says "Empty configuration section!"
 
-Skript warns about every section with nothing indented under its colon, whichever plugin the section
-belongs to. Its parser is what prints the line, and the flag behind it is internal to Skript, so no
-config file and no script can turn it off.
+Skript warns when a section has no indented content beneath its colon, regardless of which plugin provides it. The message comes from Skript's parser, and its control flag is internal; neither a config file nor a script can disable it.
 
-The forms that take their rows from a variable have no body to give, and neither do the ones that work
-by id, so they are written without a colon. A line without one is an effect, not a section, and there is
-nothing left for Skript to warn about:
+Forms that take values from a variable or operate by id need no body, so they use no colon. A line in this form is an effect, not a section, and does not trigger the empty-section warning:
 
 ```sk
 insert one {_user::*} into table "archived_users"
@@ -143,8 +104,7 @@ delete one entity from table "users" by id {_id} and wait
 select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-The colon is for the statements that have something to indent. A filter that matches every row does the
-job for a read that wants to keep one:
+Use a colon only when the statement has an indented body. To read a single row, you can supply a filter that covers the rows you want; this example suits a table whose ids start at 1:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -152,11 +112,8 @@ select one entity from table "users" and store the result in {_user::*}:
         id >= 1
 ```
 
-A section with a `where` block, a `values` block, or any other body is left alone. A script written
-before these one-line forms existed still runs, and still earns the warning; dropping the colon is all
-it takes to quiet it.
+Sections with a `where` block, `values` block, or other body need no changes. Older scripts with empty sections still run but still warn. For the one-line forms above, removing the colon resolves the warning.
 
 ## The table name works on one server and not another
 
-On Linux, MySQL table names are case-sensitive. The name in `register a database table "..."` is used as
-written, and so is every `table "..."` afterwards. Keep one spelling.
+MySQL table names on Linux are usually case-sensitive, depending on the server configuration. Both `register a database table "..."` and every later `table "..."` use the name exactly as written. Keep the spelling and case consistent.

@@ -2,8 +2,7 @@
 
 [简体中文](updating-and-deleting.zh-CN.md) | **English**
 
-Both come in two shapes: by a `where` block, which can match many rows, and by primary key, which
-matches one.
+Updates and deletes each have two forms: a `where` block can match multiple rows, while a primary key matches at most one.
 
 ## Update by condition
 
@@ -18,9 +17,7 @@ if last database error is set:
     send "Update failed: %last database error%" to console
 ```
 
-The body holds a `values` block and an optional `where` block, in either order, and the values are
-written exactly as in an insert: a column left out is not touched, and a literal `null` stores SQL NULL.
-See [Writing rows](writing.md).
+The body contains a `values` block and an optional `where` block, in either order. Values use the same format as inserts: omitted columns remain unchanged, and a literal `null` writes SQL NULL. See [Writing rows](writing.md).
 
 ## Update by id
 
@@ -31,11 +28,9 @@ update one entity in table "users" by id {_id} and wait:
         age: 26
 ```
 
-This takes no `where` block: it updates the row whose registered primary key has that value.
+This updates the row with the given registered primary-key value and does not accept a `where` block.
 
-**A key the table does not hold is not an error.** The statement touches nothing, `last database error`
-stays unset, and `store affected rows` reports `0` — which is what to check when it matters whether the
-row was there. `delete one entity ... by id` behaves the same way.
+**A missing key is not an error.** No row is changed, `last database error` remains unset, and `store affected rows` returns `0`. The same applies to `delete one entity ... by id`. For updates on MySQL, however, `0` can also mean an existing row already had the supplied values; it does not necessarily mean the row is missing.
 
 ## Delete by condition
 
@@ -46,7 +41,7 @@ delete entities from table "users" with limit 10 and wait:
         age < 18
 ```
 
-A delete has no values block; it only takes an optional `where` and an optional limit.
+Deletes accept an optional `where` block and limit, but no `values` block.
 
 ## Delete by id
 
@@ -56,52 +51,36 @@ if last database error is set:
     send "Delete failed: %last database error%" to console
 ```
 
-That check answers "did the statement run", not "was there a row": a key nothing holds deletes nothing and
-reports no error, so the count from `and store affected rows in {_rows}` is what says whether it did.
+This check tells you whether the statement succeeded, not whether the row existed. Deleting a missing key changes nothing and reports no error. Use `and store affected rows in {_rows}` to check whether a row was deleted.
 
-The colon marks a statement that has a body. This one has none, and neither has an `update`, an `upsert`
-or an `insert` whose values come from a variable; those are written without it, as
-[writing rows](writing.md) explains.
+A colon introduces a statement body. This statement has none, so it needs no colon. The same applies to `update`, `upsert` and `insert` when their values come from a variable; see [writing rows](writing.md).
 
 ## Leaving the where out
 
-**`update entities` and `delete entities` without a `where` block act on every row the implementation
-allows them to.** Both sections accept that, so a forgotten `where` is not an error:
+**Without a `where` block, `update entities` and `delete entities` act on all rows allowed by the implementation.** Both sections accept this form, so forgetting `where` does not produce an error:
 
 ```sk
-# Every row in the table.
+# Delete every row in the table.
 delete entities from table "users" and wait
 ```
 
-A `where` block whose condition list is empty is refused when the script is parsed, for `delete` just as
-much as for `update`; to act on every row, write `delete entities from table "users"` with no `where`
-block at all. When the intent is "all rows", write it as such and keep a `with limit` in mind.
+An empty `where` block is rejected when the script is parsed, for both updates and deletes. To act on all rows, omit the block entirely, as in `delete entities from table "users"`. Add `with limit` when you need to cap the number of affected rows.
 
 ## Limits
 
-`with limit N` asks for at most N rows. MySQL writes `... LIMIT N`, PostgreSQL picks the rows by `ctid`
-first so that `LIMIT` still applies, and MongoDB selects the ids the same way; only a generic `"JDBC"`
-connection cannot express it, and it says so instead of ignoring the limit.
+`with limit N` affects at most N rows. MySQL uses `... LIMIT N`; PostgreSQL first selects the limited set of rows by `ctid`; MongoDB first selects their ids. Generic `"JDBC"` connections do not support this limit and report an error rather than ignoring it.
 
-The limit has to resolve to a single positive number. A number that is zero or less is refused at run time
-with `Update limit must be positive.` (or `Delete limit must be positive.`), but an expression that
-resolves to nothing at all — an unset variable, or one holding several values — leaves the statement
-**unlimited**, because there is nothing to apply. A limit used as a safety net is worth checking in the
-script before the statement runs.
+The limit must resolve to a **single positive number**. Zero or a negative number is rejected at runtime with `Update limit must be positive.` or `Delete limit must be positive.` If the expression produces no single value, such as an unset variable or one containing multiple values, the statement runs **without a limit**. If you rely on the limit as a safeguard, validate its value before running the statement.
 
-The limit is a safety net, not a paging mechanism: which rows it keeps is up to the database, so a
-`where` block is what makes an update or a delete predictable.
+A limit caps the count; it is not a pagination mechanism. The database chooses which rows to affect, so use `where` conditions to define the intended scope.
 
 ## Waiting
 
-Both sections wait for their work: the following lines run after the change has finished and a failure is
-readable in `last database error`. The wait parks the trigger, not the server thread. `and wait` is still
-accepted and does nothing, because every statement waits now. See
-[Errors and waiting](errors-and-waiting.md).
+Both sections finish before subsequent statements run. Failures are available in `last database error`. Waiting pauses only the current trigger, not the server thread. `and wait` is still accepted but no longer changes the behaviour. See [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were changed
 
-Both also take `and store affected rows in {_rows}`, which keeps the number of rows the statement touched:
+Both sections accept `and store affected rows in {_rows}` to save the affected-row count:
 
 ```sk
 delete entities from table "sessions" and store affected rows in {_deleted} and wait:
@@ -109,13 +88,11 @@ delete entities from table "sessions" and store affected rows in {_deleted} and 
         last_seen < {_cutoff}
 ```
 
-A count of `0` means the statement ran and matched nothing, which is how an update guarded by the values
-it read says that somebody else got there first. See [Affected rows](affected-rows.md).
+For deletes, `0` means no row was deleted. For updates, it can mean no row matched, or, on MySQL, that the matched values did not change. When using previously read values as update conditions, ensure the write would change a value before treating zero as an unsuccessful conditional update. See [Affected rows](affected-rows.md).
 
 ## Updating from a variable
 
-Both `update` and `upsert` also accept the new values as a variable shaped like a select result, which
-is the shortest way to read a row, change it and store it back:
+Both `update` and `upsert` accept new values from a variable with the structure of a query result, making it straightforward to read, modify and write back a row:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -127,8 +104,4 @@ delete {_user::id}
 update one entity {_user::*} in table "users" by id {_id} and wait
 ```
 
-With `update`, only the columns in the variable are touched; with `upsert` the row is created when the
-primary key is not there yet. Neither `update by id` nor `upsert by id` accepts a variable straight from a
-select: a select result always contains the primary key, and both refuse values that contain it. Take the
-key out first, as the example does, and pass its value to `by id` separately. See
-[Cookbook](cookbook.md).
+`update` changes only columns present in the variable; `upsert` also creates the row if its primary key does not exist. Neither `update by id` nor `upsert by id` accepts query results unchanged, because those results include the primary key, which is not allowed in the values. Save the key, remove it from the variable, and pass it separately to `by id`, as shown above. See [Cookbook](cookbook.md).

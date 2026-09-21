@@ -2,7 +2,7 @@
 
 **简体中文** | [English](getting-started.md)
 
-这一页的终点，是一段能存下一行、再读回来的脚本。文档其余部分都是参考，留着你真用到时再翻。
+从建立连接到写入、读取数据，本页会带你完成一份可运行的脚本。其余文档可在需要时查阅。
 
 前提是插件已经装好，见 [环境要求](../README.zh-CN.md#环境要求) 与 [安装](../README.zh-CN.md#安装)。
 
@@ -21,11 +21,11 @@ on load:
         stop
 ```
 
-- `"MySQL"` 是某个实现的类型名。jar 里注册了四个：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
-  而且是精确匹配，所以单是数据库**产品**的名字不在其中；见 [连接](connections.zh-CN.md) 里的“实现名称”一节。
-- `url` 必填。`username` 与 `password` 可以是空字符串，供不需要账号的服务器使用。
-- 这个 section 必定等待，所以同一 trigger 里它之后的语句，跑在已经连上的库上。若另一个脚本先跑，它会看到 `No database connected.`。连接写在 `on load` 里，正是为了免去这层先后之忧。
-- 账号密码就写在脚本文件里，这个文件的可见范围，得跟数据库账号一样收着。
+- `"MySQL"` 是数据库实现的类型名。jar 注册了四种类型：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
+  名称必须精确匹配，不能任意填写数据库**产品**名。见 [连接](connections.zh-CN.md) 中的“实现名称”一节。
+- `url` 必填。不需要账号密码的数据库可将 `username` 与 `password` 设为空字符串。
+- 这个 section 始终等待完成。连接成功后，同一 trigger 中的后续语句即可使用它。若另一个脚本在连接建立前执行数据库操作，会得到 `No database connected.`。通常将连接写在 `on load` 中，并注意脚本的加载顺序。
+- 账号密码保存在脚本文件中，请限制该文件的读取权限。
 
 ## 2. 描述一张表
 
@@ -36,7 +36,7 @@ register a database table "users":
     age: int, nullable
 ```
 
-注册会在表不存在时建表，并等它存在。它**不会**动已经存在的表，所以这里新增的列，对已有该表的数据库毫无作用。这个坑连同完整的列语法，都在 [表](tables.zh-CN.md)。
+注册会在表不存在时创建它，并等待操作完成。它**不会**修改已有表，因此在脚本中新增列并不会改变数据库中已有的表结构。有关这一限制及完整的列语法，见 [表](tables.zh-CN.md)。
 
 ## 3. 写入一行
 
@@ -53,9 +53,9 @@ command /adduser <text> <integer>:
         send "已保存 %arg-1%。" to sender
 ```
 
-写入会等，所以下一行执行时 `last database error` 说的就是它：数据库自己拒绝的失败也在里面，而不只是打在控制台。每条语句都会等，写不写 `and wait` 都一样；见 [错误与等待](errors-and-waiting.zh-CN.md)。
+写入会等待完成，因此下一行执行时，`last database error` 反映的就是本次操作。数据库返回的错误也会记录在这里，而不只是输出到控制台。无论是否写 `and wait`，每条语句都会等待；见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
-`values` 里没有 `id`，它由数据库分配。日后需要它，就自己写一个值并改用 `upsert`，见 [菜谱](cookbook.zh-CN.md)。
+`values` 中省略了 `id`，由数据库分配。如果后续操作需要这个 id，可以自行指定值并使用 `upsert`，见 [菜谱](cookbook.zh-CN.md)。
 
 ## 4. 读回来
 
@@ -74,7 +74,7 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-查询必定等待，所以它之后的语句已经拿到行了。行中每一列就是变量的一个键，键名即列名。`{_user::id} is not set` 既是“没有匹配的行”的模样，也是“该列是 NULL”的模样，因为 NULL 列不会写下自己的键。两种情形都在 [读取行](reading.zh-CN.md)。
+查询始终等待完成，后续语句可直接读取结果。每一列对应变量中的一个键，键名与列名相同。本例中，`{_user::id} is not set` 表示没有匹配的行。一般而言，值为 NULL 的列也不会设置对应的键，因此检查其他列时要区分这两种情况。详见 [读取行](reading.zh-CN.md)。
 
 ## 5. 修改与删除
 
@@ -86,7 +86,7 @@ update one entity in table "users" by id {_user::id} and wait:
 delete one entity from table "users" by id {_user::id} and wait
 ```
 
-按 `where` 批量修改或删除的写法，在 [更新与删除](updating-and-deleting.zh-CN.md)。删除没有正文，所以不写冒号；上面的更新有 `values` 要缩进，仍带冒号。见 [写入行](writing.zh-CN.md)。
+这两种操作及使用 `where` 按条件修改、删除的写法，见 [更新与删除](updating-and-deleting.zh-CN.md)。示例中的删除没有主体，不写冒号；更新包含缩进的 `values` 块，需要冒号。见 [写入行](writing.zh-CN.md)。
 
 ## 完整脚本
 
@@ -132,15 +132,19 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-另一份脚本可以直接用同一张表，因为连接属于服务端，不属于建立它的那个脚本。但**建连接的只能有一个脚本**：第二个 `create a connection` 会替换默认连接，而新连接里什么都没注册，于是第一个脚本注册过的表在它眼里全没了，语句会报 `Table 'users' not found.`。第二份脚本要么别碰连接，要么用 `named` 建自己那条。见 [连接](connections.zh-CN.md)。
+其他脚本可以直接使用同一张表，因为连接属于整个服务端，而不只属于创建它的脚本。
+
+**共享的默认连接应由一个脚本负责创建**：再次执行 `create a connection` 会替换默认连接，新连接中没有任何已注册的表，后续语句会报 `Table 'users' not found.`。这不会删除数据库中的表，只是新连接没有对应的注册信息。
+
+其他脚本可以沿用已有连接，或用 `named` 创建自己的连接。见 [连接](connections.zh-CN.md)。
 
 ## 接下来读什么
 
 | 你想 | 读 |
 | --- | --- |
-| 知道列能怎么写，以及建表**不会**做什么 | [表](tables.zh-CN.md) |
-| 一次存很多行，或者“有则更新、无则插入” | [写入行](writing.zh-CN.md) |
-| 过滤、分页、按 id 查 | [读取行](reading.zh-CN.md) |
-| 弄清 `last database error` 究竟何时被设置 | [错误与等待](errors-and-waiting.zh-CN.md) |
-| 存物品、坐标、日期、NBT compound | [类型](types.zh-CN.md) |
-| 查“为什么它悄无声息，什么都没做” | [排雷](troubleshooting.zh-CN.md) |
+| 了解列的写法及注册表的限制 | [表](tables.zh-CN.md) |
+| 批量写入，或“有则更新、无则插入” | [写入行](writing.zh-CN.md) |
+| 过滤、分页、按 id 查询 | [读取行](reading.zh-CN.md) |
+| 了解 `last database error` 何时被设置 | [错误与等待](errors-and-waiting.zh-CN.md) |
+| 存储物品、位置、日期、NBT compound | [类型](types.zh-CN.md) |
+| 排查没有报错却未生效的操作 | [排雷](troubleshooting.zh-CN.md) |

@@ -2,7 +2,7 @@
 
 **简体中文** | [English](connections.md)
 
-连接由脚本建立，属于整个服务端。一个脚本可以同时留住好几条，每条语句自己决定用哪一条。
+连接由脚本建立，供整个服务端使用。一个脚本可以同时管理多条连接，并指定每条语句使用哪一条。
 
 ## 建立连接
 
@@ -13,11 +13,11 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` 是实现的名称。jar 里注册了四个：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
+- `"MySQL"` 是实现名称。jar 注册了四种实现：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
-- 块里其它字面量属性会交给实现，而实现只查自己认识的名字：**不认识的会被静默忽略**，所以把 `statement timeout` 敲成 `statment timeout` 既不生效也不报错。各实现真正会读的是 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`。
-- 这个 section 必定等待：下一行执行时，连接要么可用，要么已经失败。这里既不需要 `and wait`，也不接受它。
-- **它不能在 `database transaction` 里运行。** 这时 section 只报 `A connection cannot be created inside a database transaction. Roll it back first.`，什么也不连——替换连接会把事务一起带走。
+- 块中的其他字面量属性会传给实现，**无法识别的属性会被静默忽略**。例如，将 `statement timeout` 误写为 `statment timeout`，既不会生效，也不会报错。各实现读取的额外属性包括 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`。
+- 这个 section 始终等待完成：下一行执行时，连接要么可用，要么已报告失败。这里既不需要 `and wait`，也不接受它。
+- **不能在 `database transaction` 中创建连接。** 此时 section 会报 `A connection cannot be created inside a database transaction. Roll it back first.`，不会建立连接，以免替换连接破坏正在运行的事务。
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -29,21 +29,20 @@ if last database error is set:
     stop
 ```
 
-这条连接没有名字。它会成为**默认连接**，也就是没有任何别的东西指定时语句所使用的那一条。所以只有一个库的脚本，完全不必关心下面这些。
+这条连接没有名称，会成为**默认连接**。未另行指定连接的语句都会使用它；只用一个数据库的脚本通常无需切换连接。
 
 ## 实现名称
 
-引号里那个词是**类型名**，不是数据库产品的名字：它决定用哪套代码拼语句、读结果，而且是**大小写敏感的精确匹配**。jar 里注册了四个：
+引号中的名称是实现的**类型名**，不一定与数据库产品名相同。它决定插件如何生成语句、读取结果，必须**精确匹配，且区分大小写**。jar 注册了四种类型：
 
 | 类型名 | 它带来什么 |
 | --- | --- |
-| `"MySQL"` | MySQL 方言——反引号标识符、`upsert` 走 `ON DUPLICATE KEY UPDATE`、更新与删除上的 `LIMIT`、`AUTO_INCREMENT`、`LIMIT` 分页——以及由插件自动找到的 MySQL 驱动（`com.mysql.cj.jdbc.Driver`，或更老的 `com.mysql.jdbc.Driver`）。脚本要用的几乎总是这一个。 |
-| `"PostgreSQL"` | PostgreSQL 方言——`ON CONFLICT`、`EXCLUDED`、`GENERATED … AS IDENTITY`，以及因为 PostgreSQL 没有 `UPDATE ... LIMIT` 而改用 `ctid` 写出的行数限制——加上插件在首次启动时替它下载的驱动。 |
-| `"MongoDB"` | MongoDB，通过插件为它下载的阻塞式 MongoDB Java 驱动访问。它底下没有 SQL，所以好几条语句的回答是刻意不同的，[兼容性](compatibility.zh-CN.md#mongodb) 一一列出；它自己的属性见下面一节。 |
-| `"JDBC"` | 由**你自己**在 `driver` 属性里指定驱动，配一个写通用 SQL 的方言：`"双引号"` 标识符、取一行用 `LIMIT 1`、分页用 `LIMIT ? OFFSET ?`——这正是 MySQL、MariaDB、SQLite、PostgreSQL、H2 都接受的写法。凡是通用写法表达不了的——`insert ... if absent`、`upsert ... by id`、写操作加 limit、`auto increment`——它宁可拒绝也不猜。 |
+| `"MySQL"` | MySQL 方言：反引号标识符、用于 `upsert` 的 `ON DUPLICATE KEY UPDATE`、更新与删除中的 `LIMIT`、`AUTO_INCREMENT` 及 `LIMIT` 分页。插件会自动查找服务端的 MySQL 驱动（`com.mysql.cj.jdbc.Driver` 或旧版 `com.mysql.jdbc.Driver`）。连接 MySQL 时应选用此类型。 |
+| `"PostgreSQL"` | PostgreSQL 方言：`ON CONFLICT`、`EXCLUDED`、`GENERATED … AS IDENTITY`。由于 PostgreSQL 没有 `UPDATE ... LIMIT`，行数限制通过 `ctid` 实现。驱动在插件首次启动时下载。 |
+| `"MongoDB"` | 通过插件下载的阻塞式 MongoDB Java 驱动访问 MongoDB，不使用 SQL。部分语句的行为因此不同，详见 [兼容性](compatibility.zh-CN.md#mongodb)；连接属性见下一节。 |
+| `"JDBC"` | 由你在 `driver` 属性中指定驱动，使用通用 SQL 方言：`"双引号"` 标识符、单行查询的 `LIMIT 1`、分页的 `LIMIT ? OFFSET ?`。这种行数限制写法可用于 MySQL、MariaDB、SQLite、PostgreSQL 和 H2。不具备通用写法的操作不受支持，包括 `insert ... if absent`、`upsert ... by id`、写操作的 limit 及 `auto increment`。 |
 
-驱动从哪来，区分的是这几种类型。`"PostgreSQL"` 与 `"MongoDB"` 指的是本插件会替你取好、备好的驱动；`"JDBC"`
-指的是必须已经在服务端 classpath 上的类，这也正是它的用途。要连 SQLite 用的就是后者，因为 Paper 自带它的驱动：
+这些类型的区别还包括驱动来源。`"PostgreSQL"` 与 `"MongoDB"` 的驱动由插件下载；`"JDBC"` 指定的驱动类则必须已在服务端 classpath 中。SQLite 使用后者，因为 Paper 自带 SQLite 驱动：
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -51,25 +50,18 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-只有 `"JDBC"` 需要你给出类名，四种类型里没有任何一种的驱动会打进这个 jar。`"PostgreSQL"` 或 `"MongoDB"`
-连接不需要类名，什么都不需要：两个驱动都会在首次启动时取来，[兼容性](compatibility.zh-CN.md#jar-里有什么)
-讲了这件事，也讲了连不上它来源镜像的服务端该做些什么。
+只有 `"JDBC"` 需要指定驱动类名，四种类型的驱动都不打包在本插件 jar 中。`"PostgreSQL"` 与 `"MongoDB"` 无需指定类名，两者的驱动都会在首次启动时下载。[兼容性](compatibility.zh-CN.md#jar-里有什么) 说明了下载方式，以及无法访问镜像时的处理办法。
 
-Paper 自己带两个驱动（MySQL Connector/J 与 SQLite 的）：
+Paper 自带 MySQL Connector/J 和 SQLite 驱动：
 
-- **MySQL。** 这个方言写 `"双引号"` 标识符，而 MySQL 在没开 `ANSI_QUOTES` 时会把它当成字符串字面量，
-  所以用 `"JDBC"` 连的 MySQL 先倒在标识符上，后面的问题都轮不到。连 MySQL 请写 `"MySQL"`。
-- **SQLite。** 要连它靠的就是 `"JDBC"`，而且驱动已经在了：方言写出的东西 SQLite 全不反对，所以连一个文件
-  就能用上这个类型支持的全部操作。方言拒绝的那些在这里同样被拒绝——没有 auto increment、没有
-  `insert ... if absent`、没有 `upsert`、写操作不能加 limit——所以表的主键由脚本自己给。
+- **MySQL。** `"JDBC"` 方言使用 `"双引号"` 标识符，而 MySQL 未启用 `ANSI_QUOTES` 时会将其视为字符串字面量，导致语句失败。连接 MySQL 请使用 `"MySQL"`。
+- **SQLite。** 使用 `"JDBC"`，无需另装驱动。SQLite 接受该方言生成的 SQL，连接到数据库文件后即可使用此类型支持的操作。不过，`auto increment`、`insert ... if absent`、`upsert` 和写操作的 limit 仍不受支持，表的主键需要由脚本提供。
 
-所以 `"mysql"` 会被拒绝，报 `Database 'mysql' is not supported.`；`"MariaDB"`、`"SQLite"` 同样会被拒绝
-——它们是产品，不是类型名。`"MongoDB"` 两样都是，正如 `"MySQL"`。连接**底下**连的是什么产品是一回事，
-脚本**写**的是上面四个类型名之一，这是另一回事。[兼容性](compatibility.zh-CN.md) 里那份产品清单说的是前者。
+`"mysql"` 会报 `Database 'mysql' is not supported.`；`"MariaDB"` 和 `"SQLite"` 也不是已注册的类型名。`"MongoDB"` 与 `"MySQL"` 则既是产品名，也是类型名。连接所访问的产品与脚本中填写的实现类型需要区分，[兼容性](compatibility.zh-CN.md) 分别列出了两者。
 
 ## MongoDB 属性
 
-MongoDB 连接用的还是同一个块，只是 `url` 的含义不同：
+MongoDB 使用相同的属性块，但 `url` 的含义不同：
 
 ```sk
 create a connection to database "MongoDB" with properties:
@@ -80,20 +72,15 @@ create a connection to database "MongoDB" with properties:
     auth database: "admin"
 ```
 
-- `url` 可以只是 `host:port`，也可以是完整的连接串，以 `mongodb://` 或 `mongodb+srv://` 开头；完整的连接串会连
-  选项一起原样交给驱动，例如 `mongodb://host:27017/logs?retryWrites=false`。
-- `username` 与 `password` 和 SQL 实现一样是分开的两个属性，以字符串交给驱动，而不是拼进 url。所以含有 `@`、
-  `:`、`/`、`%` 的密码就只是密码，不需要转义。
-- `database` 指定要用的数据库，`mongodb://host:27017/mydb` 这样的 url 也指定了一个。写出来的 `database`
-  优先于 url 里的那个；两边都没有时用 `skript-orm`。
-- `auth database` 指定凭据所属的数据库，用于账号放在别处的服务端。默认就是正在使用的那个数据库。
-- **MongoDB 的事务在本实现里还没有做。** MongoDB 本身是有多文档事务的——副本集从 4.0 起、分片集群从 4.2 起，
-  单机服务端则直接拒绝——只是这条连接目前不会去开事务，所以 `database transaction` section 会失败，报
-  `This database implementation does not support transactions.`；见 [兼容性](compatibility.zh-CN.md#mongodb)。
+- `url` 可以是 `host:port`，也可以是以 `mongodb://` 或 `mongodb+srv://` 开头的完整连接串。完整连接串会连同选项原样传给驱动，例如 `mongodb://host:27017/logs?retryWrites=false`。
+- `username` 与 `password` 和 SQL 实现一样，分别以字符串传给驱动，不会拼入 URL。因此，密码中的 `@`、`:`、`/`、`%` 无需转义。
+- `database` 指定要使用的数据库，优先于 `mongodb://host:27017/mydb` 这类 URL 中的数据库名。两处都未指定时使用 `skript-orm`。
+- `auth database` 指定凭据所属的数据库，用于账号不在目标数据库中的情况。默认值为当前使用的数据库。
+- **本实现尚不支持 MongoDB 事务。** MongoDB 本身从 4.0 起支持副本集上的多文档事务，从 4.2 起支持分片集群上的多文档事务，独立部署的服务端则不支持。但本连接实现尚未提供事务，因此 `database transaction` section 会报 `This database implementation does not support transactions.`。见 [兼容性](compatibility.zh-CN.md#mongodb)。
 
 ## 给连接起名
 
-加上 `named "..."`，连接就会记在这个名字下：
+加上 `named "..."`，即可按名称注册连接：
 
 ```sk
 create a connection named "logs" to database "MySQL" with properties:
@@ -102,28 +89,28 @@ create a connection named "logs" to database "MySQL" with properties:
     password: "123456"
 ```
 
-- 具名连接登记在这个名字下，**不会碰任何别的连接**。
-- 第一条连接成功的会成为默认连接，具名与否都一样。
-- 用一个已经在用的名字建连接，替换的只是那一条：旧的断开，其它名字下的连接不受影响。把同一段 `on load` 再跑一遍，就是重连。
-- 名字是脚本能够指向的东西。`main`、`logs`、`archive`，念得顺口就行。
+- 具名连接按名称注册，**不影响其他连接**。
+- 第一条成功建立的连接会成为默认连接，无论是否具名。
+- 名称已存在时，新连接会替换同名连接并断开旧连接，其他名称的连接不受影响。重新运行同一段 `on load` 即可重连。
+- 名称用于在脚本中引用连接，建议选择便于识别的名字，例如 `main`、`logs`、`archive`。
 
-不带名字的连接替换的是默认连接，这一点和以前一样。被替换的那条只有在**没有名字可以留住它**时才会断开，所以先建了 `"logs"`、再建一条无名连接的脚本，`"logs"` 仍然活着，只是不再是无限定语句的落点。
+无名连接会替换默认连接。被替换的连接只有在**没有注册名称**时才会断开。例如，先创建 `"logs"`，再创建无名连接，`"logs"` 仍保持打开，只是不再用于未指定连接的语句。
 
 ## 一条语句用哪条连接
 
-语句会按顺序问三个问题，取第一个有答案的：
+语句按以下优先级选择连接：
 
 | 顺序 | 答案 | 写法 |
 |---|---|---|
-| 1 | 它所在的最内层作用域 | `in connection "logs":` |
-| 2 | 本事件切换到的连接 | `use connection "logs"` |
+| 1 | 所在的最内层连接作用域 | `in connection "logs":` |
+| 2 | 当前事件切换到的连接 | `use connection "logs"` |
 | 3 | 默认连接 | 不带名字的 `create a connection` |
 
-三个都没有答案时，语句什么都不做，只报 `No database connected.`。写错的名字、已经断开的连接，都不是可以退而求其次的情况：语句会在它被指向的那条连接上失败，而不会悄悄改用另一条。
+三者都未指定连接时，语句不执行操作，并报 `No database connected.`。如果指定的名称不存在或连接已断开，语句会失败，**不会自动改用其他连接**。
 
 ## 临时切换
 
-`in connection` 让一个块用指定的连接：
+`in connection` 让一个块使用指定连接：
 
 ```sk
 in connection "logs":
@@ -132,7 +119,7 @@ in connection "logs":
             message: "写进日志库"
 ```
 
-切换只在这个块内有效，正因如此，从一个库读、往另一个库写才写得清楚：
+切换只在块内有效，适合从一个数据库读取、向另一个数据库写入：
 
 ```sk
 in connection "archive":
@@ -142,11 +129,11 @@ in connection "logs":
     insert many entities into table "entries" from {_entries::*} and wait
 ```
 
-名字不存在时，块会被跳过并报错，所以打错字不会变成一次写向默认库的操作。
+名称不存在时，插件会跳过该块并报错，不会因拼写错误而误写默认数据库。
 
 ## 切换到这个事件结束
 
-`use connection` 会立即切换，并影响当前事件余下的部分：
+`use connection` 立即切换连接，并影响当前事件的后续操作：
 
 ```sk
 command /newlog <text>:
@@ -157,9 +144,9 @@ command /newlog <text>:
                 message: arg-1
 ```
 
-它不做任何数据库工作，所以和这里其它语句不同，它不等待：紧接着的下一行就已经在用它了。写在 `in connection` 块里时，块仍然优先，而块结束时，块内写的 `use connection` 会一并撤销。
+它不执行数据库操作，因此无需等待，下一行即可使用新连接。在 `in connection` 块内，块指定的连接仍然优先；块内的 `use connection` 切换也会在块结束时撤销。
 
-同一个事件上的多个处理器共用这个切换，因为它按事件保存。介意的话，在每个处理器里各写一个 `in connection`。
+切换状态按事件保存，同一事件的多个处理器会共享它。如果需要彼此独立，请在各处理器中使用 `in connection`。
 
 ## 选择默认连接
 
@@ -167,42 +154,39 @@ command /newlog <text>:
 make connection "logs" the default
 ```
 
-此后无限定语句都用 `"logs"`，直到有别的连接成为默认。脚本当前所在的连接不受影响：已经解析出连接的语句就继续用它。
+此后，未指定连接的语句会使用 `"logs"`，直到默认连接再次改变。当前作用域中的连接不受影响，已经确定连接的语句也会继续使用原连接。
 
-让出默认角色的那条连接**如果没有自己的名字，会被立刻断开**：此后没有任何语句能解析到它，留着它只是让它那片十条服务端连接的池子一直开到服务端关闭。**具名**的连接则照旧运行，只是不再是默认——脚本可能正通过作用域或 `use connection` 用它。这条语句会等这次关闭完成，所以下一行已经看到新的默认连接；事务开着时它会被拒绝。
+原默认连接**若没有注册名称，会被断开**，以免保留无法再访问的连接资源；对 SQL 连接而言，这包括最多十条数据库连接。**具名连接**则保持打开，只是不再作为默认连接，因为作用域或 `use connection` 仍可能使用它。这条语句会等待关闭完成，后续语句即可使用新的默认连接；事务运行期间不能执行此操作。
 
 ## 断开连接
 
 ```sk
 disconnect from the current database        # 当前生效的连接
-disconnect from connection "logs"           # 某一条具名连接
-disconnect from all connections             # 全部
+disconnect from connection "logs"           # 指定的具名连接
+disconnect from all connections             # 全部连接
 ```
 
-第一种写法和其它语句一样走解析：写在 `in connection "logs":` 里，关掉的是 `"logs"`；写了
-`use connection "logs"` 之后，关掉的也是 `"logs"`；两者都没有时，关掉的是默认连接。它异步执行，而下一行
-会等它结束，所以脚本可以先断开，再做别的事。
+第一种写法按前述优先级选择连接：在 `in connection "logs":` 内，或执行 `use connection "logs"` 后，断开的都是 `"logs"`；两者都没有时，断开默认连接。关闭操作异步执行，脚本会等待完成后再执行下一行。
 
-断开一条仍被作用域指着的连接不算错误。只是那个作用域里的语句从此会失败，因为它们解析到的那条连接已经
-关闭了。
+断开仍被作用域引用的连接本身不会报错，但该作用域中的后续语句会失败，因为它们使用的连接已经关闭。
 
-- 已注册的表跟着连接走。另一条连接开始时一张表都没注册，所以同一个表名在两条连接上各注册一次并不冲突。见 [表](tables.zh-CN.md)。
-- 服务端禁用插件时，插件会关掉每一条连接；`disconnect from all connections` 同样一条不落：让出默认角色的连接要么有名字、仍被登记着，要么在让出角色那一刻就已经关掉了。见[选择默认连接](#选择默认连接)。
+- 表的注册信息属于连接。新连接最初没有已注册的表，因此同一个表名可以分别在两条连接上注册。见 [表](tables.zh-CN.md)。
+- 插件被服务端禁用时会关闭所有连接，`disconnect from all connections` 也会关闭全部连接。原默认连接要么仍以名称注册，要么已在被替换时关闭，不会遗漏。见[选择默认连接](#选择默认连接)。
 
 ## 没有连接时的操作
 
-每个 section 都会先看连接。没有任何连接生效时，操作什么都不做，只报 `No database connected.`，这句会落进 `last database error`。当具名连接已经存在、却没有一条是默认时，报错会说清这一点并列出名字。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+每个 section 都会先检查连接。如果没有可用连接，操作不会执行，并在 `last database error` 中记录 `No database connected.`。如果已有具名连接但没有默认连接，错误信息会说明这一点并列出名称。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 账号凭据
 
-属性写在脚本里，意味着凡是能读到脚本文件、或能执行会打印语法的 `/sk` 命令的人，都能看到账号与密码。两个习惯可省去后患：
+连接属性写在脚本中，因此能读取脚本文件，或执行会输出语法内容的 `/sk` 命令的人，都能看到账号密码。建议：
 
-- 只给数据库账号脚本真正需要的权限。
-- 把连接单独放在一个脚本里。这样设权限时，你只需盯住那一个文件。
+- 只授予数据库账号脚本所需的权限。
+- 将连接定义放在独立脚本中，便于统一管理凭据文件的访问权限。
 
 ## 语句超时
 
-每条语句默认有 **30 秒**。可以按连接改：
+每条语句默认超时为 **30 秒**，可以按连接设置：
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -212,20 +196,20 @@ create a connection to database "MySQL" with properties:
     statement timeout: 15
 ```
 
-- `0` 表示不限，也就是驱动的默认行为：跑多久都等。
-- 它存在的原因是：一条永远不结束的语句会一直占着池子里的一条连接，直到服务器重启，而没有别的东西会终结它。
-- 它能保证的是**脚本不再等**，不是服务端停了：取消由驱动发起，MySQL 的做法是另开一条连接把那个查询杀掉。
-- 它只管一条语句，而且只管**已经拿到连接之后**的那条语句。从池里等一条空闲连接由池自己兜着：**30 秒**，超了语句就会失败并报 `HikariPool-1 - Connection is not available, request timed out after 30000ms`。`statement timeout: 0` 去掉的是语句本身的限制，不是这个等待。`commit` / `rollback` 等锁则由服务端自己的上限和 url 上的 `socketTimeout` 兜着。
-- 在 MongoDB 上，同一个属性会变成驱动的 socket 读取超时，而这条连接的 `closeWaitTimeout` 是这个超时加五秒，和 SQL 那边完全一样。不同的是超时后两边各自怎么做：MySQL 从另一条连接把语句杀掉，MongoDB 的驱动则只是不再等响应——服务端会把已经收到的语句做完。无论哪边，这个属性限制的都是**脚本等多久**，而不是服务端做什么。它是**盖在 url 之上**的：连接串里写的 `socketTimeoutMS` 会被这个属性及其 30 秒默认值替换掉，所以请在这里设值；`statement timeout: 0` 则会保留 url 自己的值。
-- MySQL 的 `innodb_lock_wait_timeout` 默认 50 秒，比这个长，所以等锁的语句通常先被这个超时取消，报出来的是超时而不是锁等待。想让数据库自己说话，就把这个值调到 50 以上。
-- 这个值必须是整秒。别的写法会被拒绝，报 `Connection property 'statement timeout' must be a whole number of seconds, but was 'x'.`；负数则报 `Connection property 'statement timeout' must not be negative, but was -1.`。
+- `0` 表示不限制，与驱动默认的无限等待行为一致。
+- 超时用于避免未结束的语句持续占用池中的连接，否则这种占用可能一直持续到服务端重启。
+- 它限制的是**脚本的等待时间**，并不保证数据库服务端已经停止执行。驱动负责取消语句，MySQL 会通过另一条连接终止查询。
+- 在 SQL 后端，超时只适用于单条语句，且从**取得连接后**开始计算。等待池中空闲连接由连接池另行限制，最多 **30 秒**，超过后报 `HikariPool-1 - Connection is not available, request timed out after 30000ms`。`statement timeout: 0` 不会取消这项限制。`commit` / `rollback` 的锁等待受数据库服务端自身限制及 URL 中的 `socketTimeout` 控制。
+- 对 MongoDB，这个属性设置驱动的 socket 读取超时；连接的 `closeWaitTimeout` 与 SQL 实现一样，为该超时加五秒。区别在于超时后的处理：MySQL 会通过另一条连接取消语句，MongoDB 驱动只停止等待响应，服务端仍会完成已收到的操作。因此，这个属性同样只限制**脚本等待多久**。它优先于 URL 设置：连接串中的 `socketTimeoutMS` 会被该属性或其 30 秒默认值覆盖，请在这里设置；设为 `statement timeout: 0` 则保留 URL 中的值。
+- MySQL 的 `innodb_lock_wait_timeout` 默认为 50 秒，因此等待锁的语句通常会先触发本插件的语句超时，返回超时错误而非锁等待错误。若希望收到 MySQL 自身的锁等待错误，可将本属性设为大于 50 秒。
+- 属性值必须是整数秒，否则会报 `Connection property 'statement timeout' must be a whole number of seconds, but was 'x'.`；负数会报 `Connection property 'statement timeout' must not be negative, but was -1.`。
 
-事务内的语句拿到的是**事务剩余的时间**，而不是这整个超时。见 [事务](transactions.zh-CN.md)。
+事务中的语句使用**事务剩余的超时时间**，而不是这里设置的完整时长。见 [事务](transactions.zh-CN.md)。
 
 ## 并发操作
 
-一个连接内部维持着**十条**连接的池子，操作之间不必排队；同一时刻的第十一条会等，最多等上面说的 30 秒。池子大小改不了：没有任何连接属性能碰到它。
+每条 SQL 连接内部维护一个最多包含**十条**数据库连接的 Hikari 连接池，允许多个操作并发执行。第十一个并发操作需要等待，最多等待上述 30 秒。连接池大小不能通过脚本属性调整。
 
-也正因如此，一次写入要等它结束之后，才对读取可见，因为两个操作可能跑在池里不同的连接上。从脚本的角度看，决定先后的是每条语句自己都会做的那次等待。
+不同操作可能使用不同的池内连接。由于每条语句都会等待完成，同一 trigger 中的后续读取会等前一次写入结束后再执行；并发操作之间的数据可见性则取决于事务隔离。
 
-每条连接都有自己的一片连接池，所以三条连接最多能让服务端同时持有三十条数据库连接——对着数据库自己的 `max_connections` 算一算。
+每条 SQL 连接都有独立的连接池，三条连接最多可占用三十条数据库连接。配置时请一并考虑数据库的 `max_connections` 限制。

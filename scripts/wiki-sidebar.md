@@ -15,7 +15,7 @@
 - [事务](Transactions)
 - [类型](Types)
 
-**出了问题**
+**实用指南**
 
 - [排雷](Troubleshooting)
 - [菜谱](Cookbook)
@@ -40,7 +40,7 @@
 - [Transactions](Transactions-EN)
 - [Types](Types-EN)
 
-**When something goes wrong**
+**Practical guides**
 
 - [Troubleshooting](Troubleshooting-EN)
 - [Cookbook](Cookbook-EN)
@@ -48,6 +48,6 @@
 
 ---
 
-内容以[仓库](https://github.com/heyhey123-git/skript-orm)里的 `docs/` 为准，请不要在这里直接改。
+Wiki 由[仓库](https://github.com/heyhey123-git/skript-orm)中的 README 和 `docs/` 自动生成。修改文档请到仓库提交，直接编辑 Wiki 的内容会在下次同步时被覆盖。
 
-These pages are published from `docs/` in the [repository](https://github.com/heyhey123-git/skript-orm); please do not edit them here.
+This wiki is generated from the README files and `docs/` in the [repository](https://github.com/heyhey123-git/skript-orm). Please submit changes there; direct wiki edits are overwritten on the next sync.

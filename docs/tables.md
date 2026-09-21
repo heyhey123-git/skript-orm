@@ -2,8 +2,8 @@
 
 [简体中文](tables.zh-CN.md) | **English**
 
-A table is described once, in the script that connects, and the description is what the plugin uses to
-build statements and to name the keys of a result.
+Define the table in the script that creates the connection. The plugin uses this definition to build
+statements and name the keys in query results.
 
 ## Registering
 
@@ -59,20 +59,19 @@ row again by another column; see [Cookbook](cookbook.md).
 
 ## What registering does, and what it does not
 
-Registering runs `CREATE TABLE IF NOT EXISTS`, then waits for the table to exist. It never drops,
-alters or inspects anything.
+On SQL backends, registration runs `CREATE TABLE IF NOT EXISTS` and waits for completion.
+It does not drop, alter, or inspect existing table structures.
 
-**A table that already exists is left exactly as it is.** Adding a column to the script and reloading it
-changes nothing in the database: the plugin stores the new column in its own description, the database
-does not grow one, and the operations that mention it fail at runtime while the ones that do not keep
-working. There is no warning, because from the plugin's point of view the registration succeeded. To
-change a table, run the `ALTER TABLE` yourself, or drop the table in a development database and let the
-plugin create it again.
+**Existing tables are left unchanged.** Adding a column to the script and reloading updates the plugin's
+definition, not the database schema. Operations that reference the missing column fail at runtime;
+other operations continue to work. Registration produces no warning because it has succeeded.
+To change the schema, run `ALTER TABLE` yourself. In a development database, you can also drop the
+table and let the plugin recreate it.
 
-**Registering is remembered per connection.** A second `register a database table "users"` on the same
-connection is refused with `Table 'users' is already registered.` — a second script registering the same
-name on the connection the first script made, or a reloaded script that registers without connecting
-again. The pair below avoids it by building a fresh connection every time it runs:
+**Registrations belong to a connection.** Registering `"users"` again on the same connection fails with
+`Table 'users' is already registered.`. This can happen when two scripts register the same table on a
+shared connection, or when a script is reloaded without recreating its connection.
+The following example avoids duplicate registration by creating a fresh connection each time:
 
 ```sk
 on load:
@@ -86,10 +85,10 @@ on load:
         name: string(64), not null
 ```
 
-`create a connection` builds a new connection each time it runs, and a connection starts with nothing
-registered, so reloading a script that connects and then registers works: the reload replaces the
-connection rather than registering into the old one. What is refused is a registration that meets a
-connection something else is still holding. See [Connections](connections.md).
+`create a connection` always creates a fresh connection with no registered tables. A script that
+connects before registering can therefore be reloaded: it replaces the connection rather than
+registering on the old one. Only duplicate registration on the same connection is rejected.
+See [Connections](connections.md).
 
 ## Failures
 

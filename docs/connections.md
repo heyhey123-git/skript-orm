@@ -17,15 +17,15 @@ create a connection to database "MySQL" with properties:
 - `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"PostgreSQL"`, `"MongoDB"` and
   `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
-- Any other literal property in the block is handed to the implementation, which looks up only the names
-  it knows: one it does not know is **ignored without a word**, so a misspelled `statment timeout`
-  changes nothing at all and reports nothing. What the implementations read is `statement timeout`, the
-  `driver` of a `"JDBC"` connection, and MongoDB's `database` and `auth database`.
+- Other literal properties are passed to the implementation. **Unknown properties are silently ignored**:
+  misspelling `statement timeout` as `statment timeout` has no effect and produces no error.
+  Supported extra properties are `statement timeout`, `driver` for `"JDBC"`, and MongoDB's
+  `database` and `auth database`.
 - The section always waits: when the next line runs, the connection is either live or failed. `and wait`
   is neither needed nor accepted here.
 - **It is refused inside a `database transaction`.** The section reports
   `A connection cannot be created inside a database transaction. Roll it back first.` and connects
-  nothing, because replacing the connection would take the transaction with it.
+  nothing, because replacing the connection would disrupt the active transaction.
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -37,27 +37,25 @@ if last database error is set:
     stop
 ```
 
-This connection has no name. It becomes the **default** connection, which is the one a statement uses
-when nothing else says otherwise, so a script with a single database never has to think about any of
-this.
+This unnamed connection becomes the **default**. Statements use it unless another connection is
+specified, so a script with one database usually needs no connection-switching syntax.
 
 ## The implementation name
 
-The quoted word is a **type name**, not the name of a database product: it selects the code that builds
-the statements and reads the rows back, and it is matched exactly, case-sensitively. The jar registers
-four:
+The quoted value is an implementation **type name**, not an arbitrary database product name.
+It selects the code used to build statements and read results. Matching is exact and case-sensitive.
+The jar registers four types:
 
 | Type name | What it brings |
 | --- | --- |
-| `"MySQL"` | MySQL's dialect — backtick identifiers, `ON DUPLICATE KEY UPDATE` for `upsert`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, `LIMIT` paging — and the MySQL driver, found for the server (`com.mysql.cj.jdbc.Driver`, or the older `com.mysql.jdbc.Driver`). This is what a script almost always wants. |
-| `"PostgreSQL"` | PostgreSQL's dialect — `ON CONFLICT`, `EXCLUDED`, `GENERATED … AS IDENTITY`, and a row limit written through `ctid` because PostgreSQL has no `UPDATE ... LIMIT` — and the driver the plugin downloads for it on the first start. |
-| `"MongoDB"` | MongoDB, through the blocking MongoDB Java driver the plugin downloads for it. There is no SQL under it, so several statements answer differently on purpose; [Compatibility](compatibility.md#mongodb) lists them, and its properties are below. |
-| `"JDBC"` | A driver *you* name in a `driver` property, plus a dialect that writes portable SQL: `"double quoted"` identifiers, `LIMIT 1` to take a single row, and `LIMIT ? OFFSET ?` to page — row limiting in the one form MySQL, MariaDB, SQLite, PostgreSQL and H2 all take. Whatever has no portable form — `insert ... if absent`, `upsert ... by id`, a limit on a write, `auto increment` — is refused rather than guessed at. |
+| `"MySQL"` | MySQL's dialect: backtick identifiers, `ON DUPLICATE KEY UPDATE` for `upsert`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, and `LIMIT` paging. The plugin locates the server's MySQL driver (`com.mysql.cj.jdbc.Driver` or the older `com.mysql.jdbc.Driver`). Use this type for MySQL. |
+| `"PostgreSQL"` | PostgreSQL's dialect: `ON CONFLICT`, `EXCLUDED`, and `GENERATED … AS IDENTITY`. Row limits use `ctid` because PostgreSQL has no `UPDATE ... LIMIT`. The driver is downloaded on first startup. |
+| `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [Compatibility](compatibility.md#mongodb). Connection properties are listed below. |
+| `"JDBC"` | A driver specified through the `driver` property, with portable SQL: `"double quoted"` identifiers, `LIMIT 1` for a single row, and `LIMIT ? OFFSET ?` for paging. This row-limit syntax works in MySQL, MariaDB, SQLite, PostgreSQL and H2. Operations without a portable form are rejected: `insert ... if absent`, `upsert ... by id`, write limits, and `auto increment`. |
 
-Where the driver comes from is the difference between the types. `"PostgreSQL"` and `"MongoDB"` name
-drivers this plugin fetches and keeps ready; `"JDBC"` names a class that has to be on the server's
-classpath already, which is what it is for. `"JDBC"` is how SQLite is reached, since Paper carries its
-driver:
+The types also differ in how drivers are provided. PostgreSQL and MongoDB drivers are downloaded
+for the plugin; a `"JDBC"` driver class must already be on the server's classpath.
+Use `"JDBC"` for SQLite, whose driver is included with Paper:
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -65,25 +63,23 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-Only `"JDBC"` asks you for a class name, and the jar bundles no driver for any of the four. What a
-`"PostgreSQL"` or `"MongoDB"` connection needs instead of a class name is nothing: both drivers are
-fetched on the first start, which [Compatibility](compatibility.md#what-is-inside-the-jar) explains —
-including what a server that cannot reach the mirror it comes from has to do about it.
+Only `"JDBC"` requires a driver class name. None of the four drivers is bundled in this jar.
+PostgreSQL and MongoDB drivers are downloaded on first startup, with no class name needed.
+See [Compatibility](compatibility.md#what-is-inside-the-jar) for details and options if the server
+cannot reach the download mirror.
 
 Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
 
-- **MySQL.** The dialect writes `"double quoted"` identifiers, which MySQL reads as string literals
-  unless its `ANSI_QUOTES` mode is on, so a MySQL connection written as `"JDBC"` fails on the quoting
-  before it reaches anything else. Write `"MySQL"` for MySQL.
-- **SQLite.** `"JDBC"` is the way to reach it, and the driver is already there: nothing the dialect
-  writes is foreign to SQLite, so a connection to a file works for everything the type supports. What
-  the dialect refuses stays refused, which on SQLite means no auto increment, no `insert ... if absent`,
-  no `upsert` and no limit on a write, so a table's key is one the script supplies.
+- **MySQL.** The `"JDBC"` dialect uses `"double quoted"` identifiers. MySQL treats these as string
+  literals unless `ANSI_QUOTES` is enabled, causing statements to fail. Use `"MySQL"` instead.
+- **SQLite.** Use `"JDBC"`; no additional driver is needed. SQLite accepts the SQL this dialect
+  generates, so a file connection supports all of the type's operations. Its limitations still apply:
+  no auto increment, `insert ... if absent`, `upsert`, or write limits. The script must supply the key.
 
-So `"mysql"` is refused with `Database 'mysql' is not supported.`, and so are `"MariaDB"` and `"SQLite"`:
-those are products, not types. `"MongoDB"` is both, the way `"MySQL"` is. What a connection reaches is a
-product; what a script names is one of the four types above, and [Compatibility](compatibility.md) keeps
-the two lists apart.
+`"mysql"` is rejected with `Database 'mysql' is not supported.`. `"MariaDB"` and `"SQLite"` are also
+rejected because they are not registered type names. `"MongoDB"` and `"MySQL"` are both product names
+and type names, but the distinction matters: scripts must use one of the four types above.
+[Compatibility](compatibility.md) lists types and database products separately.
 
 ## MongoDB properties
 
@@ -130,7 +126,7 @@ create a connection named "logs" to database "MySQL" with properties:
 - Creating a name that is already in use replaces that connection: the old one is disconnected, and
   the ones under other names are untouched. Running the same `on load` again is how a script
   reconnects.
-- Names are what a script can point at. `main`, `logs`, `archive`: anything you would say out loud.
+- Choose a recognizable name that scripts can refer to, such as `main`, `logs`, or `archive`.
 
 An unnamed connection replaces the default, as it always has. The connection it replaces is
 disconnected only if no name keeps it reachable, so a script that created `"logs"` and then creates an
@@ -138,7 +134,7 @@ unnamed connection keeps `"logs"` open and merely stops using it for unqualified
 
 ## Which connection a statement uses
 
-A statement asks three questions, in this order, and uses the first answer it gets:
+Statements select a connection in the following order of precedence:
 
 | Order | Answer | Written as |
 |---|---|---|
@@ -146,9 +142,9 @@ A statement asks three questions, in this order, and uses the first answer it ge
 | 2 | what this event switched to | `use connection "logs"` |
 | 3 | the default connection | the unnamed `create a connection` |
 
-If none of them answers, the statement does nothing and reports `No database connected.` A name that
-was never created, or a connection that has been disconnected, is a mistake rather than a fallback:
-the statement fails against the connection it was pointed at instead of quietly using another one.
+If none is set, the statement does nothing and reports `No database connected.`. If the selected name
+does not exist or its connection is closed, the statement fails rather than falling back to another
+connection.
 
 ## Switching for a while
 
@@ -161,8 +157,7 @@ in connection "logs":
             message: "written to the logs database"
 ```
 
-The switch lasts for the block and nothing more, which is what makes reading from one database and
-writing to another a readable script:
+The switch applies only within the block, making cross-database reads and writes explicit:
 
 ```sk
 in connection "archive":
@@ -204,11 +199,10 @@ make connection "logs" the default
 Unqualified statements then use `"logs"` until something else becomes the default. The connection the
 script is currently in is not affected: a statement that already resolved its connection keeps it.
 
-The connection that had the role **is disconnected when it has no name of its own**: no statement can
-resolve to it afterwards, so leaving it running would only hold its pool of ten server connections open
-until the server stops. A **named** connection keeps running and merely stops being the default, because a
-scope or a `use connection` may still be using it. The statement waits for that close, so the next line
-already sees the new default, and it is refused while a `database transaction` is open.
+The previous default **is disconnected if it has no registered name**, since no future statement can
+select it. This releases its resources, including up to ten pooled connections on SQL backends. A **named** connection
+stays open because a scope or `use connection` may still refer to it. The statement waits for closure
+before continuing, so subsequent lines use the new default. It is rejected during a `database transaction`.
 
 ## Disconnecting
 
@@ -261,11 +255,11 @@ create a connection to database "MySQL" with properties:
 ```
 
 - `0` means no limit, which is what the driver does by default: wait as long as it takes.
-- The timeout exists because one statement that never finishes holds one of the pool's connections until
-  the server is restarted, and there is nothing else that would end it.
+- The timeout prevents an unfinished statement from holding a pooled connection indefinitely,
+  potentially until the server restarts.
 - What it guarantees is that the script stops waiting, not that the server stopped working: the driver
   cancels the statement, and MySQL does that by killing the query from another connection.
-- It covers one statement, and only after that statement has a connection to run on. Waiting for a free
+- On SQL backends, it covers one statement after that statement has acquired a connection. Waiting for a free
   one is bounded by the pool instead: **30 seconds**, after which the statement fails with
   `HikariPool-1 - Connection is not available, request timed out after 30000ms`. `statement timeout: 0`
   removes the limit on the statement, not that wait. A `commit` or `rollback` waiting on a lock is bounded
@@ -290,13 +284,13 @@ Inside a transaction, a statement gets what is left of the transaction's own tim
 
 ## Several operations at once
 
-A connection keeps a pool of **ten** database connections of its own, so operations do not have to queue
-behind each other; an eleventh at the same time waits, for up to the 30 seconds above. The size is not
-something a script can set: no connection property reaches the pool.
+Each SQL connection has a Hikari pool of up to **ten** database connections, allowing concurrent
+operations. An eleventh concurrent operation waits for up to the 30 seconds described above.
+The pool size cannot be changed through script connection properties.
 
-That is also why a write is visible to a read only after it has finished: two operations may run on
-different pooled connections. What orders them from a script's point of view is the wait every statement
-performs.
+Different operations may use different pooled connections. Within one trigger, a read waits for the
+preceding write to complete because each statement waits. Visibility between concurrent operations
+depends on transaction isolation.
 
-Each connection has a pool of its own, so a script with three connections can hold thirty server
-connections open — worth counting against the database's own `max_connections`.
+Each SQL connection has its own pool, so three connections can use up to thirty database connections.
+Account for this when planning around the database's `max_connections` limit.

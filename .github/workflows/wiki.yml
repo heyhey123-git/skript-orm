@@ -1,12 +1,11 @@
 name: Wiki
 
-# The documentation is mirrored to the repository wiki, which is a git repository of its own. Both
-# languages are published there, Chinese first: the page of a topic has the plain name and its English
-# half adds `-EN`, and the language switch at the top of each page links the two. The repository is where
-# both languages are written; the wiki is the reading copy.
+# Publish both languages to the separate wiki repository, with Chinese first.
+# Chinese pages keep their existing names; English pages add `-EN`. Edit the source files here,
+# not the generated wiki pages.
 #
-# CI ignores a change to a Markdown file, so this workflow has to name what it watches. It runs on the
-# branch the wiki follows, not on pull requests: a pull request must not be able to publish anything.
+# Watch documentation and publishing files explicitly. Publish only from master or a manual run,
+# never from pull requests.
 on:
   push:
     branches:
@@ -21,12 +20,11 @@ on:
       - '.github/workflows/wiki.yml'
   workflow_dispatch:
 
-# The wiki belongs to this repository, so the token this run starts with may write to it.
+# Allow the workflow token to push changes to the wiki.
 permissions:
   contents: write
 
-# Two pushes in quick succession would otherwise have the second run push onto a wiki the first one has
-# already moved; queued rather than cancelled, so that the last push is the one that ends up published.
+# Run one publication at a time to avoid conflicting pushes. Let an active run finish.
 concurrency:
   group: wiki
   cancel-in-progress: false
@@ -41,9 +39,8 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v6
 
-      # This needs the wiki to exist. A wiki that was never opened has no repository behind it yet, so
-      # create one page by hand in the web interface before this workflow is expected to work; after
-      # that the page is replaced by the mirror on the next run.
+      # Create an initial page in GitHub's wiki interface before the first run.
+      # This initializes the wiki repository; the generated pages replace it on publication.
       - name: Check out the wiki
         uses: actions/checkout@v6
         with:
@@ -64,5 +61,5 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add --all
-          git commit --message "docs: mirror the Chinese documentation from ${GITHUB_SHA:0:7}"
+          git commit --message "docs: sync bilingual wiki from ${GITHUB_SHA:0:7}"
           git push

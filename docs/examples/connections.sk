@@ -1,9 +1,6 @@
-# The script from docs/connections.md, kept here so the server test parses it.
-#
-# A syntax error in the documentation then fails a build instead of reaching a reader. Nothing in this
-# file is ever run: the examples only have to parse. That is why every connection here is opened in a
-# command rather than in `on load`, where the page shows it. The test server has scripts of its own
-# with connections of their own, and an extra connection at load time would sit alongside them.
+# Examples for docs/connections.md. The server test parses these commands but does not run them.
+# This checks syntax, not runtime behavior. Connection setup uses commands instead of `on load`
+# events so loading this file does not create connections or affect the test server's setup.
 
 command /example-named-connection:
     trigger:
@@ -15,8 +12,7 @@ command /example-named-connection:
             send "Connection failed: %last database error%" to console
             stop
 
-        # Tables belong to the connection they were registered on, so this one is registered inside
-        # the scope that makes the named connection the one in effect.
+        # Register the table on the "logs" connection. Table registrations are local to each connection.
         in connection "logs":
             register a database table "entries":
                 id: bigint, primary key, auto increment, not null

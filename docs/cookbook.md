@@ -2,18 +2,15 @@
 
 [简体中文](cookbook.zh-CN.md) | **English**
 
-Whole recipes, using only the syntax in the rest of the documentation. Each one is written as a script
-you can paste and adapt.
+These recipes cover common tasks and are ready to copy and adapt. They use only syntax introduced elsewhere in the documentation.
 
-Every recipe is also in [`docs/examples/cookbook.sk`](examples/cookbook.sk), where CI parses it on a real
-server, so a recipe cannot teach syntax the plugin does not have. That copy differs in two ways on
-purpose: each recipe is wrapped in a `command /example-…` that nobody runs, and its command names are
-unique across the example files because they are all loaded on one server; and its messages are the ones
-written here.
+Companion examples live in [`docs/examples/cookbook.sk`](examples/cookbook.sk). They are maintained manually, not extracted from this page, and may differ in wording.
+
+CI checks that they parse on a real server; it does not run the commands or verify their results. The examples use English messages and are wrapped in `command /example-…` blocks. Command names must be unique across all example files because they load on the same test server.
 
 ## Know the id of a row you just created
 
-The plugin does not return a generated id, so let the script own the value and use `upsert`:
+The plugin does not return generated ids. Assign the id in your script and save the row with `upsert`:
 
 ```sk
 on load:
@@ -27,8 +24,8 @@ on load:
 
 command /adduser <text>:
     trigger:
-        # A counter keeps the id in the script. It is not shared between servers, so a setup with
-        # more than one server should let the database assign ids instead and look the row up again.
+        # Assign ids with a script counter. This counter is not shared between servers.
+        # For multiple servers, let the database assign ids, then find the row by another column.
         if {users::next-id} is not set:
             set {users::next-id} to 0
         add 1 to {users::next-id}
@@ -43,8 +40,7 @@ command /adduser <text>:
 
 ## One row per player
 
-A `uuid` column as the primary key makes the player the identity, and `upsert` then keeps one row per
-player:
+Use the player's UUID as the primary key, then use `upsert` to maintain one row per player:
 
 ```sk
 on join:
@@ -80,11 +76,11 @@ command /addage <integer>:
         send "Your age is now %{_new-age}%." to sender
 ```
 
-The value that identifies the row is the primary key the table was registered with: `uuid` here, matching
-the recipe above. A table that has both an `id` and a `uuid` uses whichever is the primary key, which is
-the one `by id` and `store affected rows` work with.
+`by id` uses the primary key declared when the table was registered: `uuid` here, as in the recipe above. If a table has both `id` and `uuid` columns, `by id` uses whichever is the primary key.
 
-Only the columns in the `values` block are written, so the rest of the row is left alone.
+Only columns listed in the `values` block are written; the others keep their existing values.
+
+The read and update are separate operations. If another script changes the age between them, this write can overwrite that change, causing a lost update. For concurrent use, add a version column and use a conditional update that matches both the primary key and the old version, writing the new version in the same update. Check `store affected rows` to confirm that one row was updated. If the count is 0, read again before retrying or reporting a conflict.
 
 ## Copy rows between tables
 
@@ -103,8 +99,9 @@ delete entities from table "users" and wait:
         active = false
 ```
 
-The variable a `select many` fills is already shaped the way `insert many` reads, so nothing has to be
-reshaped. The insert waits, so the delete cannot run before it.
+A `select many` result can be passed directly to `insert many`, with no restructuring. The insert finishes before the delete runs. In 1.2, all database statements wait for completion; the `and wait` retained in this example has no effect.
+
+These three steps are not a transaction and do not roll back together on failure. Avoid concurrent changes to the affected data: the delete matches `active = false` again, so it can remove rows that became eligible after the read and were never archived. Changes made after the read are not automatically included in the archive either. Use this example during a maintenance window with the relevant writes paused.
 
 ## Build rows in a script and insert them
 
@@ -121,7 +118,7 @@ The row index is one-based, exactly like the keys a read produces.
 
 ## Walk every page
 
-There is no count query, so a script walks pages until one comes back empty:
+There is no count query. Read pages until one is empty, with a limit of 100 pages in this example:
 
 ```sk
 set {_page} to 1
@@ -129,9 +126,9 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
-    # Walk the row indices, testing the primary key: every row is a sub-list, so a row index is done when
-    # the next row's key is unset. The key and not another column, because a NULL column leaves its key
-    # unset too and would end the walk at that row. `{_row} is 1` after the walk means the page was empty.
+    # Walk the row indices and check the primary key to see whether another row exists.
+    # Each row is a sub-list. Other columns may be NULL, leaving an unset key that would stop the loop early.
+    # If {_row} is still 1 after the loop, the page was empty.
     set {_row} to 1
     while {_page-rows::%{_row}%::id} is set:
         send "%{_page-rows::%{_row}%::name}%" to console
@@ -141,20 +138,15 @@ while {_page} <= 100:
     add 1 to {_page}
 ```
 
-A row is a sub-list of the result variable, so `size of {_page-rows::*}` counts first-layer values
-rather than rows, which is why the recipe counts the row indices itself.
+`size of {_page-rows::*}` counts first-layer values, but each row is a sub-list. The example instead walks row indices until the next row's primary key is unset.
 
-The loop bound is a safety net: without a count query, an upper bound is what keeps a script from paging
-forever when a condition keeps matching.
+The loop limit prevents endless pagination. If page 100 still contains data, this run stops there and leaves the remaining rows unread.
 
-A page is an offset into the primary-key order rather than a snapshot of it, so this walk is safe only
-while nothing writes to the table: a row inserted or deleted between two pages shifts everything behind it,
-and the walk can repeat or miss a row. A table that is being written to is better walked by key
-(`where all: id > {_last}`); see [Reading rows](reading.md).
+A page is an offset into primary-key order, not a snapshot. Inserts or deletes between reads can shift later rows, causing duplicates or omissions, so use this recipe when nothing is writing to the table. A keyset filter (`where all: id > {_last}`) requires a stable primary-key sort order. `select many` does not offer `ORDER BY`, so adding the filter alone is not a complete replacement for pagination. See [Reading rows](reading.md).
 
 ## Store an item's NBT
 
-Needs SkBee, and an `nbtcompound` column:
+This requires SkBee and an `nbtcompound` column:
 
 ```sk
 register a database table "tools":
@@ -172,9 +164,7 @@ command /savetool:
         send "Saved." to sender
 ```
 
-What is stored is the compound as it was when the command ran: changing the item afterwards does not
-change the row. Reading it back gives a compound SkBee's syntax can use, and its SNBT text is the easy
-way to check what is inside. See [Types](types.md).
+The saved compound is a snapshot from when the command ran; later changes to the item do not affect the row. The compound you read back works directly with SkBee syntax. You can also inspect its contents as SNBT text. See [Types](types.md).
 
 ## Delete old rows in batches
 
@@ -196,18 +186,16 @@ command /prune:
         send "Pruned %{_pruned}% old rows." to sender
 ```
 
-A bounded batch keeps one statement from holding the table for long. The delete reports how many rows it
-removed, so a batch that comes back short is the end of the work: the loop stops there instead of running
-all ten times, and the script can say how many rows it pruned.
+Batching helps reduce the time each statement holds the table. Each delete returns its affected-row count, so a batch of fewer than 500 rows stops the loop early. The script also reports the total deleted. If all ten batches are full, this run deletes at most 5,000 rows and leaves the rest for a later run.
 
 ## Use the table from a second script
 
-The connection belongs to the server, so exactly one script should own it and register the tables:
+Scripts on the server share connections. Choose one script to create the connection and register its tables:
 
 ```sk
 # database.sk
 on load:
-    set {database::ready} to false    # a global from an earlier run must not pass for this one
+    set {database::ready} to false    # Clear the ready flag left by the previous run.
     create a connection to database "MySQL" with properties:
         url: "jdbc:mysql://localhost:3306/mydb"
         username: "root"
@@ -234,9 +222,6 @@ command /whois <text>:
         # ...
 ```
 
-A second script that connects as well is not an error, but it replaces the connection and starts with no
-tables registered, so the owning script is the one that should do it. See [Connections](connections.md).
+A second script can create a connection, but doing so replaces the current one, and the new connection has no registered tables. Keeping this responsibility in one script avoids accidental replacements. See [Connections](connections.md).
 
-`{database::ready}` is a global, which means it survives a restart: without the first line setting it to
-false, a load that failed to connect leaves the previous run's `true` in place, and the other script runs
-its statements into `No database connected.` instead of saying what the recipe intends.
+`{database::ready}` is a global variable and survives restarts. Resetting it to false on load prevents a failed connection attempt from leaving the previous run's `true` in place. The second script can then report that the database is not ready instead of running statements that fail with `No database connected.`.

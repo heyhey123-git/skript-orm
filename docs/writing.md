@@ -2,13 +2,11 @@
 
 [简体中文](writing.zh-CN.md) | **English**
 
-Five statements write rows: `insert one`, `insert many`, `insert entity if absent`, `upsert one entity`
-and, for existing rows, `update`. They share one way of describing the row.
+Five statements write rows: `insert one`, `insert many`, `insert entity if absent`, `upsert one entity`, and `update` for existing rows. They all use the same format for row values.
 
 ## The values block
 
-Values are written as `column: expression` lines, either directly in the section body or inside a
-`values:` block:
+Write values as `column: expression`, either directly in the section body or inside a `values:` block:
 
 ```sk
 insert one entity into table "users" and wait:
@@ -18,21 +16,12 @@ insert one entity into table "users" and wait:
         joined: now
 ```
 
-- The right-hand side is any Skript expression, so variables, arguments and functions work.
-- Every line must be `column: expression` on one line; a nested block is only allowed where rows are
-  expected (see `insert many`).
-- **A column that is left out is not part of the statement.** An `insert` leaves it to the database
-  default, which is how an auto-increment key stays automatic, while an `update` or an `upsert by id`
-  leaves it at its stored value. Writing `null` instead stores SQL NULL; see [Types](types.md).
-- **A column that is named but resolves to nothing is written as SQL NULL.** `name: {_nick}` with
-  `{_nick}` unset is not the same as leaving `name` out: the key is there with no value, and the statement
-  stores NULL (or fails on a `not null` column). Only leaving the line out keeps the stored value.
-- **A list variable cannot carry SQL NULL.** Skript deletes a key that is set to null, and a select leaves
-  the key of a NULL column unset, so a row copied out of a select result and written back from a variable
-  has no value for those columns at all: an `insert` gives them the database default — and fails on a
-  `not null` column that has none — while an `update` leaves them untouched. A `values` block with a
-  literal `null` is the only way to write NULL.
-- An unknown column name fails before anything is sent to the database.
+- The right-hand side accepts any Skript expression, including variables, arguments and functions.
+- Each `column: expression` must fit on one line. Nested blocks are allowed only where multiple rows are expected (see `insert many`).
+- **Omitted columns are left out of the statement.** An `insert` uses the database default, allowing auto-increment keys to be generated. An `update`, or an `upsert by id` that updates an existing row, preserves the stored value. To store SQL NULL explicitly, write `null`; see [Types](types.md).
+- **A named column whose expression resolves to nothing is written as SQL NULL.** If `{_nick}` is unset, `name: {_nick}` writes NULL (or fails on a `not null` column). It is not the same as omitting `name`: only omitting the line preserves the stored value during an update.
+- **A list variable cannot store SQL NULL.** Skript deletes keys set to null, and query results leave NULL columns unset. When you copy a result row and write it back from a variable, those columns are omitted: an `insert` uses database defaults and fails on a `not null` column without a default, while an `update` leaves the columns unchanged. To write NULL explicitly, use a `values` block with a literal `null`.
+- Unknown column names fail before the statement is sent to the database.
 
 ## Insert one
 
@@ -45,7 +34,7 @@ if last database error is set:
     send "Insert failed: %last database error%" to console
 ```
 
-The same section also takes the row from a variable shaped like a select result:
+The same section can also read a row from a variable with the structure of a query result:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -54,18 +43,13 @@ select one entity from table "users" and store the result in {_user::*}:
 insert one {_user::*} into table "archived_users"
 ```
 
-Such a variable must hold exactly one row; a variable holding several rows is refused here and belongs
-in `insert many`.
+The variable must contain exactly one row. Multiple rows are rejected; use `insert many` for those.
 
-There is nothing to indent under that last line, so it is written without a colon, and Skript reads a
-line without one as an effect. An empty section is what Skript warns about, and the two spellings do the
-same thing: keep the colon when the statement has a body to give, leave it out when it has none. The
-same rule holds on the [reading](reading.md) and [updating and deleting](updating-and-deleting.md)
-pages.
+The last statement has no body, so it has no colon. Skript parses this form as an effect; adding a colon without a body produces an empty-section warning. Both forms perform the same operation: use a colon when there is a body, and omit it otherwise. The examples in [reading](reading.md) and [updating and deleting](updating-and-deleting.md) follow the same rule.
 
 ## Insert many
 
-Each nested block under `values:` is one row:
+Each nested block under `values:` represents one row:
 
 ```sk
 insert many entities into table "users" and wait:
@@ -78,24 +62,18 @@ insert many entities into table "users" and wait:
             age: 30
 ```
 
-or the rows come from a variable:
+You can also supply rows from a variable:
 
 ```sk
 insert many {_rows::*} into table "archived_users" and wait
 ```
 
-Rows may name different columns, with two rules:
+The column sets follow these rules:
 
-- A **`values` block** has to name the same columns in every row. One statement binds one column list, so
-  a row that omits a column another row names is refused at runtime with
-  `Batch row 2 does not contain the same columns as the first row.`
-- A **list variable** holding several rows is filled to its common column set instead, and a row that
-  omits a column is written with NULL there. That is what lets a select result be inserted straight back.
-  MongoDB takes ragged rows either way.
+- In a **`values` block**, every row must name the same columns. One statement binds one column list. A row missing a column included in another row is rejected at runtime with `Batch row 2 does not contain the same columns as the first row.`
+- A **list variable** containing multiple rows is expanded to the combined set of columns, with NULL written for missing columns. This lets you insert query results directly. MongoDB accepts rows with different column sets in either form.
 
-A variable that is not set, or holds nothing, fails the statement with `{_rows::*} is not set.` rather
-than writing no rows — and a `select many` that matched nothing leaves its result variable unset, so a
-script that feeds one into `insert many` should check it first. See [Reading rows](reading.md).
+An unset or empty variable fails with `{_rows::*} is not set.` rather than successfully inserting zero rows. Since `select many` leaves its result unset when nothing matches, check the variable before passing it to `insert many`. See [Reading rows](reading.md).
 
 ## In-or-out: upsert and if absent
 
@@ -106,10 +84,7 @@ upsert one entity in table "users" by id {_id} and wait:
         age: 26
 ```
 
-`upsert` writes the row with that primary-key value, updating it when it is already there. The key goes in
-`by id` and **not** in the `values` block: a `values` entry naming the primary key is refused with
-`The primary key must not be included in upsert values.`, because the key is what decides whether the row
-is inserted or updated. On MySQL this is `INSERT ... ON DUPLICATE KEY UPDATE`.
+`upsert` writes the row with the given primary key, updating it if it already exists. Put the key in `by id`, **not** in the `values` block. Including it there fails with `The primary key must not be included in upsert values.` The key determines whether to insert or update. MySQL implements this as `INSERT ... ON DUPLICATE KEY UPDATE`.
 
 ```sk
 insert entity if absent into table "users" and wait:
@@ -118,35 +93,25 @@ insert entity if absent into table "users" and wait:
         name: "Alice"
 ```
 
-`if absent` inserts only when the database considers the row missing, and does nothing when it is there: an
-existing row keeps its old values, where `upsert` would overwrite them. On MySQL the insert is attempted
-and a key that is already taken is the one error read as "the row is there"; everything else — a value too
-long for its column, a `null` in a `not null` column — fails the statement the way any other write does.
-Which one to reach for is a matter of what "already there" should mean:
+`if absent` inserts only when the database considers the row missing. Otherwise, it preserves the existing row rather than overwriting it as `upsert` would. On MySQL, it attempts a normal insert and treats only a duplicate-key error as “already exists”. Other errors, such as an oversized value or `null` in a `not null` column, still fail the statement.
 
 | Want | Use |
 | --- | --- |
-| Create it, or overwrite it with these values | `upsert` |
-| Create it only if it is missing, leave the old row alone | `insert entity if absent` |
-| Know whether it was created | `insert entity if absent ... and store affected rows in {_rows}`: `1` means the row was written and `0` means a key already held it. A read-back works too, but only `if absent` leaves the old row alone to be compared against. |
+| Create the row, or update it with these values | `upsert` |
+| Create the row only if missing; preserve an existing row | `insert entity if absent` |
+| Check whether a row was created | `insert entity if absent ... and store affected rows in {_rows}`: `1` means inserted, `0` means the key already exists. You can also read the data back for comparison, but only `if absent` preserves the existing row for that comparison. |
 
-Both depend on the implementation's conflict rules, as their description says; the behaviour above is
-MySQL's.
+Both follow the implementation's conflict rules, as noted in their syntax descriptions. The behaviour above is specific to MySQL.
 
 ## Waiting
 
-A write waits for its work: the lines after it run once the change has been taken, and a failure is
-readable in `last database error`. The wait parks the trigger, not the server thread, so other players and
-other scripts carry on while the statement is in flight.
+Writes finish before the following statements run. Failures are available in `last database error`. Waiting pauses only the current trigger, not the server thread, so other players and scripts continue normally.
 
-`and wait` is still accepted on these statements and does nothing. Every statement waits now, writes
-included; it used to be how a write asked for exactly this, so the examples here keep it. See
-[Errors and waiting](errors-and-waiting.md).
+These statements still accept `and wait`, but it no longer changes their behaviour: every statement now waits, including writes. The examples retain the clause for compatibility with the older syntax. See [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were written
 
-Any of these statements can keep the number of rows it affected in a variable, by ending with
-`and store affected rows in {_rows}`:
+All these statements accept `and store affected rows in {_rows}` to save the affected-row count:
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:
@@ -154,8 +119,4 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
         name: "Alice"
 ```
 
-For `insert entity if absent` that count is exactly "was it written": `1` it was, `0` a key already held the
-row. It is also how a script writes a condition that only takes effect while a value it read is still
-current. For anything else the number is the backend's answer for that statement — an `upsert` on MySQL
-counts `1` for an insert and `2` for an update, while PostgreSQL and MongoDB report `1` either way — so
-read [Affected rows](affected-rows.md) before branching on it.
+For `insert entity if absent`, `1` means inserted and `0` means the key already exists. Affected-row counts also let you check conditional updates that should succeed only while a previously read value remains unchanged. Other counts depend on the backend: for example, a MySQL `upsert` reports `1` for an insert and `2` for an update, while PostgreSQL and MongoDB report `1` for either. Read [Affected rows](affected-rows.md) before using the count to choose what happens next.

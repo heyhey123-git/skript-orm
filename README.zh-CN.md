@@ -1,10 +1,9 @@
 # skript-orm
 
-<!-- Absolute rather than relative: this page is also the wiki's home, where a relative path would
-     point at a file the wiki does not carry. -->
-![skript-orm:一个给 Skript 用的 ORM](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
+<!-- 此页也用作 wiki 首页；图片使用绝对路径，避免指向 wiki 中不存在的文件。 -->
+![skript-orm：适用于 Skript 的 ORM](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
 
-写给 Skript 的 ORM。表描述一次，往后读写行都照 Skript 的写法来，SQL 由插件代劳。
+适用于 Skript 的 ORM。定义好表结构，就能用 Skript 语法读写数据，无需手写 SQL。
 
 **简体中文** | [English](README.md)
 
@@ -44,57 +43,56 @@ command /adduser <text> <integer>:
             send "写入失败: %last database error%" to console
 ```
 
-两段里都没有一句 SQL。语句由插件拼好，在服务端线程之外执行，回到脚本里依然是普通的变量和值，伸手就能用。
+两段示例都不需要 SQL。插件负责生成语句，在服务端线程之外执行，再以普通 Skript 变量和值返回结果。
 
 ## 环境要求
 
 | | |
 | --- | --- |
-| **Paper** | 26.2 或更高，本插件正是针对这条版本线编译的。 |
-| **Skript** | 2.16.2 或更高。版本不够时插件会自行禁用，并在控制台说明缘由。 |
-| **MySQL** | 打包的数据库实现，对着 MySQL 8 测过。驱动 Paper 自带，不必另装。 |
-| **PostgreSQL** | 也已打包，CI 里对着真库测过。它的驱动会在首次启动时下载到服务端的 `libraries/`；见 [兼容性](docs/compatibility.zh-CN.md#jar-里有什么)。 |
-| **MongoDB** | 也已打包，CI 里对着 MongoDB 8 测过。它的驱动和 PostgreSQL 的一样，会在首次启动时下载。 |
-| **SkBee** | 可选，只有 `nbtcompound` 列需要它。反过来说，没有 SkBee 时脚本本来也造不出 NBT 数据。 |
+| **Paper** | 26.2 或更高。本插件针对该版本系列编译。 |
+| **Skript** | 2.16.2 或更高。版本过低时，插件会自行禁用，并在控制台说明原因。 |
+| **MySQL** | 已包含对应实现，并通过 MySQL 8 测试。Paper 自带驱动，无需另行安装。 |
+| **PostgreSQL** | 已包含对应实现，并在 CI 中通过真实数据库测试。驱动会在首次启动时下载到服务端的 `libraries/`；见 [兼容性](docs/compatibility.zh-CN.md#jar-里有什么)。 |
+| **MongoDB** | 已包含对应实现，并在 CI 中通过 MongoDB 8 测试。驱动与 PostgreSQL 一样，会在首次启动时下载。 |
+| **SkBee** | 可选，仅 `nbtcompound` 列需要。脚本中的 NBT compound 也由 SkBee 提供。 |
 
 ## 安装
 
-1. 到 releases 页面取 `skriptorm-<version>.jar`，或者自己构建，见 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md)。
-2. 把 jar 与 Skript 一并放进 `plugins/`。
-3. 启动一次服务端，再把连接和建表写进脚本，`/sk reload` 即可。这两件事都由脚本完成，没有配置文件要改。
+1. 从 releases 页面下载 `skriptorm-<version>.jar`，或自行构建，见 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md)。
+2. 将 jar 与 Skript 一起放入 `plugins/`。
+3. 启动一次服务端，再在脚本中建立连接、注册表，用 `/sk reload` 加载。连接和表都由脚本定义，无需修改配置文件。
 
 ## 几条规矩
 
-- **想要几条连接就有几条。** `create a connection` 让那个库成为默认连接，`named "logs"` 再留住一条，`in connection "logs":` 或 `use connection "logs"` 决定一条语句用哪一条。
-- **碰数据的操作都是 section。** 写入、读取、更新、删除各有各的语法和主体，读取必定等结果。
-- **一个事务就是一个 section。** `database transaction:` 在主体结束时提交，主体里有语句失败时回滚，运行期间独占一条连接。
-- **写入会报出影响的行数。** `and store affected rows in {_rows}` 把行数留下，脚本因此分得清“本来就在”和“刚刚写入”，也能发现读到的行在它眼皮底下被改过。见 [影响行数](docs/affected-rows.zh-CN.md)。
-- **失败是一个值。** 每条语句都会等，所以下一行执行时 `last database error` 里就是出错原因。一切顺利时它保持为空。
+- **支持多条连接。** `create a connection` 建立默认连接，`named "logs"` 创建具名连接，`in connection "logs":` 或 `use connection "logs"` 指定语句使用的连接。
+- **每种数据操作都有对应的 Skript 语法。** 写入、读取、更新、删除各有专用语法，包含 `values` 或 `where` 主体时使用 section。所有语句都会等待完成。
+- **一个事务就是一个 section。** `database transaction:` 在主体结束时提交，其中的语句失败时回滚，运行期间独占一条连接。
+- **写操作可以返回影响行数。** `and store affected rows in {_rows}` 保存行数，具体含义取决于操作和数据库；条件更新可借此检测并发修改。见 [影响行数](docs/affected-rows.zh-CN.md)。
+- **错误可在脚本中读取。** 每条语句都会等待完成，所以下一行执行时，`last database error` 已记录本次操作的错误；操作成功时则未设置。
 
 ## 文档
 
 | 页面 | 内容 |
 | --- | --- |
-| [快速上手](docs/getting-started.zh-CN.md) | 从空脚本到存下第一行，最短的一条路。 |
-| [连接](docs/connections.zh-CN.md) | 连接属性、具名连接、切换、断开连接。 |
-| [表](docs/tables.zh-CN.md) | 列语法、全部类型、主键与修饰符，以及建表**不会**做的事。 |
+| [快速上手](docs/getting-started.zh-CN.md) | 从空脚本开始，保存第一行数据。 |
+| [连接](docs/connections.zh-CN.md) | 连接属性、具名连接、切换与断开连接。 |
+| [表](docs/tables.zh-CN.md) | 列语法、全部类型、主键与修饰符，以及注册表**不会**做的事。 |
 | [写入行](docs/writing.zh-CN.md) | 插入一行或多行、从变量插入、upsert，以及 `values` 块的写法。 |
-| [读取行](docs/reading.zh-CN.md) | 查一行、多行、分页、按 id，`where` 块，以及结果的形状。 |
+| [读取行](docs/reading.zh-CN.md) | 单行、多行、分页与按 id 查询，`where` 块及结果结构。 |
 | [更新与删除](docs/updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |
-| [影响行数](docs/affected-rows.zh-CN.md) | `store affected rows` 子句，以及不用事务的条件写入。 |
-| [错误与等待](docs/errors-and-waiting.zh-CN.md) | 哪些会等、`last database error`，以及失败会怎样。 |
-| [事务](docs/transactions.zh-CN.md) | 全做或全不做的一组语句，以及它怎样结束。 |
-| [类型](docs/types.zh-CN.md) | 每种列类型接受什么、怎么存。 |
-| [排雷](docs/troubleshooting.zh-CN.md) | 会踩的坑：静默的改表、看不见的 NULL、没有 SkBee 时的 NBT。 |
-| [菜谱](docs/cookbook.zh-CN.md) | 脚本里最常用的几种写法，整段可抄。 |
-| [兼容性](docs/compatibility.zh-CN.md) | 版本、脚本能写的类型名、jar 里打包了什么、不支持什么。 |
-| [更新日志](CHANGELOG.md) | 每个版本改了什么，也就是它 release 页面上写的内容。 |
+| [影响行数](docs/affected-rows.zh-CN.md) | `store affected rows` 子句，以及不使用事务的条件写入。 |
+| [错误与等待](docs/errors-and-waiting.zh-CN.md) | 等待机制、`last database error` 及失败后的行为。 |
+| [事务](docs/transactions.zh-CN.md) | 一组语句如何共同提交或回滚，以及事务何时结束。 |
+| [类型](docs/types.zh-CN.md) | 每种列类型接受的值与存储方式。 |
+| [排雷](docs/troubleshooting.zh-CN.md) | 常见问题：改表未生效、NULL 不显示、缺少 SkBee 时的 NBT。 |
+| [菜谱](docs/cookbook.zh-CN.md) | 常见需求的完整脚本示例。 |
+| [兼容性](docs/compatibility.zh-CN.md) | 版本、可用类型名、jar 内容及不支持的功能。 |
+| [更新日志](CHANGELOG.md) | 各版本的改动，与 release 页面的说明一致。 |
 
 ## 从源码构建
 
-`./gradlew build` 会在 `build/dist/` 生成 shaded jar，`./gradlew serverTest` 会拉起一个真实的 Paper 服务端跑插件自测。两者都写在 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md) 里。
+`./gradlew build` 会在 `build/dist/` 生成 shaded jar；`./gradlew serverTest` 会启动真实的 Paper 服务端，运行插件自测。详见 [CONTRIBUTION.zh-CN.md](CONTRIBUTION.zh-CN.md)。
 
 ## 许可证
 
 MIT，见 [LICENSE](LICENSE)。
-

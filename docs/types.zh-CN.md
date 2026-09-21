@@ -2,7 +2,7 @@
 
 **简体中文** | [English](types.md)
 
-列的类型写在建表里，它决定脚本能放什么进去、什么能拿出来。
+列类型在建表时声明，决定了脚本能写入什么值，以及读回什么值。
 
 ```sk
 register a database table "users":
@@ -17,87 +17,78 @@ register a database table "users":
 | 类型 | 脚本里 | MySQL 存储 | 大小 |
 | --- | --- | --- | --- |
 | `boolean` | `true` / `false` | `BOOLEAN` | |
-| `tinyint` | 一个字节放得下的整数（−128…127） | `TINYINT` | |
+| `tinyint` | 单字节整数（−128…127） | `TINYINT` | |
 | `int` | 整数 | `INT` | |
-| `bigint` | 整数，包含超出 `int` 范围的 | `BIGINT` | |
+| `bigint` | 整数，可超出 `int` 范围 | `BIGINT` | |
 | `double` | 小数 | `DOUBLE` | |
 | `float` | 小数 | `FLOAT` | |
 | `string` | 文本 | `VARCHAR` | `string(64)`，默认 255 |
-| `uuid` | 一个 UUID | `BINARY(16)` | 固定 16 |
+| `uuid` | UUID | `BINARY(16)` | 固定 16 |
 | `itemstack` | 物品（含 meta 与 NBT） | `BLOB` | |
 | `location` | 坐标（含世界） | `VARBINARY` | 默认 2048 |
-| `bukkitserializable` | 任何 Bukkit 能序列化的对象 | `BLOB` | |
+| `bukkitserializable` | Bukkit 可序列化的对象 | `BLOB` | |
 | `nbtcompound` | NBT compound（需要 SkBee） | `BLOB` | |
 | `date` | Skript 的 date | `DATE` | |
 | `time` | Skript 的 time | `INT` | |
 | `timespan` | Skript 的 timespan | `BIGINT` | |
 
-括号里的大小是给 `string` 的。`uuid` 就是 16 字节，`location` 有自己的序列化形式，而 PostgreSQL 对这两者都拒绝写大小；见 [表](tables.zh-CN.md)。
+`string` 可在括号里指定长度。`uuid` 固定占 16 字节，`location` 则使用自己的序列化格式；PostgreSQL 不允许为后两者指定大小。见 [表](tables.zh-CN.md)。
 
 ### MongoDB
 
-上面那张表的“MySQL 存储”一列是 `"MySQL"` 与 `"JDBC"` 建出来的。`"PostgreSQL"` 接近但不相同：`tinyint` 是 `SMALLINT`、`float` 是 `REAL`、`double` 是 `DOUBLE PRECISION`，而所有二进制类型（`uuid`、`itemstack`、`location`、`bukkitserializable`、`nbtcompound`）都是 `BYTEA`，不接受大小——所以 `uuid(16)`、`location(2048)` 在那里会被拒绝，而不是被接受。`"MongoDB"` 是底下没有 SQL 的那个类型名：文档里存的是 BSON，没有任何东西会变成 SQL 列，同一批逻辑类型的对应关系如下。这一实现其它不同之处在 [兼容性](compatibility.zh-CN.md#mongodb)。
+上表的“MySQL 存储”列适用于 `"MySQL"` 与 `"JDBC"`。`"PostgreSQL"` 的映射略有不同：`tinyint` 对应 `SMALLINT`，`float` 对应 `REAL`，`double` 对应 `DOUBLE PRECISION`；所有二进制类型（`uuid`、`itemstack`、`location`、`bukkitserializable`、`nbtcompound`）都对应 `BYTEA`，不接受大小参数，因此 `uuid(16)` 和 `location(2048)` 会被拒绝。
+
+`"MongoDB"` 不使用 SQL，而是将数据存为 BSON 文档，没有 SQL 列。同一组逻辑类型的 BSON 映射如下；其他差异见 [兼容性](compatibility.zh-CN.md#mongodb)。
 
 | 类型 | BSON |
 | --- | --- |
 | `boolean` | boolean |
-| `tinyint` | int32——一个字节加宽成整数 |
+| `tinyint` | int32（由单字节整数扩宽） |
 | `int` | int32 |
 | `bigint` | int64 |
 | `double` | double |
-| `float` | double——float 加宽而来 |
+| `float` | double（由 float 扩宽） |
 | `string` | string |
-| `uuid` | binary——它两半的 16 个字节 |
-| `itemstack` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
-| `location` | binary——与 SQL 实现存进 `VARBINARY` 的序列化内容相同 |
-| `bukkitserializable` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
-| `nbtcompound` | binary——与 SQL 实现存进 `BLOB` 的序列化内容相同 |
-| `date` | int64——epoch 毫秒 |
-| `time` | int32——ticks（0…24000） |
-| `timespan` | int64——毫秒 |
+| `uuid` | binary（UUID 的高、低 64 位，共 16 字节） |
+| `itemstack` | binary（与 SQL 实现写入 `BLOB` 的序列化内容相同） |
+| `location` | binary（与 SQL 实现写入 `VARBINARY` 的序列化内容相同） |
+| `bukkitserializable` | binary（与 SQL 实现写入 `BLOB` 的序列化内容相同） |
+| `nbtcompound` | binary（与 SQL 实现写入 `BLOB` 的序列化内容相同） |
+| `date` | int64（epoch 毫秒） |
+| `time` | int32（ticks，0…24000） |
+| `timespan` | int64（毫秒） |
 
-`size` 与 `nullable` 在这里只是声明：集合没有 schema，没有任何东西强制它们。注册真正建立的是主键上的唯一索引
-与 `auto increment` 背后的计数器，而集合由 MongoDB 在写入第一份文档时自行创建。
+`size` 与 `nullable` 在这里只是声明，集合没有强制执行它们的 schema。注册会按表定义建立主键唯一索引，并为 `auto increment` 准备计数器。集合可能在建立索引时创建；若此前尚未创建，则会在首次写入文档时创建。
 
-**在 MongoDB 上，`date` 列保留的是精确时刻。** BSON 没有“只有日期”的类型，所以这一列就是上面的 epoch 毫秒，
-时分秒**不会**被丢掉。它是唯一一个在各实现之间含义不同的类型；语句层面的差异都写在
-[兼容性](compatibility.zh-CN.md#mongodb) 里。下一节讲的是 SQL 实现。
+**MongoDB 的 `date` 列保留精确时刻。** BSON 没有只表示日期的类型，因此这里用 epoch 毫秒存储，**不会**丢掉时分秒。这是唯一一个在不同实现中含义不同的类型；语句行为的差异见 [兼容性](compatibility.zh-CN.md#mongodb)。下一节介绍 SQL 实现。
 
 ## 两个容易意外的点
 
-**`date` 列只保留日期，不保留时间——这是 SQL 实现的行为。** 在它们那里，这一列存为 SQL `DATE`，时分秒会被
-丢掉；需要精确时刻的脚本应该存 `bigint`（epoch 毫秒）或者 `timespan`。MongoDB 是例外，原因见上面的
-[MongoDB](#mongodb) 一节。
+**SQL 实现的 `date` 列只保留日期，不保留时间。** 该列存为 SQL `DATE`，时分秒会被丢掉。需要精确时刻时，请用 `bigint` 保存 Unix 时间戳（明确使用秒还是毫秒），或用 `string` 保存带时区的时间文本。`timespan` 表示时长，不是时间点。MongoDB 是例外，见上面的 [MongoDB](#mongodb) 一节。
 
-**`time` 列是“Minecraft 一天中的时刻”**，也就是 Skript `time` 类型携带的那个数字（0…24000），不是墙上时间。
-日历值用 `date`，时长用 `timespan`。
+**`time` 列表示 Minecraft 一天中的时刻**，即 Skript `time` 类型中的数值（0…24000），不是现实世界的钟表时间。日历值用 `date`，时长用 `timespan`。
 
 ## NULL
 
-SQL NULL 是能表达的，而且有两条彼此独立的规则：
+脚本可以读写 SQL NULL，但写入和读取各有一条规则：
 
-- **写入**：`values` 块里字面量 `null` 会存成 SQL NULL。把列从块里省略掉不是同一件事：插入时，语句没有提到的列用数据库默认值，也就是没写 `not null` 的列为 NULL、自增主键为下一个 id；而在 `update` 与 `upsert by id` 里，没提到的列保留它原来的值。
-- **读取**：NULL 列不会在结果变量里写下自己的键。Skript 的列表变量会把值为 null 的键删掉，所以对脚本来说，“该列是 NULL”和“没有这一列”长得一模一样。也就是说 `{_user::age} is not set` 表示“NULL 或不存在”，而不是 0。
+- **写入**：`values` 块中的字面量 `null` 会存为 SQL NULL，省略列则不同。插入时，未指定的列使用数据库默认值：未声明 `not null` 的列为 NULL，自增主键为下一个 id。执行 `update` 或 `upsert by id` 时，已有行中未指定的列保留原值。
+- **读取**：NULL 列在结果变量中没有对应的键。Skript 会删除值为 null 的列表变量键，因此脚本无法仅凭这个键区分“列为 NULL”和“列不存在”。`{_user::age} is not set` 表示“NULL 或不存在”，不是 0。
 
 ## NBT compound
 
-`nbtcompound` 是唯一一种实现位于别的插件里的类型：能给脚本提供构造方式的是 SkBee，本插件也通过 SkBee 的类
-读写 compound。
+`nbtcompound` 是唯一依赖其他插件实现的类型。SkBee 提供在脚本中构造 compound 的语法，本插件也通过 SkBee 的类读写它。
 
-- **没有 SkBee 时**，注册带 `nbtcompound` 列的表会被明确拒绝，信息里点名 SkBee。服务器上插件其余部分照常工作，
-  只有 NBT 这一块需要它。
-- **存储形式是 NBT 本身**，不是文本：compound 以 NBT 字节写进 `BLOB`，所以读回来的是 compound，而不是还需要
-  再解析的字符串。
-- **值是脚本命名它的那一刻的快照。** SkBee 为物品/实体/方块给出的 compound 是那个活对象上的视图：改 compound
-  就是改对象。而数据库里存的是操作写下那一刻的 compound，之后物品再改也不会改写已经存下的历史。
-- **比较时用文本最省事。** SkBee 会把 compound 渲染成 SNBT，所以脚本可以用
-  `"%{_row::data}%" contains "某个标签"` 检查读回来的内容，而不必逐层遍历。
+- **没有 SkBee 时**，注册含 `nbtcompound` 列的表会被拒绝，错误信息会明确提到 SkBee。插件的其他功能不受影响。
+- **存储的是 NBT，不是文本。** compound 以 NBT 字节写入 `BLOB`，读回后仍是 compound，无需再从字符串解析。
+- **存储值是脚本提供该值时的快照。** SkBee 返回的物品、实体或方块 compound 是对应对象的实时视图，修改 compound 就会修改对象。数据库保存的是操作取值时的内容，之后再修改物品不会影响已保存的数据。
+- **用文本检查内容最方便。** SkBee 会将 compound 转为 SNBT，脚本可以用 `"%{_row::data}%" contains "某个标签"` 检查读回的内容，不必逐层遍历。
 
 ## 类型不匹配会怎样
 
-列放不下的值会让这次操作失败，而不是被近似地存进去；`last database error` 会说明是哪一列、期望什么。这句话有两处要注意别理解得太满：
+值不符合列类型时，操作会失败，`last database error` 会指出列名和预期类型。不过，范围检查和精度损失需要分开看：
 
-- **整型越界在发出语句之前就会被检查。** `tinyint` 是 −128…127，`int` 是 −2147483648…2147483647，`bigint` 是 64 位；超出范围的值会被**报出来**，而不是被削成能放下的那个数。而**小数写进整型列仍然向零截断**——Skript 在别处对 `1.7` 就是这么做的：`int` 列写 `1.7`，存进去的是 `1`。
-- **`float` 只留 4 字节，`double` 只精确到 2^53。** `0.1` 写进 `float` 列，读回来是 `0.10000000149011612`；`bigint` 量级的数写进 `double` 列会丢低位。这两条是列类型本身的性质，插件拦不了。
+- **整数越界会在发送语句前被检查。** `tinyint` 的范围是 −128…127，`int` 是 −2147483648…2147483647，`bigint` 是 64 位整数。超出范围会报错，不会强行截成可容纳的值。**小数写入整型列仍会向零截断**：例如将 `1.7` 写入 `int` 列，结果是 `1`，与 Skript 的整数转换一致。
+- **`float` 占 4 字节，`double` 能精确表示到 2^53 的整数。** 将 `0.1` 写入 `float` 列，读回会得到 `0.10000000149011612`；将 `bigint` 量级的数写入 `double` 列，可能丢失低位。这是类型本身的精度限制，插件无法消除。
 
 见 [错误与等待](errors-and-waiting.zh-CN.md)。

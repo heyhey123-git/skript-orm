@@ -2,9 +2,7 @@
 
 [简体中文](transactions.zh-CN.md) | **English**
 
-A transaction makes a group of statements all-or-nothing. It runs on one connection, so the statements
-inside it see each other's unfinished work, and nothing another script reads sees any of it until it
-commits.
+A transaction commits a group of database changes together or rolls them all back. Its statements share one connection and can read each other's uncommitted changes. What other scripts can see depends on the backend and its isolation level.
 
 ```sk
 database transaction:
@@ -20,27 +18,22 @@ if last database error is set:
     send "The transfer was rolled back: %last database error%"
 ```
 
-The section uses the connection in effect, the same way every other statement does. `database
-transaction on connection "logs":` pins a named one instead, and `with timeout 5 seconds` changes how
-long it may stay open — see [The timeout](#the-timeout).
+Like other statements, this section uses the current connection. Use `database transaction on connection "logs":` to choose a named connection, or `with timeout 5 seconds` to set its maximum duration; see [The timeout](#the-timeout).
 
 ## How it ends
 
 | What happens | What the transaction does |
 | --- | --- |
-| the body reaches its end | commits |
-| a statement in the body fails | rolls back, once the body ends |
+| the body reaches its normal end | commits |
+| a statement in the body fails | rolls back when the body ends |
 | `exit`, `stop` or `return` leaves the body | rolls back |
-| `rollback database transaction` | rolls back, and leaves the section |
-| it stays open past its timeout | rolls back on its own |
-| the connection is closed, or the plugin is disabled | rolls back on its own |
+| `rollback database transaction` | rolls back and leaves the section |
+| the timeout expires before it ends | rolls back automatically |
+| the connection is closed or the plugin is disabled | rolls back automatically |
 
-There is no `commit` to write. A commit that carried on with the body would leave the statements after
-it in a transaction that no longer exists, and every answer to "which transaction are they in now" is a
-surprise.
+There is no explicit `commit` statement. Committing only at the normal end of the body avoids ambiguity about which transaction any remaining statements would belong to.
 
-`rollback database transaction` can only be written inside a transaction, and it is the way out of the
-middle of one:
+`rollback database transaction` is available only inside a transaction. Use it to roll back and leave early:
 
 ```sk
 database transaction:
@@ -53,8 +46,7 @@ database transaction:
 
 ## A statement that fails
 
-The first failure is kept, and the transaction becomes one that can only be rolled back. The statements
-after it do nothing: sending them to the database would be writing work that is about to be thrown away.
+The transaction preserves the first error and becomes rollback-only. Subsequent database statements are skipped rather than sent to the database. This does not stop the entire body: ordinary Skript statements, such as sending messages or changing variables, may still run, and their effects are not rolled back with the database changes.
 
 ```sk
 database transaction:
@@ -64,100 +56,54 @@ database transaction:
     insert one entity into table "orders" and wait:     # fails: no such column
         values:
             itemm: "sword"
-    insert one entity into table "audit" and wait:      # does nothing
+    insert one entity into table "audit" and wait:      # skipped; no write is performed
         values:
             what: "order stored"
 ```
 
-`last database error` holds the first failure, so the line after the section says what went wrong even
-though the rollback itself succeeded. That slot is the one thing a transaction keeps across statements:
-a statement inside one does not clear it, because the cause of the rollback is worth more than the
-silence of the statements that were skipped. A `store affected rows` variable is not kept that way — it
-is cleared per statement, in a transaction too, so that no number is left over from a statement that
-never answered. See [Affected rows](affected-rows.md).
+After the section, `last database error` still contains the original error, even if the rollback succeeded. Statements inside the transaction do not clear it. In contrast, each statement still clears its `store affected rows` target, preventing an earlier count from being mistaken for the result of a skipped statement. See [Affected rows](affected-rows.md).
 
 ## One connection at a time
 
-Every statement inside runs on the connection the transaction pinned, so two of them cannot be in flight
-at once and cannot overtake each other: a second statement would be writing into a transaction that is
-still being built, and the transaction cannot commit before the statements it is made of have finished.
-Nothing has to be written for that, because every statement waits anyway, and `and wait` inside a
-transaction is accepted and does nothing.
+All statements in a transaction use the same reserved connection and run sequentially, not concurrently or out of order. The transaction waits for them to finish before committing. Every statement already waits, so no additional setting is needed. `and wait` remains accepted inside a transaction but does not change the behaviour.
 
 ## One inside another
 
-A `database transaction` written inside another one joins it: only the outermost section commits, so an
-inner one is not a savepoint and cannot be undone on its own. Two consequences are worth knowing:
+A nested `database transaction` **joins the outer transaction**. Only the outermost section commits; an inner section is not a savepoint and cannot be rolled back independently. In particular:
 
-- Naming **another connection** in the inner section is refused with
-  `A database transaction is already open on another connection.` That refusal is a statement of the outer
-  body which did not run, so the outer transaction becomes rollback-only and everything the body did is
-  undone.
-- `rollback database transaction` in the inner section rolls back the **whole** transaction rather than the
-  inner body, and the statements after it in the outer body report that the transaction is no longer
-  running.
+- Specifying **another connection** in the inner section fails with `A database transaction is already open on another connection.` This makes the outer transaction rollback-only, so all its changes will be undone.
+- `rollback database transaction` inside the inner section rolls back the **whole transaction**, not just the inner body. Subsequent database statements in the outer body report that the transaction is no longer running.
 
-A function called from inside a transaction is part of it: its statements run on the transaction's
-connection, and a `database transaction` written in the function joins the caller's rather than opening a
-second one.
+Functions called inside a transaction are part of it. Their statements use the transaction's connection, and a `database transaction` inside the function joins the caller's transaction rather than opening another one.
 
 ## The timeout
 
-A transaction holds one of the connection's pooled connections for its whole life, so one that is never
-finished is one the pool never gets back. The default timeout is 30 seconds, and it exists for the case
-where the script stops mid-body: an error inside the body ends the trigger without telling the section,
-and a `wait` parks it for as long as it likes.
+A transaction reserves one pooled connection for its entire lifetime. If it never ends, that connection cannot return to the pool. The default timeout of 30 seconds guards against scripts stopping mid-transaction: an error may end the Skript trigger without notifying the section, and a `wait` may pause it for a long time.
 
-Write the timeout on the section that wants another one:
+Set a different duration when opening the transaction:
 
 ```sk
 database transaction with timeout 2 minutes:
     ...
 ```
 
-- It takes a Skript timespan (`2 minutes`, `500 milliseconds`), and it has to be positive.
-- `with a timeout of 2 minutes` is the same clause: the `a` and the `of` are optional.
-- It comes after `on connection`, in that order:
-  `database transaction on connection "logs" with timeout 2 minutes:`.
-- The clock starts when the transaction opens, because opening it is what takes the connection — not at
-  its first statement — and it does not pause: statements, the script's own work between them and a
-  `wait` all count towards it. A large or slow body is rolled back even when every statement in it is
-  quick, because what the deadline bounds is how long a connection and its locks are held, not how fast
-  any one statement is.
-- A value that is not positive, or an expression that resolved to nothing, is reported as
-  `The transaction timeout has to be positive.` and `The transaction timeout is not set.`, and no
-  transaction is opened.
-- It is written per transaction. A connection sets a timeout for its statements
-  (`statement timeout`), but there is no connection-wide transaction timeout: a script that wants a
-  longer one says so where it opens the transaction.
+- Use a positive Skript timespan, such as `2 minutes` or `500 milliseconds`.
+- `with a timeout of 2 minutes` is the same clause; `a` and `of` are optional.
+- The timeout clause must follow `on connection`: `database transaction on connection "logs" with timeout 2 minutes:`.
+- Timing starts when the transaction opens and reserves its connection, not at the first statement. The timer **does not pause**: database statements, script work between them and `wait` all count. A long body may time out even if each statement is quick. The limit bounds how long the connection and row locks are held, not just individual statement execution.
+- A nonpositive value reports `The transaction timeout has to be positive.` An expression with no value reports `The transaction timeout is not set.` Neither opens a transaction.
+- The timeout is set per transaction. Connections can define a `statement timeout`, but there is no connection-wide transaction timeout. Specify a longer duration where you open the transaction that needs it.
 
-When it expires, the transaction is rolled back and the next statement inside it reports why. Do not
-write a long `wait` inside a transaction: it holds a connection and any row locks the body has taken
-while it waits.
+When the timeout expires, the transaction rolls back, and subsequent statements inside it report the reason. Avoid long waits inside transactions: the connection and any acquired row locks remain occupied during the wait.
 
-A statement inside a transaction is not given the whole timeout but what is left of it, rounded up to a
-second and never below one, as the limit the driver enforces. The last statement of a transaction
-therefore cannot outlive it by another full timeout, and a statement that runs into the deadline is
-cancelled rather than left holding the connection. The connection's `statement timeout` does not apply
-inside a transaction: the remaining transaction time is the only limit there is.
+Statements within a transaction use the **remaining transaction time** as their driver execution limit, rounded up to whole seconds with a minimum of one second. Each statement does not receive a fresh, full timeout. At the deadline, cancellation is attempted so the statement does not continue holding the connection. The connection's `statement timeout` does not apply inside a transaction; the remaining transaction time is used instead.
 
-Nothing can interrupt a statement that is already running, because the rollback needs the same connection
-and waits for it to come back. That is why the statement is the one that gives up first. A connection
-that stopped answering altogether is the case where the deadline can slip, and the `socketTimeout` in the
-[url](connections.md#statement-timeout) is what bounds it.
+Rollback needs the same connection, so it cannot run immediately while a statement is still executing. It must first wait for that statement to finish. If the connection stops responding entirely, rollback and connection release may occur after the deadline; the deadline itself does not change. The `socketTimeout` in the [url](connections.md#statement-timeout) bounds that wait.
 
-A transaction that legitimately needs longer says so, and one that is slow because it holds a lot of work
-is better off split: what is inside it is what the transaction protects, so slow reads and long
-computation can move out of the body while the statements that have to happen together stay in it.
+Set a longer timeout when the transaction genuinely needs it. If it is slow because it includes too much work, consider splitting it up: move slow reads and lengthy calculations outside when they do not need transaction protection, and keep only the statements that must succeed together inside.
 
 ## What it does not do
 
-- **It is not a lock.** A transaction decides whether a group of statements happens at all. Two scripts
-  that read a value, change it and write it back can still lose one of the changes; the database's
-  isolation level decides what each of them sees.
-- **It does not span connections.** `use connection` and `in connection` refuse to switch to another
-  connection while a transaction is open, and so do `disconnect` and `make ... the default`. Two
-  connections need two transactions and no promise that both commit.
-- **It does not cover everything.** `register a database table` is refused inside one, because creating
-  a table commits the transaction on MySQL and its relatives. Statements that are not database
-  statements are not undone either: a message that was sent stays sent.
+- **It is not a lock.** A transaction commits or rolls back a group of changes together, but two scripts reading, modifying and writing the same value can still lose an update. The database's isolation level determines what each can see.
+- **It does not span connections.** While a transaction is open, `use connection` and `in connection` cannot switch to another connection; `disconnect` and `make ... the default` are also restricted accordingly. Two connections require two transactions, with no guarantee that both commit together.
+- **It does not cover everything.** `register a database table` is prohibited inside a transaction because creating a table commits transactions on databases such as MySQL. Non-database operations are not rolled back either: a message already sent cannot be recalled.

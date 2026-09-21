@@ -2,8 +2,8 @@
 
 [简体中文](getting-started.zh-CN.md) | **English**
 
-This page ends with a script that stores a row and reads it back. Everything else in the documentation
-is reference for the parts you do not need yet.
+Build a working script that connects to a database, stores a row, and reads it back.
+The other pages provide reference material when you need more detail.
 
 Assumes the plugin is installed: see [Requirements](../README.md#requirements) and
 [Install](../README.md#install).
@@ -23,15 +23,14 @@ on load:
         stop
 ```
 
-- `"MySQL"` is the type name of an implementation. The jar registers four, `"MySQL"`, `"PostgreSQL"`,
-  `"MongoDB"` and `"JDBC"`, and the name is matched exactly, so a name that is only a database *product*
-  is not one of them; see [Connections](connections.md#the-implementation-name).
-- `url` is required. `username` and `password` may be empty strings, for a server that does not ask for
-  them.
-- The section always waits, so anything after it in the same trigger runs against the live connection.
-  A different script that ran earlier would have seen `No database connected.`, which is why connecting
-  on load is the usual place.
-- Credentials live in the script file, so keep that file as private as the database account is.
+- `"MySQL"` is an implementation type name. The jar registers four: `"MySQL"`, `"PostgreSQL"`,
+  `"MongoDB"` and `"JDBC"`. Names must match exactly; an arbitrary database *product* name will not work.
+  See [Connections](connections.md#the-implementation-name).
+- `url` is required. `username` and `password` may be empty strings if the database does not require them.
+- The section always waits. After a successful connection, later statements in the same trigger can
+  use it. A script that accesses the database before the connection is ready gets `No database connected.`.
+  Connecting in `on load` is the usual approach, but script load order still matters.
+- Credentials are stored in the script file, so restrict access to that file.
 
 ## 2. Describe a table
 
@@ -42,9 +41,9 @@ register a database table "users":
     age: int, nullable
 ```
 
-Registering creates the table when it is missing and waits for it to exist. It does **not** change a
-table that is already there, so adding a column here has no effect on a database that has the table
-already; see [Tables](tables.md) for that trap and the rest of the column syntax.
+Registration creates the table if it is missing and waits for completion. It does **not** alter an
+existing table: adding a column to the script does not add it to the database.
+See [Tables](tables.md) for this limitation and the full column syntax.
 
 ## 3. Write a row
 
@@ -61,9 +60,9 @@ command /adduser <text> <integer>:
         send "Stored %arg-1%." to sender
 ```
 
-The write waits, so `last database error` is about it by the time the next line runs: a failure from the
-database itself is in there, not only in the console. Every statement waits, whether or not it says
-`and wait`; see [Errors and waiting](errors-and-waiting.md).
+The write waits for completion, so `last database error` reflects this operation before the next line
+runs. Database errors are available there, not just in the console. Every statement waits, with or
+without `and wait`; see [Errors and waiting](errors-and-waiting.md).
 
 `id` is not in the values because the database assigns it. If you need it afterwards, write your own
 value for it and use `upsert` instead; see [Cookbook](cookbook.md).
@@ -85,10 +84,10 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-A select always waits, so the lines after it already have the row. Each column of the row is one key of
-the variable, named after the column. `{_user::id} is not set` is how "no row matched" looks, and it is
-also how a NULL column looks: a column whose value is NULL leaves its key unset. Both cases are covered
-in [Reading rows](reading.md).
+A select always waits, so subsequent lines can read its result. Each column becomes a variable key
+with the same name. In this example, `{_user::id} is not set` means no row matched. In general, a NULL
+column also leaves its key unset, so checks on other columns must account for both cases.
+See [Reading rows](reading.md).
 
 ## 5. Change and remove
 
@@ -148,11 +147,13 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-A second script may use the same table, because the connection belongs to the server rather than to the
-script that made it. **Only one script should create it, though**: a second `create a connection` replaces
-the default connection and starts with nothing registered, so the tables the first script registered are
-gone from it and its statements report `Table 'users' not found.` A second script either leaves the
-connecting to the first one or makes a connection of its own with `named`. See
+Other scripts can use the same table because the connection is shared across the server.
+
+**One script should manage the shared default connection.** Another `create a connection` replaces it
+with a new connection that has no registered tables, so subsequent operations report `Table 'users' not found.`.
+The database tables are not deleted; their registration is simply absent from the new connection.
+
+Other scripts should reuse the connection or create their own with `named`. See
 [Connections](connections.md).
 
 ## Where to go next

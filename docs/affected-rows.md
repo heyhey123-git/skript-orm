@@ -2,8 +2,7 @@
 
 [简体中文](affected-rows.zh-CN.md) | **English**
 
-A write can report how many rows it touched, and a script can act on that number. This is what makes a
-conditional write possible without a transaction:
+Writes can report an affected-row count for scripts to act on. For example, you can use it to check whether a conditional update succeeded without a transaction:
 
 ```sk
 update entities in table "accounts" with limit 1 and store affected rows in {_rows}:
@@ -19,11 +18,7 @@ if {_rows} is 0:
 
 ## The clause
 
-`store affected rows in {_rows}` is optional and belongs to every statement that writes: `insert one`,
-`insert many`, `insert ... if absent`, `update`, `upsert` and `delete`, in the section form and in the
-colon-free form alike. It is written with `and`, after the statement's own arguments: that conjunction is
-what tells Skript where the argument in front of the clause ends. An `and wait` after it is accepted and
-changes nothing.
+The optional `store affected rows in {_rows}` clause is available on every write: `insert one`, `insert many`, `insert ... if absent`, `update`, `upsert` and `delete`, with or without a section body. Place it after the statement's arguments, joined with `and`. That conjunction tells Skript where the preceding argument ends. You can still append `and wait`, but it does not change the waiting behaviour.
 
 ```sk
 delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
@@ -33,43 +28,35 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
         name: "Alice"
 ```
 
-The target is a single variable, `{_rows}` and not `{_rows::*}`: a list would hold the number under a key
-nobody chose, and an expression cannot be written into at all. Both are refused when the script is parsed.
+The target must be a single variable such as `{_rows}`, not `{_rows::*}`. A list does not specify which key should hold the count, and other expressions cannot be assigned a value. Both are rejected when the script is parsed.
 
 ## What the number means
 
-It is what the backend reports as written: rows an insert added, rows a delete removed, rows an update
-wrote. Which updates count is the backend's answer rather than this addon's — a row an update matched
-without changing is one row to PostgreSQL and to MongoDB, and zero rows to MySQL. Compare the number only
-where the statement changes a value, as the example above does.
+The backend supplies the count: inserts count added rows, deletes count removed rows, and updates follow backend-specific rules. If an update matches a row without changing its values, PostgreSQL and MongoDB count one row, while MySQL counts zero. To use the count as a conditional-update check, ensure the write would change a value, as the example above does when the amount is nonzero.
 
 | Statement | MySQL | PostgreSQL | MongoDB |
 | --- | --- | --- | --- |
 | `insert one`, `insert many` | rows written | rows written | rows written |
 | `update` | rows **changed** | rows matched | rows matched |
 | `delete` | rows removed | rows removed | rows removed |
-| `upsert` | `1` inserted, `2` updated, `0` for a row that already held those values | `1` either way | `1` inserted, rows matched when updated |
-| `insert ... if absent` | `1` written, `0` a key already held it | same | same |
-| a batch the driver cannot count | no number at all | same | never happens |
+| `upsert` | `1` inserted, `2` updated, `0` if values were unchanged | `1` either way | `1` inserted, rows matched when updated |
+| `insert ... if absent` | `1` inserted, `0` if the key already exists | same | same |
+| a batch the driver cannot count | no number | same | never happens |
 
-Only `insert ... if absent` answers the question scripts reach for this clause with — "was it written" — on
-every backend. An `upsert` does not: a `2` on MySQL says it updated, and the other two do not tell the two
-cases apart at all.
+Use `insert ... if absent` to distinguish a new insert from an existing row consistently across all three backends. `upsert` cannot provide that distinction everywhere: MySQL reports `2` for an update, but the other two backends do not distinguish inserts from updates.
 
-A backend that answers a batch without a per-row count reports no number at all rather than a wrong one.
+Some backends cannot provide per-row counts for a batch. In that case, the result is **no number**, rather than an inaccurate count.
 
 ## Set, unset and zero
 
-The variable is **cleared when the statement starts**, before anything that could refuse it, and written
-once the statement has finished and could count exactly:
+The variable is **cleared when the statement starts**, before any validation that might reject it. A count is stored only after the statement finishes and an exact count is available:
 
 | The variable holds | It means |
 | --- | --- |
-| a number | the statement ran and affected that many rows |
-| nothing | no statement answered: it was refused or skipped, it failed, or the backend could not count |
+| a number | the statement ran and reported a count using the backend's rules |
+| nothing | the statement was rejected, skipped or failed, or the backend could not count |
 
-**Zero is a real answer**, not a missing one: the statement ran and matched nothing. That is the useful
-case, and `is set` is what tells the two apart:
+**Zero is a valid result**, not a missing one. Its meaning depends on the statement and backend: no matching rows, an existing key, or unchanged values in a MySQL update, for example. Use `is set` to distinguish zero from an unavailable count:
 
 ```sk
 if {_rows} is not set:
@@ -78,23 +65,17 @@ else if {_rows} is 0:
     send "No row matched." to console
 ```
 
-Clearing the variable first is what stops an older number from being read as this statement's answer. The
-count is there when the next line runs: a write waits for its work, so nothing extra has to be written for
-the clause to be readable. See [Errors and waiting](errors-and-waiting.md).
+The zero-count message above applies only when zero means no match; it is not suitable for every write.
 
-Inside a [transaction](transactions.md) it works the same way, and the variable is still cleared statement
-by statement there: a statement the transaction skipped has not answered, and a number left over from the
-statement before it would say otherwise. `last database error` is the one that is kept instead, so that
-the cause of a rollback can still be read.
+Clearing the variable prevents a previous count from being mistaken for the current result. Writes wait for completion, so the next statement can read the count without any extra waiting. See [Errors and waiting](errors-and-waiting.md).
 
-Ending the transaction does not clear the variable either: a rollback does not reach back and unset it, so
-after the section a `{_rows}` of `1` can describe a statement whose work was undone. Check
-`last database error` before trusting the number once a transaction is over.
+This also applies inside a [transaction](transactions.md): every statement with this clause clears its target, including skipped statements. In contrast, `last database error` preserves the first error so the cause of a rollback remains available.
+
+Ending a transaction does not clear this variable, and rolling back does not undo the variable assignment. A `{_rows}` value of `1` after the section may therefore describe a database change that was rolled back. Check `last database error` before relying on a count from a transaction.
 
 ## A safe conditional write
 
-Reading a value and writing a new one based on it is two statements, and another write can land between
-them. Without transactions, the defence is to make the write itself check the value it was based on:
+Reading a value and then writing a new value takes two statements, with room for another write between them. Without a transaction, include the previously read value in the update condition:
 
 ```sk
 select one entity from table "accounts" and store the result in {_account::*}:
@@ -112,21 +93,16 @@ loop 3 times:
 
     if {_rows} is 1:
         stop
-    # Nobody matched the balance that was read, so the row moved: read it again and retry.
+    # Read the balance again before retrying; production code should also check database errors.
     select one entity from table "accounts" and store the result in {_account::*}:
         where all:
             id = {_from}
     set {_balance} to {_account::balance}
 ```
 
-The `where` repeats the value the script read, so the update can only match while the row still holds it.
-One row affected means this statement was the one that changed it; zero means somebody else got there
-first.
+The `where` block includes the balance previously read, so the update matches only while that balance is unchanged. If the amount is nonzero and the statement succeeds, one affected row means the update took effect. Zero means the conditions did not match, perhaps because another write changed the balance or deleted the row.
 
-Two details are worth keeping in mind:
+Keep two details in mind:
 
-- The write has to change the row for MySQL to count it, so an amount of `0` looks like a lost race. Refuse
-  a zero transfer before the loop rather than retrying it.
-- The retry loop is bounded. A loop that never gives up can spin forever against a row that keeps being
-  written, and a [transaction](transactions.md) is the answer when several rows have to move together
-  rather than one.
+- MySQL counts only rows whose values actually change, so an amount of `0` can also produce zero affected rows. Reject zero amounts before the loop rather than retrying them.
+- Bound the number of retries. A row that is continually updated can otherwise keep the loop running indefinitely. When several rows must change together, use a [transaction](transactions.md).
