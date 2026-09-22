@@ -153,35 +153,31 @@ class SecTransaction : ScopedBodySection() {
         event: Event,
         transaction: Transaction,
         continuation: TriggerItem?
-    ): TriggerItem? {
-        return DatabaseWork.run(
-            event = event,
-            continuation = continuation,
-            query = { transaction.commit() },
-            onFailure = { failure ->
-                val message = "The database transaction could not be committed, and whether the server " +
-                    "applied it is unknown: ${failure.message}"
-                SkriptDatabaseErrors.set(event, message)
-                this.error(message)
-            }
-        )
-    }
+    ): TriggerItem? = DatabaseWork.run(
+        event = event,
+        continuation = continuation,
+        query = { transaction.commit() },
+        onFailure = { failure ->
+            val message = "The database transaction could not be committed, and whether the server " +
+                "applied it is unknown: ${failure.message}"
+            SkriptDatabaseErrors.set(event, message)
+            this.error(message)
+        }
+    )
 
     private fun rollbackAndContinue(
         event: Event,
         transaction: Transaction,
         continuation: TriggerItem?
-    ): TriggerItem? {
-        return DatabaseWork.run(
-            event = event,
-            continuation = continuation,
-            query = { transaction.rollback() },
-            clearErrorOnSuccess = false,
-            onFailure = { failure ->
-                this.error(SkriptDatabaseErrors.messageOf(failure))
-            }
-        )
-    }
+    ): TriggerItem? = DatabaseWork.run(
+        event = event,
+        continuation = continuation,
+        query = { transaction.rollback() },
+        clearErrorOnSuccess = false,
+        onFailure = { failure ->
+            this.error(SkriptDatabaseErrors.messageOf(failure))
+        }
+    )
 
     override fun leaveBody(event: Event) {
         val transaction = ConnectionScope.transaction(event)
