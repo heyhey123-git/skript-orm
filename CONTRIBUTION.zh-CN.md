@@ -180,7 +180,9 @@ section 只有在该行以冒号结尾时才会被识别，因此 body 可省略
 - 每条碰数据库的语句都会等：`DatabaseWork.run` 停住 trigger、保留事件 continuation，并把失败写进
   `last database error`。`and wait` 仍然被所有 pattern 接受，但没有任何代码读它——写入曾经靠它来要求这个行为。
 - 所有值都在主线程、派发之前解析完成，此时局部变量仍附着在事件上。
-- 解析期问题用 `Skript.error(...)` 报告；运行期问题通过 `ErrorPrinter` 与 `SkriptDatabaseErrors` 报告。
+- 解析期问题用 `Skript.error(...)` 报告；运行期问题按 Skript 官方元素的做法，用 element 自己继承来的
+  `error(...)`（`RuntimeErrorProducer`）报告——控制台因此会写明脚本、语法与行号，而给脚本读的那份留在
+  `SkriptDatabaseErrors` 里。
 
 ---
 

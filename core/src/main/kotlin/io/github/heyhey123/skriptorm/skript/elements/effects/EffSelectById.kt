@@ -9,7 +9,6 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
@@ -73,21 +72,21 @@ class EffSelectById : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
         DatabaseWork.clearErrorForStatement(actualEvent)
 
         val id = idExpr.getSingle(actualEvent)
         if (id == null) {
             DatabaseWork.refuseRead(
                 actualEvent,
-                trigger,
+                this,
                 "Failed to parse query arguments: ID expression in 'select by id' is null.",
                 resultVar
             )
             return next
         }
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: run {
+        val target = DatabaseWork.resolveTable(actualEvent, this, tableNameExpr) ?: run {
             VariableModifier.clear(resultVar, actualEvent)
             return next
         }
@@ -109,9 +108,9 @@ class EffSelectById : Effect() {
                 }
             },
             deliver = { row -> VariableModifier.writeMap(resultVar, actualEvent, row) },
-            onFailure = { error ->
+            onFailure = { failure ->
                 VariableModifier.clear(resultVar, actualEvent)
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${error.message}")
+                this.error("Query failed: ${failure.message}")
             }
         )
     }

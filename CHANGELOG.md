@@ -13,6 +13,15 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+### Changed
+
+- **A failure reports itself the way Skript's own effects do.** When a statement fails, the console line
+  now comes from Skript's runtime error channel instead of this plugin's logger, so it names the script and
+  the syntax, prints the line number and the line itself, and warns the players who watch for runtime
+  errors — those holding `skript.see_runtime_errors`. What a script reads through `last database error` is
+  unchanged, and stays out of Skript's reach: its per-line frame limits summarise a line that keeps failing
+  in the console, never in the script.
+
 ## [1.2.0] - 2026-09-19
 
 A release about what a script can see. A write hands back the number of rows it affected, which is what a

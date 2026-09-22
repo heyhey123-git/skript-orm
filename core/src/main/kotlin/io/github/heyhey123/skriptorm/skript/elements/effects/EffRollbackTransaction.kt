@@ -5,13 +5,11 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.elements.sections.SecTransaction
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
@@ -29,7 +27,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * parsed, the same way `exit` finds the sections it leaves.
  */
 @Name("Rollback Database Transaction")
-@Description("Rolls back the database transaction the script is inside and leaves its section, so the statements after the section run on the connection again. Can only be written inside a 'database transaction' section. Failures are logged and exposed as the last database error.")
+@Description("Rolls back the database transaction the script is inside and leaves its section, so the statements after the section run on the connection again. Can only be written inside a 'database transaction' section. Failures are reported as a runtime error and exposed as the last database error.")
 @Example(
     """database transaction:
     update one entity in table "accounts" by id {_from} and wait:
@@ -82,11 +80,10 @@ class EffRollbackTransaction : Effect() {
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
         val target = section ?: return next
-        val trigger = this.trigger
 
         val transaction = ConnectionScope.transaction(actualEvent)
         if (transaction == null) {
-            report(actualEvent, trigger, "There is no database transaction to roll back.")
+            report(actualEvent, "There is no database transaction to roll back.")
             return target.next
         }
 
@@ -102,15 +99,15 @@ class EffRollbackTransaction : Effect() {
             // the only account of why the script rolled back: clearing it on the way out would leave the
             // script reading nothing, the same reason the automatic rollback of a failed body keeps it.
             clearErrorOnSuccess = false,
-            onFailure = { error ->
-                report(actualEvent, trigger, "The database transaction could not be rolled back: ${error.message}")
+            onFailure = { failure ->
+                report(actualEvent, "The database transaction could not be rolled back: ${failure.message}")
             }
         )
     }
 
-    private fun report(event: Event, trigger: Trigger?, message: String) {
+    private fun report(event: Event, message: String) {
         SkriptDatabaseErrors.set(event, message)
-        trigger?.let { ErrorPrinter.printErrorMessageWithDetail(it, message) }
+        this.error(message)
     }
 
     override fun toString(event: Event?, debug: Boolean) = "rollback database transaction"

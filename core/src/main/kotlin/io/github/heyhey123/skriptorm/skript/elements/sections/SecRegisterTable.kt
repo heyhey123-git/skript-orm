@@ -7,14 +7,12 @@ import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.SkriptOrm
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
@@ -147,24 +145,23 @@ class SecRegisterTable : Section() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
-        val trigger = this.trigger ?: return walk(event, false)
+        if (this.trigger == null) return walk(event, false)
         DatabaseWork.clearErrorForStatement(actualEvent)
 
         val database = ConnectionScope.resolve(actualEvent)
-            ?: return fail(actualEvent, trigger, ConnectionScope.noConnectionMessage())
+            ?: return fail(actualEvent, ConnectionScope.noConnectionMessage())
         // MySQL and its relatives commit the open transaction when they see DDL, so a table registered
         // inside one would silently end it. Refusing keeps "all of it or none of it" true.
         if (ConnectionScope.transaction(actualEvent) != null) {
             return fail(
                 actualEvent,
-                trigger,
                 "A table cannot be registered inside a database transaction, because creating it would commit that transaction."
             )
         }
         val tableName = tableNameExpr.getSingle(actualEvent)
-            ?: return fail(actualEvent, trigger, "Table name is null.")
+            ?: return fail(actualEvent, "Table name is null.")
         if (database.tables.containsKey(tableName)) {
-            return fail(actualEvent, trigger, "Table '$tableName' is already registered.")
+            return fail(actualEvent, "Table '$tableName' is already registered.")
         }
 
         val table = try {
@@ -184,11 +181,11 @@ class SecRegisterTable : Section() {
                 }
             )
         } catch (error: IllegalArgumentException) {
-            return fail(actualEvent, trigger, error.message ?: "Invalid table definition.")
+            return fail(actualEvent, error.message ?: "Invalid table definition.")
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
-            return fail(actualEvent, trigger, "Database lifecycle is shutting down.")
+            return fail(actualEvent, "Database lifecycle is shutting down.")
         }
 
         val continuation = next
@@ -210,7 +207,7 @@ class SecRegisterTable : Section() {
                     if (localVariables != null) SkriptLocalVariables.restore(actualEvent, localVariables)
                     if (failure != null) {
                         SkriptDatabaseErrors.set(actualEvent, failure)
-                        ErrorPrinter.printErrorWithDetail(trigger, failure)
+                        this@SecRegisterTable.error(SkriptDatabaseErrors.messageOf(failure))
                     } else {
                         SkriptDatabaseErrors.clear(actualEvent)
                     }
@@ -232,8 +229,8 @@ class SecRegisterTable : Section() {
         size = raw.size
     )
 
-    private fun fail(event: Event, trigger: Trigger, message: String): TriggerItem? {
-        DatabaseWork.report(event, trigger, message)
+    private fun fail(event: Event, message: String): TriggerItem? {
+        DatabaseWork.report(event, this, message)
         return walk(event, false)
     }
 

@@ -9,7 +9,6 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
@@ -68,10 +67,10 @@ class EffSelectManyUnfiltered : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
         DatabaseWork.clearErrorForStatement(actualEvent)
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: run {
+        val target = DatabaseWork.resolveTable(actualEvent, this, tableNameExpr) ?: run {
             VariableModifier.clear(resultVar, actualEvent)
             return next
         }
@@ -95,9 +94,9 @@ class EffSelectManyUnfiltered : Effect() {
                 }
             },
             deliver = { rows -> VariableModifier.writeMap(resultVar, actualEvent, rows) },
-            onFailure = { error ->
+            onFailure = { failure ->
                 VariableModifier.clear(resultVar, actualEvent)
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${error.message}")
+                this.error("Query failed: ${failure.message}")
             }
         )
     }

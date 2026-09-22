@@ -42,7 +42,7 @@ class SecSelectById : SecSelectBase() {
         idExpr = ExpressionsHelper.withAnyType(expressions[1]!!)
     }
 
-    override fun resolveExtraArguments(event: Event?, trigger: ch.njol.skript.lang.Trigger): Any =
+    override fun resolveExtraArguments(event: Event?): Any =
         requireNotNull(idExpr.getSingle(event)) { "ID expression in 'select by id' is null." }
 
     override suspend fun executeQuery(

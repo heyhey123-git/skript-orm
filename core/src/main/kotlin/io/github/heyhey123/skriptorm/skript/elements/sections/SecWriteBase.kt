@@ -17,7 +17,6 @@ import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.RawValues
 import io.github.heyhey123.skriptorm.skript.utils.RawValuesList
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
@@ -248,7 +247,7 @@ abstract class SecWriteBase : Section() {
     }
 
     override fun walk(event: Event?): TriggerItem? {
-        val trigger = this.trigger ?: return walk(event, false)
+        if (this.trigger == null) return walk(event, false)
         event?.let {
             DatabaseWork.clearErrorForStatement(it)
             // Cleared before anything can refuse the statement, so a statement that never ran leaves the
@@ -257,25 +256,25 @@ abstract class SecWriteBase : Section() {
         }
 
         val database = ConnectionScope.resolve(event) ?: run {
-            DatabaseWork.report(event, trigger, ConnectionScope.noConnectionMessage())
+            DatabaseWork.report(event, this, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            DatabaseWork.report(event, trigger, "Table name is null.")
+            DatabaseWork.report(event, this, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
             val message = "Table '$tableName' not found."
-            DatabaseWork.report(event, trigger, message)
+            DatabaseWork.report(event, this, message)
             return walk(event, false)
         }
 
         val whereClause = try {
             where?.bind(table)?.resolve(event)
         } catch (error: Exception) {
-            DatabaseWork.report(event, trigger, "Failed to parse where clause: ${error.message}")
+            DatabaseWork.report(event, this, "Failed to parse where clause: ${error.message}")
             return walk(event, false)
         }
 
@@ -305,7 +304,7 @@ abstract class SecWriteBase : Section() {
                 resolvedMultiple = multipleValues?.bind(table)?.resolve(event)
             }
         } catch (error: Exception) {
-            DatabaseWork.report(event, trigger, "Failed to parse write values: ${error.message}")
+            DatabaseWork.report(event, this, "Failed to parse write values: ${error.message}")
             return walk(event, false)
         }
 
@@ -313,23 +312,23 @@ abstract class SecWriteBase : Section() {
             resolveExtraArguments(event)
         } catch (error: Exception) {
             val message = "Failed to parse write arguments: ${error.message}"
-            DatabaseWork.report(event, trigger, message)
+            DatabaseWork.report(event, this, message)
             return walk(event, false)
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
-            DatabaseWork.report(event, trigger, "Database lifecycle is shutting down.")
+            DatabaseWork.report(event, this, "Database lifecycle is shutting down.")
             return walk(event, false)
         }
 
-        if (event != null && DatabaseWork.skipInactiveTransaction(event, trigger)) {
+        if (event != null && DatabaseWork.skipInactiveTransaction(event, this)) {
             return walk(event, false)
         }
         val transaction = ConnectionScope.transaction(event)
         // Every write waits, whether or not it says `and wait`: the trigger carries on after the change
         // has happened, so the order a script reads is the order it wrote, and every failure is in
-        // `last database error` rather than only in the console. `and wait` is still accepted, and does
-        // nothing, the way it has always been on a read.
+        // `last database error` as well as through Skript's runtime error channel. `and wait` is still
+        // accepted, and does nothing, the way it has always been on a read.
         val continuation = next
         val localVariables = if (event != null) {
             SkriptLocalVariables.remove(event)
@@ -365,7 +364,7 @@ abstract class SecWriteBase : Section() {
                         }
                     }
                     failure?.let {
-                        ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${it.message}")
+                        this@SecWriteBase.error("Write failed: ${it.message}")
                     }
                     if (event != null && localVariables != null) {
                         SkriptLocalVariables.restore(event, localVariables)

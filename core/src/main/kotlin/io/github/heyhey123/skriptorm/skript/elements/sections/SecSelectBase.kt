@@ -6,7 +6,6 @@ import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
@@ -16,7 +15,6 @@ import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
@@ -117,34 +115,34 @@ abstract class SecSelectBase : Section() {
         return true
     }
 
-    protected open fun resolveExtraArguments(event: Event?, trigger: Trigger): Any? = Unit
+    protected open fun resolveExtraArguments(event: Event?): Any? = Unit
 
     /**
      * Reports a refusal and clears the result variable, because a read that did not run must not leave
      * the previous result behind. [DatabaseWork.refuseRead] owns the rule and the reasoning.
      */
-    private fun refuse(event: Event, trigger: Trigger, message: String) {
-        DatabaseWork.refuseRead(event, trigger, message, resultVar)
+    private fun refuse(event: Event, message: String) {
+        DatabaseWork.refuseRead(event, this, message, resultVar)
     }
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
-        val trigger = this.trigger ?: return walk(event, false)
+        if (this.trigger == null) return walk(event, false)
         DatabaseWork.clearErrorForStatement(actualEvent)
 
         val database = ConnectionScope.resolve(event) ?: run {
-            refuse(actualEvent, trigger, ConnectionScope.noConnectionMessage())
+            refuse(actualEvent, ConnectionScope.noConnectionMessage())
             return walk(event, false)
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            refuse(actualEvent, trigger, "Table name is null.")
+            refuse(actualEvent, "Table name is null.")
             return walk(event, false)
         }
 
         val table = database.tables[tableName] ?: run {
             val message = "Table '$tableName' not found."
-            refuse(actualEvent, trigger, message)
+            refuse(actualEvent, message)
             return walk(event, false)
         }
 
@@ -153,25 +151,25 @@ abstract class SecSelectBase : Section() {
                 raw.bind(table).resolve(event)
             } catch (e: Exception) {
                 val message = "Failed to parse where clause: ${e.message}"
-                refuse(actualEvent, trigger, message)
+                refuse(actualEvent, message)
                 return walk(event, false)
             }
         }
 
         val extraArguments = try {
-            resolveExtraArguments(event, trigger)
+            resolveExtraArguments(event)
         } catch (e: Exception) {
             val message = "Failed to parse query arguments: ${e.message}"
-            refuse(actualEvent, trigger, message)
+            refuse(actualEvent, message)
             return walk(event, false)
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
-            refuse(actualEvent, trigger, "Database lifecycle is shutting down.")
+            refuse(actualEvent, "Database lifecycle is shutting down.")
             return walk(actualEvent, false)
         }
 
-        if (DatabaseWork.skipInactiveTransaction(actualEvent, trigger)) {
+        if (DatabaseWork.skipInactiveTransaction(actualEvent, this)) {
             // The statement was skipped by the transaction it belongs to and never ran, so the variable
             // is cleared like any other refusal. The transaction's own failure stays in the error slot.
             VariableModifier.clear(resultVar, actualEvent)
@@ -209,7 +207,7 @@ abstract class SecSelectBase : Section() {
                     if (queryFailure != null) {
                         VariableModifier.clear(resultVar, actualEvent)
                         DatabaseWork.recordFailure(actualEvent, queryFailure)
-                        ErrorPrinter.printErrorMessageWithDetail(trigger, "Query failed: ${queryFailure.message}")
+                        this@SecSelectBase.error("Query failed: ${queryFailure.message}")
                     } else {
                         SkriptDatabaseErrors.clear(actualEvent)
                         VariableModifier.writeMap(resultVar, actualEvent, checkNotNull(queryResult))

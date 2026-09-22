@@ -5,7 +5,6 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.util.Timespan
 import ch.njol.util.Kleenean
@@ -14,7 +13,6 @@ import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.database.Transaction
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
@@ -104,10 +102,10 @@ class SecTransaction : ScopedBodySection() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
-        val trigger = this.trigger ?: return walk(actualEvent, false)
+        if (this.trigger == null) return walk(actualEvent, false)
 
-        val database = resolveConnection(actualEvent, trigger) ?: return walk(actualEvent, false)
-        val timeout = resolveTimeout(actualEvent, trigger) ?: return walk(actualEvent, false)
+        val database = resolveConnection(actualEvent) ?: return walk(actualEvent, false)
+        val timeout = resolveTimeout(actualEvent) ?: return walk(actualEvent, false)
 
         val open = ConnectionScope.transaction(actualEvent)
         if (open != null) {
@@ -115,14 +113,14 @@ class SecTransaction : ScopedBodySection() {
             // database can do, and one on another connection would have to commit before this body is
             // finished with the first.
             if (connectionNameExpr != null && open.database !== database) {
-                report(actualEvent, trigger, "A database transaction is already open on another connection.")
+                report(actualEvent, "A database transaction is already open on another connection.")
                 return walk(actualEvent, false)
             }
             ConnectionScope.push(actualEvent, open.database, this, transaction = open, ownsTransaction = false)
             return walk(actualEvent, true)
         }
 
-        return beginAndWalk(actualEvent, trigger, database, timeout)
+        return beginAndWalk(actualEvent, database, timeout)
     }
 
     override fun onBodyEnd(event: Event, continuation: TriggerItem?): TriggerItem? {
@@ -143,9 +141,8 @@ class SecTransaction : ScopedBodySection() {
             // a body whose last statement was a `wait` never heard about it, so it is said here.
             else -> {
                 val reason = transaction.failure
-                val trigger = this.trigger
-                if (reason != null && trigger != null) {
-                    DatabaseWork.report(event, trigger, reason.message ?: "The transaction was aborted.")
+                if (reason != null) {
+                    DatabaseWork.report(event, this, reason.message ?: "The transaction was aborted.")
                 }
                 continuation
             }
@@ -157,16 +154,15 @@ class SecTransaction : ScopedBodySection() {
         transaction: Transaction,
         continuation: TriggerItem?
     ): TriggerItem? {
-        val trigger = this.trigger
         return DatabaseWork.run(
             event = event,
             continuation = continuation,
             query = { transaction.commit() },
-            onFailure = { error ->
+            onFailure = { failure ->
                 val message = "The database transaction could not be committed, and whether the server " +
-                    "applied it is unknown: ${error.message}"
+                    "applied it is unknown: ${failure.message}"
                 SkriptDatabaseErrors.set(event, message)
-                trigger?.let { ErrorPrinter.printErrorMessageWithDetail(it, message) }
+                this.error(message)
             }
         )
     }
@@ -176,14 +172,13 @@ class SecTransaction : ScopedBodySection() {
         transaction: Transaction,
         continuation: TriggerItem?
     ): TriggerItem? {
-        val trigger = this.trigger
         return DatabaseWork.run(
             event = event,
             continuation = continuation,
             query = { transaction.rollback() },
             clearErrorOnSuccess = false,
-            onFailure = { error ->
-                trigger?.let { ErrorPrinter.printErrorWithDetail(it, error) }
+            onFailure = { failure ->
+                this.error(SkriptDatabaseErrors.messageOf(failure))
             }
         )
     }
@@ -200,7 +195,7 @@ class SecTransaction : ScopedBodySection() {
             try {
                 transaction.rollback()
             } catch (error: Throwable) {
-                SkriptOrm.instance.logger.warning(
+                this@SecTransaction.warning(
                     "Failed to roll back a database transaction: ${error.message}"
                 )
             }
@@ -216,7 +211,6 @@ class SecTransaction : ScopedBodySection() {
      */
     private fun beginAndWalk(
         event: Event,
-        trigger: Trigger,
         database: Database,
         timeout: Duration
     ): TriggerItem? {
@@ -245,7 +239,7 @@ class SecTransaction : ScopedBodySection() {
                     if (started == null) {
                         failure?.let {
                             SkriptDatabaseErrors.set(event, it)
-                            ErrorPrinter.printErrorWithDetail(trigger, it)
+                            this@SecTransaction.error(SkriptDatabaseErrors.messageOf(it))
                         }
                         TriggerItem.walk(next, event)
                     } else {
@@ -269,53 +263,53 @@ class SecTransaction : ScopedBodySection() {
     }
 
     /** The connection the transaction pins: the one named, or the one already in effect. */
-    private fun resolveConnection(event: Event, trigger: Trigger): Database? {
+    private fun resolveConnection(event: Event): Database? {
         val expression = connectionNameExpr
         if (expression == null) {
             val resolved = ConnectionScope.resolve(event)
             if (resolved == null) {
-                report(event, trigger, ConnectionScope.noConnectionMessage())
+                report(event, ConnectionScope.noConnectionMessage())
             }
             return resolved
         }
 
         val name = expression.getSingle(event)
         if (name == null) {
-            report(event, trigger, "Connection name is null.")
+            report(event, "Connection name is null.")
             return null
         }
 
         val connection = Database.connection(name)
         if (connection == null) {
-            report(event, trigger, ConnectionScope.unknownConnectionMessage(name))
+            report(event, ConnectionScope.unknownConnectionMessage(name))
             return null
         }
         if (!connection.isConnected) {
-            report(event, trigger, "Connection '$name' is not connected.")
+            report(event, "Connection '$name' is not connected.")
             return null
         }
         return connection
     }
 
-    private fun resolveTimeout(event: Event, trigger: Trigger): Duration? {
+    private fun resolveTimeout(event: Event): Duration? {
         val expression = timeoutExpr ?: return Database.DEFAULT_TRANSACTION_TIMEOUT
         val timespan = expression.getSingle(event)
         if (timespan == null) {
-            report(event, trigger, "The transaction timeout is not set.")
+            report(event, "The transaction timeout is not set.")
             return null
         }
 
         val millis = timespan.getAs(Timespan.TimePeriod.MILLISECOND)
         if (millis <= 0) {
-            report(event, trigger, "The transaction timeout has to be positive.")
+            report(event, "The transaction timeout has to be positive.")
             return null
         }
         return Duration.ofMillis(millis)
     }
 
-    private fun report(event: Event, trigger: Trigger, message: String) {
+    private fun report(event: Event, message: String) {
         SkriptDatabaseErrors.set(event, message)
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        this.error(message)
     }
 
     override fun toString(event: Event?, debug: Boolean) = buildString {

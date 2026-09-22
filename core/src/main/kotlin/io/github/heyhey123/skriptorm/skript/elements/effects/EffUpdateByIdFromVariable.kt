@@ -10,7 +10,6 @@ import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.WriteValues
@@ -82,7 +81,7 @@ class EffUpdateByIdFromVariable : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
         DatabaseWork.clearErrorForStatement(actualEvent)
         AffectedRows.clear(affectedRowsVariable, actualEvent)
 
@@ -90,15 +89,15 @@ class EffUpdateByIdFromVariable : Effect() {
         if (id == null) {
             DatabaseWork.report(
                 actualEvent,
-                trigger,
+                this,
                 "Failed to parse write arguments: ID expression in 'update by id' is null."
             )
             return next
         }
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
+        val target = DatabaseWork.resolveTable(actualEvent, this, tableNameExpr) ?: return next
 
-        val row = WriteValues.singleRow(actualEvent, trigger, valuesVariable, target) ?: return next
+        val row = WriteValues.singleRow(actualEvent, this, valuesVariable, target) ?: return next
 
         return DatabaseWork.run(
             event = actualEvent,
@@ -109,8 +108,8 @@ class EffUpdateByIdFromVariable : Effect() {
                 }
             },
             deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
-            onFailure = { error ->
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")
+            onFailure = { failure ->
+                this.error("Write failed: ${failure.message}")
             }
         )
     }

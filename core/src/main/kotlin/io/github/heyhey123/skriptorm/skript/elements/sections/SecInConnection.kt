@@ -3,12 +3,10 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
@@ -65,21 +63,21 @@ class SecInConnection : ScopedBodySection() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return walk(event, false)
-        val trigger = this.trigger ?: return walk(actualEvent, false)
+        if (this.trigger == null) return walk(actualEvent, false)
 
         val name = nameExpr.getSingle(actualEvent)
         if (name == null) {
-            report(actualEvent, trigger, "Connection name is null.")
+            report(actualEvent, "Connection name is null.")
             return walk(actualEvent, false)
         }
 
         val connection = Database.connection(name)
         if (connection == null) {
-            report(actualEvent, trigger, ConnectionScope.unknownConnectionMessage(name))
+            report(actualEvent, ConnectionScope.unknownConnectionMessage(name))
             return walk(actualEvent, false)
         }
         if (!connection.isConnected) {
-            report(actualEvent, trigger, "Connection '$name' is not connected.")
+            report(actualEvent, "Connection '$name' is not connected.")
             return walk(actualEvent, false)
         }
 
@@ -87,7 +85,6 @@ class SecInConnection : ScopedBodySection() {
         if (transaction != null && transaction.database !== connection) {
             report(
                 actualEvent,
-                trigger,
                 "A database transaction is open on another connection. Roll it back before switching."
             )
             return walk(actualEvent, false)
@@ -117,9 +114,9 @@ class SecInConnection : ScopedBodySection() {
         ConnectionScope.popOwned(event, this)
     }
 
-    private fun report(event: Event, trigger: Trigger, message: String) {
+    private fun report(event: Event, message: String) {
         SkriptDatabaseErrors.set(event, message)
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        this.error(message)
     }
 
     override fun toString(event: Event?, debug: Boolean) =

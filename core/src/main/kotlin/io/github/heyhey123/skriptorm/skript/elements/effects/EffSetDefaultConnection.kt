@@ -65,14 +65,14 @@ class EffSetDefaultConnection : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
 
         // Every refusal here goes through DatabaseWork.report rather than through a message of its own,
         // so a statement that did not run counts the same as one that failed: inside a transaction, the
         // body is undone rather than committed as if nothing had happened.
         val name = nameExpr.getSingle(actualEvent)
         if (name == null) {
-            DatabaseWork.report(actualEvent, trigger, "Connection name is null.")
+            DatabaseWork.report(actualEvent, this, "Connection name is null.")
             return next
         }
 
@@ -80,11 +80,11 @@ class EffSetDefaultConnection : Effect() {
         // one can say which of the two happened.
         val connection = Database.connection(name)
         if (connection == null) {
-            DatabaseWork.report(actualEvent, trigger, ConnectionScope.unknownConnectionMessage(name))
+            DatabaseWork.report(actualEvent, this, ConnectionScope.unknownConnectionMessage(name))
             return next
         }
         if (!connection.isConnected) {
-            DatabaseWork.report(actualEvent, trigger, "Connection '$name' is not connected.")
+            DatabaseWork.report(actualEvent, this, "Connection '$name' is not connected.")
             return next
         }
 
@@ -94,7 +94,7 @@ class EffSetDefaultConnection : Effect() {
         if (ConnectionScope.transaction(actualEvent) != null) {
             DatabaseWork.report(
                 actualEvent,
-                trigger,
+                this,
                 "The default connection cannot be changed inside a database transaction. Roll it back first."
             )
             return next
@@ -108,7 +108,7 @@ class EffSetDefaultConnection : Effect() {
                 // The name was there a moment ago, so this is a connection that went away while the
                 // statement was waiting for its turn.
                 if (!moved) {
-                    DatabaseWork.report(actualEvent, trigger, ConnectionScope.unknownConnectionMessage(name))
+                    DatabaseWork.report(actualEvent, this, ConnectionScope.unknownConnectionMessage(name))
                 }
             }
         )

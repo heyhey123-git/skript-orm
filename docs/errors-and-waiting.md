@@ -39,7 +39,7 @@ send "Stored." to console
 - An unset error is displayed as `<none>`. Test it with `is set`, rather than comparing the displayed text.
 - Failures set the error. Outside a transaction, success leaves it unset, which you can use as a success check. Inside a transaction, an earlier error may still be present.
 - **Failure does not stop the trigger.** Subsequent statements still run, so the examples check the error and explicitly `stop`. Do the same when later operations depend on the write succeeding.
-- Failures are also logged to the console with the script line number for administrators to investigate. Scripts read them through `last database error`.
+- Failures are also reported as a Skript runtime error, through Skript's own channel: the console names the script, the syntax, the line number and the line itself, and players with `skript.see_runtime_errors` are told about it. When one line keeps failing, Skript applies its frame limits to those console lines (see `runtime errors.*` in its configuration); what a script reads is always in `last database error`, unaffected.
 
 ## Writing and then reading
 

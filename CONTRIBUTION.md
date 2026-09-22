@@ -219,8 +219,10 @@ section!` in the log and runs the section anyway. Those notes are expected, not 
   pattern and read by nobody, because writes once needed it to ask for that.
 - All values are resolved on the main thread, before dispatch, while local variables are still
   attached to the event.
-- Report user-facing parse problems with `Skript.error(...)` during `init`, and runtime problems
-  through `ErrorPrinter` plus `SkriptDatabaseErrors`.
+- Report user-facing parse problems with `Skript.error(...)` during `init`, and runtime problems the way
+  Skript's own elements do: through the element's inherited `error(...)`
+  (`RuntimeErrorProducer`), so the console names the script, the syntax and the line, with the message
+  kept for scripts in `SkriptDatabaseErrors`.
 
 ---
 

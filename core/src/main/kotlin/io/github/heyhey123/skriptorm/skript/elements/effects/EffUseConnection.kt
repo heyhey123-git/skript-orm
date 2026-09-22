@@ -4,12 +4,10 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
@@ -75,21 +73,21 @@ class EffUseConnection : Effect() {
 
     override fun execute(event: Event?) {
         val actualEvent = event ?: return
-        val trigger = this.trigger ?: return
+        if (this.trigger == null) return
 
         val name = nameExpr.getSingle(actualEvent)
         if (name == null) {
-            report(actualEvent, trigger, "Connection name is null.")
+            report(actualEvent, "Connection name is null.")
             return
         }
 
         val connection = Database.connection(name)
         if (connection == null) {
-            report(actualEvent, trigger, ConnectionScope.unknownConnectionMessage(name))
+            report(actualEvent, ConnectionScope.unknownConnectionMessage(name))
             return
         }
         if (!connection.isConnected) {
-            report(actualEvent, trigger, "Connection '$name' is not connected.")
+            report(actualEvent, "Connection '$name' is not connected.")
             return
         }
 
@@ -103,7 +101,6 @@ class EffUseConnection : Effect() {
         if (open != null && open.database !== connection) {
             report(
                 actualEvent,
-                trigger,
                 "A database transaction is open on another connection. Roll it back before switching."
             )
             return
@@ -115,9 +112,9 @@ class EffUseConnection : Effect() {
         DatabaseWork.clearErrorForStatement(actualEvent)
     }
 
-    private fun report(event: Event, trigger: Trigger, message: String) {
+    private fun report(event: Event, message: String) {
         SkriptDatabaseErrors.set(event, message)
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        this.error(message)
     }
 
     override fun toString(event: Event?, debug: Boolean) =

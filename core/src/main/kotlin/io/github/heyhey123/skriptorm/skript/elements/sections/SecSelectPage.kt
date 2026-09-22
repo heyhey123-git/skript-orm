@@ -2,7 +2,6 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 
 import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
-import ch.njol.skript.lang.Trigger
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
@@ -48,7 +47,7 @@ class SecSelectPage : SecSelectBase() {
 
     private data class PageArguments(val pageIndex: Int, val pageSize: Int)
 
-    override fun resolveExtraArguments(event: Event?, trigger: Trigger): Any {
+    override fun resolveExtraArguments(event: Event?): Any {
         val pageIndex = requireNotNull(pageIndexExpr.getSingle(event)) {
             "Page index expression in 'select page' is null."
         }

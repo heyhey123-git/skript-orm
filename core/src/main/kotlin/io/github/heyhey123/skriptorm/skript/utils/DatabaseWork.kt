@@ -2,7 +2,6 @@ package io.github.heyhey123.skriptorm.skript.utils
 
 import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import io.github.heyhey123.skriptorm.SkriptOrm
@@ -16,6 +15,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
+import org.skriptlang.skript.log.runtime.RuntimeErrorProducer
 
 /**
  * What every asynchronous database element shares: the checks made before a statement is sent, and the
@@ -49,31 +49,39 @@ internal object DatabaseWork {
     }
 
     /**
-     * Resolves the table [tableNameExpr] names, reporting a failure the way the sections do.
+     * Resolves the table [tableNameExpr] names, reporting a failure the way Skript itself reports one.
+     *
+     * [producer] is the effect or section the statement was written as. Reporting through it is what puts
+     * the script, the syntax and the line into the console, and what tells the players watching for
+     * runtime errors which line is failing.
      *
      * Returns null when the caller should let the trigger carry on with its next item instead; a message
      * for `last database error` has already been stored at that point.
      */
-    fun resolveTable(event: Event, trigger: Trigger, tableNameExpr: Expression<String>): Target? {
-        if (skipInactiveTransaction(event, trigger)) return null
+    fun resolveTable(
+        event: Event,
+        producer: RuntimeErrorProducer,
+        tableNameExpr: Expression<String>
+    ): Target? {
+        if (skipInactiveTransaction(event, producer)) return null
 
         val database = ConnectionScope.resolve(event) ?: run {
-            report(event, trigger, ConnectionScope.noConnectionMessage())
+            report(event, producer, ConnectionScope.noConnectionMessage())
             return null
         }
 
         val tableName = tableNameExpr.getSingle(event) ?: run {
-            report(event, trigger, "Table name is null.")
+            report(event, producer, "Table name is null.")
             return null
         }
 
         val table = database.tables[tableName] ?: run {
-            report(event, trigger, "Table '$tableName' not found.")
+            report(event, producer, "Table '$tableName' not found.")
             return null
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
-            report(event, trigger, "Database lifecycle is shutting down.")
+            report(event, producer, "Database lifecycle is shutting down.")
             return null
         }
 
@@ -88,13 +96,13 @@ internal object DatabaseWork {
      * reading. One that was aborted from outside (its timeout, a disconnect) never had the chance to say
      * anything, so it says it now.
      */
-    fun skipInactiveTransaction(event: Event, trigger: Trigger): Boolean {
+    fun skipInactiveTransaction(event: Event, producer: RuntimeErrorProducer): Boolean {
         val transaction = ConnectionScope.transaction(event) ?: return false
         if (transaction.isActive) return false
         if (transaction.state != Transaction.State.ROLLBACK_ONLY) {
             report(
                 event,
-                trigger,
+                producer,
                 transaction.failure?.message
                     ?: "The database transaction is ${transaction.state} and cannot run this statement."
             )
@@ -103,19 +111,24 @@ internal object DatabaseWork {
     }
 
     /**
-     * Reports [message] the way a section does: as the last database error, and in the console.
+     * Reports [message] the way a section does: as the last database error, and through [producer].
+     *
+     * The console half goes through the same channel Skript's own effects use, so the line is named, the
+     * syntax is named and the script line is printed with it, and a server operator watching for runtime
+     * errors hears about it. Skript applies its own frame limits to those lines: a script that fails the
+     * same line over and over is reported the first time and summarised afterwards.
      *
      * It also marks the transaction in effect as rollback-only, which is what makes a statement that
      * never reached the database count the same as one that failed there. A table that was not found is
      * still a statement of the body that did not run, and committing the rest of them would be exactly
      * the half-finished transaction the section exists to prevent.
      */
-    fun report(event: Event?, trigger: Trigger, message: String) {
+    fun report(event: Event?, producer: RuntimeErrorProducer, message: String) {
         event?.let {
             ConnectionScope.transaction(it)?.markFailed(IllegalStateException(message))
             SkriptDatabaseErrors.set(it, message)
         }
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        producer.error(message)
     }
 
     /**
@@ -145,9 +158,14 @@ internal object DatabaseWork {
      * statement did not run". Clearing first is the same rule the affected row count follows, and the
      * reason a read that failed at the database also clears.
      */
-    fun refuseRead(event: Event, trigger: Trigger, message: String, resultVar: Variable<*>) {
+    fun refuseRead(
+        event: Event,
+        producer: RuntimeErrorProducer,
+        message: String,
+        resultVar: Variable<*>
+    ) {
         VariableModifier.clear(resultVar, event)
-        report(event, trigger, message)
+        report(event, producer, message)
     }
 
     /**

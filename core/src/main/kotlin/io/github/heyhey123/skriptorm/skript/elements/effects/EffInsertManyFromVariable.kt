@@ -10,7 +10,6 @@ import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.WriteValues
 import org.bukkit.event.Event
@@ -78,13 +77,13 @@ class EffInsertManyFromVariable : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
         DatabaseWork.clearErrorForStatement(actualEvent)
         AffectedRows.clear(affectedRowsVariable, actualEvent)
 
-        val target = DatabaseWork.resolveTable(actualEvent, trigger, tableNameExpr) ?: return next
+        val target = DatabaseWork.resolveTable(actualEvent, this, tableNameExpr) ?: return next
 
-        val rows = WriteValues.rows(actualEvent, trigger, valuesVariable, target) ?: return next
+        val rows = WriteValues.rows(actualEvent, this, valuesVariable, target) ?: return next
 
         return DatabaseWork.run(
             event = actualEvent,
@@ -93,8 +92,8 @@ class EffInsertManyFromVariable : Effect() {
                 target.withQueries { queries -> queries.insertMany(rows).execute(target.table) }
             },
             deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
-            onFailure = { error ->
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Write failed: ${error.message}")
+            onFailure = { failure ->
+                this.error("Write failed: ${failure.message}")
             }
         )
     }

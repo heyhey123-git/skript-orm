@@ -4,14 +4,12 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.SkriptParser
-import ch.njol.skript.lang.Trigger
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.database.Transaction
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
-import io.github.heyhey123.skriptorm.skript.utils.ErrorPrinter
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
@@ -35,7 +33,7 @@ import org.skriptlang.skript.addon.SkriptAddon
  * [DatabaseWork.run] takes is what carries it.
  */
 @Name("Disconnect Database")
-@Description("Disconnects a database connection asynchronously. Without a name it closes the connection in effect: the innermost 'in connection' scope, then a 'use connection' from this event, then the default one. The named form closes one connection, and the all form closes every connection. The following trigger item runs after disconnection finishes. Failures are logged and exposed as the last database error.")
+@Description("Disconnects a database connection asynchronously. Without a name it closes the connection in effect: the innermost 'in connection' scope, then a 'use connection' from this event, then the default one. The named form closes one connection, and the all form closes every connection. The following trigger item runs after disconnection finishes. Failures are reported as a runtime error and exposed as the last database error.")
 @Example("disconnect from the current database")
 @Example("disconnect from connection \"logs\"")
 @Example("disconnect from all connections")
@@ -79,7 +77,7 @@ class EffDisconnect : Effect() {
 
     override fun walk(event: Event?): TriggerItem? {
         val actualEvent = event ?: return next
-        val trigger = this.trigger ?: return next
+        if (this.trigger == null) return next
 
         // Closing a connection rolls back whatever transaction is open on it, and doing that behind the
         // script's back would turn a half-finished transaction into a silent rollback. Lifecycle paths
@@ -89,7 +87,6 @@ class EffDisconnect : Effect() {
         if (open != null && targets(actualEvent, open)) {
             report(
                 actualEvent,
-                trigger,
                 "A database transaction is open on this connection. Roll it back before disconnecting it."
             )
             return next
@@ -97,7 +94,7 @@ class EffDisconnect : Effect() {
 
         val disconnect = when (matchedPattern) {
             0 -> everyConnection()
-            1 -> namedConnection(actualEvent, trigger)
+            1 -> namedConnection(actualEvent)
             else -> connectionInEffect(actualEvent)
         } ?: return next
 
@@ -105,8 +102,8 @@ class EffDisconnect : Effect() {
             event = actualEvent,
             continuation = next,
             query = { disconnect() },
-            onFailure = { error ->
-                ErrorPrinter.printErrorMessageWithDetail(trigger, "Disconnect failed: ${error.message}")
+            onFailure = { failure ->
+                this.error("Disconnect failed: ${failure.message}")
             }
         )
     }
@@ -124,16 +121,16 @@ class EffDisconnect : Effect() {
         return { Database.disconnectAll() }
     }
 
-    private fun namedConnection(event: Event, trigger: Trigger): (suspend () -> Unit)? {
+    private fun namedConnection(event: Event): (suspend () -> Unit)? {
         val name = nameExpr?.getSingle(event)
         if (name == null) {
-            report(event, trigger, "Connection name is null.")
+            report(event, "Connection name is null.")
             return null
         }
 
         val connection = Database.connection(name)
         if (connection == null) {
-            report(event, trigger, ConnectionScope.unknownConnectionMessage(name))
+            report(event, ConnectionScope.unknownConnectionMessage(name))
             return null
         }
 
@@ -151,9 +148,9 @@ class EffDisconnect : Effect() {
         return { connection.disconnect() }
     }
 
-    private fun report(event: Event, trigger: Trigger, message: String) {
+    private fun report(event: Event, message: String) {
         SkriptDatabaseErrors.set(event, message)
-        ErrorPrinter.printErrorMessageWithDetail(trigger, message)
+        this.error(message)
     }
 
     override fun toString(event: Event?, debug: Boolean) = when (matchedPattern) {
