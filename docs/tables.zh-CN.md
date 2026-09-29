@@ -42,9 +42,21 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 ## 注册做了什么、没做什么
 
-在 SQL 后端，注册会执行 `CREATE TABLE IF NOT EXISTS`，并等待完成。它不会删除、修改或检查已有表结构。
+在 SQL 后端，注册会执行 `CREATE TABLE IF NOT EXISTS` 并等待完成，然后把表从服务端读回来，与声明逐项比较。
 
-**已有表会原样保留。** 在脚本中新增列后重新加载，数据库中的表结构不会改变。插件虽然记录了新列，但数据库中没有对应列，引用它的操作会在运行时报错，其他操作仍可正常执行。此时**不会**出现注册警告，因为注册本身已经成功。要修改表结构，请自行执行 `ALTER TABLE`；在开发数据库中，也可以删除表后由插件重新创建。
+**已有表会原样保留。** 在脚本中新增列后重新加载，数据库中的表结构不会改变——插件只更新自己的定义。注册本身是成功的，因此不会给出警告；也正是 `CREATE TABLE IF NOT EXISTS` 让「每次启动都注册同一张表」是安全的。
+
+**声明与表不一致时，注册当场失败。** 由于上面那张表永远不会被修改，如果脚本给一张已存在的表加上 `age: int`，本来会拖到第一条用到该列的语句才报服务端的 `Unknown column 'age' in 'INSERT INTO'`——那条消息指向写入，而不是注册。现在 `register a database table` 会直接失败，`last database error` 会把差异说清楚：
+
+```
+Registered table 'users' does not match the table in the database. Registration is 'CREATE TABLE IF
+NOT EXISTS', so a table that already exists is never changed, and every statement that uses the column
+or type below will fail.
+Column(s) 'age' are declared but missing from the table. The table holds: 'id', 'name'.
+Drop the table and register it again, or change the table in the database to match this declaration.
+```
+
+比较的内容包括：有哪些列、每列的类型与长度、非主键列上的 `not null`、以及哪一列是主键。**不比较** `auto increment`，因为两种服务端通过不同的元数据报告它。要改表结构，请自行执行 `ALTER TABLE`；在开发数据库中也可以删除表后由插件重新创建。
 
 **注册信息按连接保存。** 在同一连接上再次执行 `register a database table "users"`，会报 `Table 'users' is already registered.`。常见原因包括多个脚本在共享连接上注册同名表，或重新加载脚本后未重建连接便再次注册。下面的写法每次都先建立新连接，可以避免重复注册：
 

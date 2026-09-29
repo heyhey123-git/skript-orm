@@ -120,6 +120,33 @@ class MysqlSchemaIntegrationTest : MysqlIntegrationTestBase() {
         assertEquals(listOf("kept"), allUsers().map { it.name })
     }
 
+    /**
+     * The reported failure, end to end: a declaration that adds a column to a table that already exists.
+     *
+     * `CREATE TABLE IF NOT EXISTS` leaves the table alone, so without the comparison the registration
+     * succeeds here and the first insert naming `age` is refused by MySQL with
+     * `Unknown column 'age' in 'INSERT INTO'` — a message about the insert, at the insert's line, for a
+     * mistake made in the registration.
+     */
+    @Test
+    fun `a declaration the existing table does not match is refused at registration`() = runBlocking<Unit> {
+        executeSql("DROP TABLE IF EXISTS `older_users`")
+        executeSql("CREATE TABLE `older_users` (`id` INT NOT NULL PRIMARY KEY, `name` VARCHAR(64) NOT NULL)")
+        val withAge = Table(
+            "older_users",
+            listOf(
+                Column("id", IntJdbcDataType(), isPrimaryKey = true, isNullable = false),
+                Column("name", StringJdbcDataType(), isNullable = false, size = 64),
+                Column("age", IntJdbcDataType())
+            )
+        )
+
+        val thrown = assertFailsWith<IllegalArgumentException> { database.registerTable(withAge) }
+
+        assertTrue("'age'" in thrown.message.orEmpty(), thrown.message.orEmpty())
+        assertTrue("'id', 'name'" in thrown.message.orEmpty(), thrown.message.orEmpty())
+    }
+
     @Test
     fun `reserved words are quoted and usable as identifiers`() = runBlocking<Unit> {
         val reserved = Table(

@@ -30,7 +30,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Register Database Table")
-@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Failures are exposed as the last database error.")
+@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Registering is idempotent: an existing table is left as it is, and the declaration is then compared with it, so a declaration that no longer matches the table fails here instead of at the first statement that uses the difference. Failures are exposed as the last database error.")
 @Example(
     """register a database table "users":
     id: bigint, primary key, auto increment, not null

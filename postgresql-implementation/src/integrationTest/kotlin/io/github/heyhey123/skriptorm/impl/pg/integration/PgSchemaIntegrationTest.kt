@@ -5,6 +5,7 @@ import io.github.heyhey123.skriptorm.table.Table
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -71,5 +72,33 @@ class PgSchemaIntegrationTest : PgIntegrationTestBase() {
         assertTrue(primaryKeys(keyless.name).isEmpty())
         assertEquals("integer", columnsOf(keyless.name).getValue("value").dataType)
         assertEquals(20, columnsOf(keyless.name).getValue("label").size)
+    }
+
+    /**
+     * The same comparison the MySQL suite makes, against PostgreSQL's own metadata: its driver reports
+     * `int4`, `varchar` and `bool` where the declaration says `INT`, `VARCHAR` and `BOOLEAN`, so this is
+     * also what proves the two spellings are recognised as the same storage rather than reported as a
+     * difference.
+     */
+    @Test
+    fun `a declaration the existing table does not match is refused at registration`() = runBlocking<Unit> {
+        executeSql("DROP TABLE IF EXISTS \"orm_older_users\"")
+        executeSql(
+            "CREATE TABLE \"orm_older_users\" (\"id\" INTEGER NOT NULL PRIMARY KEY, " +
+                "\"name\" VARCHAR(64) NOT NULL)"
+        )
+        val withAge = Table(
+            "orm_older_users",
+            listOf(
+                Column("id", intType, isPrimaryKey = true, isNullable = false),
+                Column("name", stringType, isNullable = false, size = 64),
+                Column("age", intType)
+            )
+        )
+
+        val thrown = assertFailsWith<IllegalArgumentException> { database.registerTable(withAge) }
+
+        assertTrue("'age'" in thrown.message.orEmpty(), thrown.message.orEmpty())
+        assertTrue("'id', 'name'" in thrown.message.orEmpty(), thrown.message.orEmpty())
     }
 }

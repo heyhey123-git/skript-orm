@@ -59,14 +59,31 @@ row again by another column; see [Cookbook](cookbook.md).
 
 ## What registering does, and what it does not
 
-On SQL backends, registration runs `CREATE TABLE IF NOT EXISTS` and waits for completion.
-It does not drop, alter, or inspect existing table structures.
+On SQL backends, registration runs `CREATE TABLE IF NOT EXISTS`, waits for completion, and then reads the
+table back from the server and compares it with the declaration.
 
 **Existing tables are left unchanged.** Adding a column to the script and reloading updates the plugin's
-definition, not the database schema. Operations that reference the missing column fail at runtime;
-other operations continue to work. Registration produces no warning because it has succeeded.
-To change the schema, run `ALTER TABLE` yourself. In a development database, you can also drop the
-table and let the plugin recreate it.
+definition, not the database schema. Registration produces no warning because it has succeeded, and
+`CREATE TABLE IF NOT EXISTS` is what makes registering the same table on every startup safe.
+
+**A declaration that no longer matches the table is refused at registration.** Because the table above is
+never altered, a script that adds `age: int` to a table that already exists without it would otherwise
+fail later, at the first statement that names the column, with the server's
+`Unknown column 'age' in 'INSERT INTO'` — which names the write rather than the registration. Instead,
+`register a database table` fails right there and `last database error` names the difference:
+
+```
+Registered table 'users' does not match the table in the database. Registration is 'CREATE TABLE IF
+NOT EXISTS', so a table that already exists is never changed, and every statement that uses the column
+or type below will fail.
+Column(s) 'age' are declared but missing from the table. The table holds: 'id', 'name'.
+Drop the table and register it again, or change the table in the database to match this declaration.
+```
+
+The comparison covers which columns exist, each column's type and size, `not null` on columns that are
+not the key, and which column is the primary key. It does not compare `auto increment`, which the two
+servers report through different metadata. To change the schema, run `ALTER TABLE` yourself, or drop the
+table in a development database and let the plugin recreate it.
 
 **Registrations belong to a connection.** Registering `"users"` again on the same connection fails with
 `Table 'users' is already registered.`. This can happen when two scripts register the same table on a

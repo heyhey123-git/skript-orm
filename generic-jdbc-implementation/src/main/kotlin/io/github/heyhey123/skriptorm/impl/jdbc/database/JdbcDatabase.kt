@@ -148,6 +148,12 @@ open class JdbcDatabase(
      * Leaving this one out would make "30 seconds unless you say otherwise" untrue of the statements
      * most likely to wait: MySQL bounds a `CREATE TABLE` waiting on a metadata lock by
      * `lock_wait_timeout`, whose default is a year.
+     *
+     * The table the server holds is then read back and compared with [table]. `CREATE TABLE IF NOT EXISTS`
+     * leaves an existing table exactly as it is, which is what keeps a restart from destroying rows and
+     * also what lets a declaration drift away from the table it names: a column added to a script never
+     * arrives, and the first statement that mentions it is refused by the server with a message about that
+     * statement. The comparison turns that silence into a failure here, where the declaration is.
      */
     override suspend fun doRegisterTable(table: Table) {
         val source = checkNotNull(dataSource) {
@@ -160,6 +166,7 @@ open class JdbcDatabase(
                 if (statementTimeoutSeconds > 0) statement.queryTimeout = statementTimeoutSeconds
                 statement.executeUpdate(sql)
             }
+            SchemaVerification.requireMatches(connection, table)
         }
     }
 }
