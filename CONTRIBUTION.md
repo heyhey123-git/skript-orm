@@ -86,17 +86,17 @@ the KDoc on `MINIMUM_SKRIPT_VERSION` for why a version-qualified `depend` entry 
 `docs/minebbs-resource.bbcode.txt` and `docs/skunity-resource.bbcode.txt` are the resource posts, kept in
 the repository but deliberately untracked: they are pasted into a forum by hand and nothing reads them.
 
-A release edits one section of a post and nothing else. Everything a version added or changed is written
-into that one section, tersely — a sentence or two per change, saying what it does and why it matters to
-someone deciding whether to update — and the section is rewritten for each release rather than added to,
-so a post carries the current version and not a history of them. The description, requirements and install
-steps say only what does not change, and the feature list says what the plugin is rather than what it
-gained. Keeping it that way is the point: a reader sees what is new without the rest of the post being
-rewritten around them, and a new feature is never folded into a description that then has to be re-read to
-be trusted. `CHANGELOG.md` is where the full account lives, one section per released version.
+A post describes what the plugin is, and nothing about which version did what. What a release added or
+changed is written in the update description the forum asks for when publishing one, not here: a post
+carries no version and no release notes, so a release does not edit it at all unless the syntax itself
+changed. The description, requirements and install steps say only what does not change, and the feature
+list says what the plugin is rather than what it recently gained. Keeping it that way is the point — a
+reader sees the same post they saw before, and what is new is where new things are read: the update
+description, whose full record is `CHANGELOG.md`.
 
-When a feature is removed or a pattern renamed, the feature list and the pattern list are edited then,
-because leaving them would describe syntax that no longer exists.
+A post is edited only when it would otherwise be wrong: a feature removed, a pattern renamed, a
+requirement or a supported backend changed. Then the feature list or the pattern list is corrected,
+because leaving it would describe syntax that no longer exists.
 
 ---
 
