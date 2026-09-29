@@ -152,6 +152,8 @@ class SchemaVerificationTest {
         assertEquals("REAL", SchemaVerification.normalizeTypeName("float4"))
         assertEquals("DOUBLE PRECISION", SchemaVerification.normalizeTypeName("float8"))
         assertEquals("BOOLEAN", SchemaVerification.normalizeTypeName("bool"))
+        // What MySQL's driver reports for the `BOOLEAN` column the dialect wrote, which is `TINYINT(1)`.
+        assertEquals("BOOLEAN", SchemaVerification.normalizeTypeName("bit"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("character varying"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("VARCHAR(64)"))
         assertEquals("BLOB", SchemaVerification.normalizeTypeName("bytea"))

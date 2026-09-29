@@ -257,6 +257,10 @@ internal object SchemaVerification {
         "FLOAT4" to "REAL",
         "FLOAT8" to "DOUBLE PRECISION",
         "BOOL" to "BOOLEAN",
+        // MySQL has no boolean of its own: `BOOLEAN` is `TINYINT(1)`, and Connector/J reports the column
+        // it created as `BIT` — one bit, which is the same one-byte column. Neither name can be declared
+        // here except as `boolean`, so both are that type.
+        "BIT" to "BOOLEAN",
         "CHARACTER VARYING" to "VARCHAR",
         "CHARACTER LARGE OBJECT" to "BLOB",
         "BINARY LARGE OBJECT" to "BLOB",
