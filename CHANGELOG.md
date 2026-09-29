@@ -13,6 +13,32 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+### Added
+
+- **Raw statements: SQL and command documents a script writes itself.** `execute query`, `execute update`
+  and `execute command` send a statement exactly as written — the plugin does not parse it, check it against
+  a registered table, or translate it between implementations — which is what makes migrations, indexes,
+  vendor extensions, and filters whose shape is only known while the script runs expressible at all. Values
+  are bound to `?` placeholders by a `with` clause rather than pasted, and the count has to match the number
+  of placeholders before anything is sent; nothing else is checked, and the documentation says so first. A
+  statement the connection cannot take is refused by name before it reaches the server: a SQL connection
+  takes `execute query` and `execute update`, a document one takes `execute command`. See
+  [Raw statements](docs/raw-statements.md). **This is unsafe by design and has no safety net.**
+
+### Fixed
+
+- **A connection property nothing reads is now refused instead of dropped.** Writing `database: "sicilia_db"`
+  on a MySQL connection used to connect to a server with no default database and fail later, at the first
+  statement that needed one, naming neither the property nor the connection; a typo in a property name did
+  nothing at all and looked like a property that had been honoured. Each implementation now declares the
+  names it reads, and `create a connection` checks the body against that set while the script is still on the
+  line.
+- **A registration that no longer matches the table it names is refused.** Registration is
+  `CREATE TABLE IF NOT EXISTS`, so a column added to a script never reached a table that already existed and
+  the first statement to mention it failed with the server's `Unknown column ...`, at the insert's line. The
+  table is now read back and compared with the declaration — columns, types, sizes, `not null` and the
+  primary key — and the failure lands where the declaration is.
+
 ### Changed
 
 - **A failure reports itself the way Skript's own effects do.** When a statement fails, the console line
@@ -21,6 +47,9 @@ the previous release used, because the notes are the release body and nothing el
   errors — those holding `skript.see_runtime_errors`. What a script reads through `last database error` is
   unchanged, and stays out of Skript's reach: its per-line frame limits summarise a line that keeps failing
   in the console, never in the script.
+- **Startup reports which database implementations loaded.** A server owner who expected a type and does not
+  see it in the list has the answer without reading the changelog, and an implementation that failed to load
+  is named with the reason its initializer gave rather than passing in silence.
 
 ## [1.2.0] - 2026-09-19
 
