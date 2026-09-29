@@ -385,8 +385,4 @@ every 5 seconds:
     else:
         log "SKRIPTORM_SELFTEST detail: sqlite round trip -> ok"
 
-    # Closed here rather than left open, for the reason `29-raw-sql.sk` gives: a named connection outlives
-    # the script that made it.
-    disconnect from connection "sqlite"
-
     set {skriptorm::selftest::done::sqlite} to true

@@ -445,14 +445,18 @@ val serverTestDatabaseChecks = mapOf(
     // closed: the default still answers for its own table, and the named connection is gone.
     "connections disconnect" to "ran",
     "connections default after" to "",
-    "connections gone" to "No connection named 'secondary', and no connection has been created yet.",
+    // The refusal has two shapes, and which one is written depends on whether any connection is named at
+    // that moment — a fact belonging to whichever other script has run by then, not to this one. What this
+    // script owns is that the name is reported as unknown, so that much is checked and the rest is left to
+    // `ConnectionScopeTest`, which pins both shapes directly.
+    "connections gone" to "No connection named 'secondary'.",
     // `use connection` switches for the rest of the event, and the connection it names has no table of
     // its own: the lookup failing is what shows the switch reached it. The named disconnect then closes
     // that same connection, whatever the switch says.
     "connections create tertiary" to "",
     "connections used" to "Table 'orm_roundtrip' not found.",
     "connections named disconnect" to "ran",
-    "connections tertiary gone" to "No connection named 'tertiary', and no connection has been created yet.",
+    "connections tertiary gone" to "No connection named 'tertiary'.",
     // Transactions. `row1` is the row the first transaction committed and `row2` is `<none>` as long as
     // nothing else survived, so one line says both that a commit worked and that a rollback did.
     "transaction commit" to "",
@@ -642,7 +646,12 @@ abstract class VerifySkriptServerTest : DefaultTask() {
                 // An empty expectation means the line only has to be there. The database mode cannot
                 // predict how far each element got before the round trip states the real assertions.
                 message.isEmpty() -> Unit
-                actual != message -> problems += "'$element' reported '$actual' instead of '$message'."
+                // An expectation is checked as a prefix, so an entry that has to account for the whole line
+                // writes the whole line. The rule exists for the lines whose log appends a clause about
+                // connections the reporting script does not own, and no other line here starts with another's
+                // expectation.
+                actual == message || actual.startsWith(message) -> Unit
+                else -> problems += "'$element' reported '$actual' instead of '$message'."
             }
         }
 
