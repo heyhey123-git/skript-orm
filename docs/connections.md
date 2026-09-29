@@ -229,6 +229,8 @@ from then on, because the connection they resolve to is closed.
 - The tables registered for a connection belong to that connection. Another connection starts with
   none registered, so registering the same table name on two connections is not a conflict. See
   [Tables](tables.md).
+- A connection also accepts [raw statements](raw-statements.md) — SQL it sends as written, with none of
+  the checks the statements above get. They run as this connection's account, with its privileges.
 - The plugin closes every connection when the server disables the plugin, and `disconnect from all
   connections` closes every one of them: a connection that lost the default role either has a name and is
   still registered, or was closed when it lost the role. See [Choosing the default](#choosing-the-default).

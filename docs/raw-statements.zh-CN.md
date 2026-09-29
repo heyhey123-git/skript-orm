@@ -6,6 +6,8 @@
 
 本文档其他页面里的语句，都建立在你注册过的表之上。只有这一页不是。
 
+配套示例见 [`docs/examples/raw-statements.sk`](examples/raw-statements.sk)。它们会被服务端自检解析，因此示例里出现的语法都是插件确实接受的语法。
+
 ## 什么时候该用它
 
 - **迁移。** `ALTER TABLE`、`CREATE INDEX`、数据修补——声明式语法没有对应写法的事。
@@ -22,7 +24,8 @@
 ```sk
 execute query "SELECT id, name FROM users WHERE age > ?" with (18) and store the result in {_rows::*}
 execute update "ALTER TABLE users ADD COLUMN age INT NULL"
-execute update "UPDATE users SET age = ? WHERE name = ?" with (30, "Alice") and store affected rows in {_rows}
+set {_values::*} to 30, "Alice"
+execute update "UPDATE users SET age = ? WHERE name = ?" with {_values::*} and store affected rows in {_rows}
 ```
 
 - **`execute query`** 存结果行。键是服务端报告的列标签，行号从 1 起，与 `select many` 的形状完全一致：`{_rows::1::name}`、`{_rows::2::name}`。别名就是你读的名字，所以 `SELECT name AS who` 给的是 `{_rows::1::who}`。没有匹配到行就是什么都不存，这不算失败。
@@ -47,8 +50,13 @@ send "现在有 %{_answer::n}% 个用户。"
 在要放值的地方写 `?`，然后在 `with` 子句里按同样顺序给出值：
 
 ```sk
-execute query "SELECT name FROM users WHERE age > ? AND language = ?" with (18, "zh-CN") and store the result in {_rows::*}
+execute query "SELECT name FROM users WHERE age > ?" with (18) and store the result in {_rows::*}
+
+set {_values::*} to 18, "zh-CN"
+execute query "SELECT name FROM users WHERE age > ? AND language = ?" with {_values::*} and store the result in {_rows::*}
 ```
+
+**这个子句只接受一个值，或一个列表变量——而这是它最容易让人写错的地方。** `with (18, "zh-CN")`（用字面量写出的两个值）会在**解析期**被拒绝，并明确说明原因。Skript 会把这样的列表作为**未转换的字面量**交给语句，而语句在运行期无法读取它；若不拒绝，代价就是语句执行到一半抛异常，而不是在脚本那一行上报错。单个值不必用变量，多于一个就必须用。
 
 - 值的个数必须与语句里 `?` 的个数一致，不一致会在**发出之前**被拒绝。
 - 值由驱动绑定，因此值永远不可能被当成 SQL 读取。这是本功能唯一提供的保护，也是**绝不该把值拼进语句**的原因。

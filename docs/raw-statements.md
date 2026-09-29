@@ -6,6 +6,8 @@
 
 Everywhere else in this documentation, a statement is built from a table you registered. This page is the one place where that stops being true.
 
+Companion examples live in [`docs/examples/raw-statements.sk`](examples/raw-statements.sk). They are parsed by the server test, so the syntax they show is syntax the plugin accepts.
+
 ## When to use one
 
 - **A migration.** `ALTER TABLE`, `CREATE INDEX`, a data fix-up — the things a declaration has no syntax for.
@@ -22,7 +24,8 @@ Two statements, because a relational server answers in two shapes: rows, or a co
 ```sk
 execute query "SELECT id, name FROM users WHERE age > ?" with (18) and store the result in {_rows::*}
 execute update "ALTER TABLE users ADD COLUMN age INT NULL"
-execute update "UPDATE users SET age = ? WHERE name = ?" with (30, "Alice") and store affected rows in {_rows}
+set {_values::*} to 30, "Alice"
+execute update "UPDATE users SET age = ? WHERE name = ?" with {_values::*} and store affected rows in {_rows}
 ```
 
 - **`execute query`** stores rows. The keys are the column labels the server reported, numbered from one, exactly as `select many` stores its result: `{_rows::1::name}`, `{_rows::2::name}`. An alias is the name you read, so `SELECT name AS who` gives `{_rows::1::who}`. A read that matched nothing stores nothing, which is not a failure.
@@ -47,8 +50,13 @@ There are no parameters. A command is the whole statement, so there is no placeh
 Write a `?` where a value goes, and give the values in the `with` clause, in the same order:
 
 ```sk
-execute query "SELECT name FROM users WHERE age > ? AND language = ?" with (18, "zh-CN") and store the result in {_rows::*}
+execute query "SELECT name FROM users WHERE age > ?" with (18) and store the result in {_rows::*}
+
+set {_values::*} to 18, "zh-CN"
+execute query "SELECT name FROM users WHERE age > ? AND language = ?" with {_values::*} and store the result in {_rows::*}
 ```
+
+**The clause takes one value or a list variable, and that is the one mistake it makes easy.** `with (18, "zh-CN")` — two values written out of literals — is refused while the script is parsed, and the refusal says so. Skript hands such a list to the statement as unparsed literals, which it will not read once the script runs, so the alternative would be an exception in the middle of a statement instead of an error on its line. A single value needs no variable; more than one does.
 
 - The number of values must match the number of `?` characters in the statement. A mismatch is refused before anything is sent.
 - The values are bound by the driver, so a value can never be read as SQL. This is the only protection this feature offers, and it is why you should never build a statement by pasting values into it.

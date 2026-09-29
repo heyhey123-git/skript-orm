@@ -107,6 +107,10 @@ connects before registering can therefore be reloaded: it replaces the connectio
 registering on the old one. Only duplicate registration on the same connection is rejected.
 See [Connections](connections.md).
 
+A statement that is not built from a registration is a [raw statement](raw-statements.md). It is sent as
+written, so it is not compared with the table it names — not the columns, not the types, not the table's
+existence. Everything on this page is about the declared form, which is the one that is checked.
+
 ## Failures
 
 `register a database table` has no `and wait`: it always waits, and a failure is exposed as
