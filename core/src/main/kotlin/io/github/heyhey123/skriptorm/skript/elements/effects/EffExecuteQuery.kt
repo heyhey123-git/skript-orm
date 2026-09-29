@@ -27,7 +27,7 @@ loop {_rows::*}:
     send "%{_rows::%loop-index%::name}%"
 """
 )
-@Since("1.2.0")
+@Since("1.3.0")
 class EffExecuteQuery : EffRawStatementBase() {
 
     companion object {

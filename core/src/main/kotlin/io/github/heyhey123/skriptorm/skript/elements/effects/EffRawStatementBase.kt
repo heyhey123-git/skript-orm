@@ -3,6 +3,7 @@ package io.github.heyhey123.skriptorm.skript.elements.effects
 import ch.njol.skript.Skript
 import ch.njol.skript.lang.Effect
 import ch.njol.skript.lang.Expression
+import ch.njol.skript.lang.LiteralList
 import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
@@ -61,9 +62,26 @@ abstract class EffRawStatementBase : Effect() {
     ): Boolean {
         statementExpr = expressions[0] as Expression<String>
 
+        // The `with` clause is optional, and Skript pads an omitted group with null rather than leaving the
+        // slot out — so the slot being at an index says nothing about whether it was written. A statement
+        // without parameters, which is the common case for DDL, has no expression here at all.
+        //
+        // The values are read as a list while the script runs, and a list built from literals cannot be read
+        // that way: `with (18, "A")` arrives as a `LiteralList` whose elements are unparsed, and asking it for
+        // its values throws "UnparsedLiterals must be converted before use". A single value arrives as an
+        // ordinary literal and a list variable arrives already converted, so those are what this takes, and a
+        // literal list is refused here — on its own line, at parse time — instead of while the statement runs.
         val parameters = parameterIndex(matchedPattern)
-        if (parameters >= 0) {
-            parameterExpr = ExpressionsHelper.withAnyType(expressions[parameters]!!)
+        val parameterSlot = if (parameters >= 0) expressions[parameters] else null
+        if (parameterSlot != null) {
+            if (parameterSlot is LiteralList<*>) {
+                Skript.error(
+                    "The values after 'with' must be one value or a list variable, such as {_values::*}, " +
+                        "because a list written out of literals cannot be read by this statement."
+                )
+                return false
+            }
+            parameterExpr = ExpressionsHelper.withAnyType(parameterSlot)
         }
 
         if (storesAffectedRows) {

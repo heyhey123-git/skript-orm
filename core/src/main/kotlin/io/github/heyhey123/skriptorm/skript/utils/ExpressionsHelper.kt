@@ -17,12 +17,27 @@ object ExpressionsHelper {
      * should take, and reading one that was never converted throws instead of returning the value. A
      * `%object%` pattern is exactly where that happens, because it is the syntax that has to decide.
      * Anything already parsed comes back as it is.
+     *
+     * @return the converted expression, or null when the literal cannot be read as any type — which is the
+     *   caller's to report, since only the caller can say what the value was for
      */
     @Suppress("UNCHECKED_CAST")
-    fun withAnyType(expression: Expression<*>): Expression<Any> {
+    fun convertToAnyType(expression: Expression<*>): Expression<Any>? {
         if (expression !is UnparsedLiteral) return expression as Expression<Any>
-        return (expression.getConvertedExpression(Any::class.java) ?: expression) as Expression<Any>
+        return expression.getConvertedExpression(Any::class.java) as Expression<Any>?
     }
+
+    /**
+     * [convertToAnyType], falling back to the expression as it stands.
+     *
+     * That fallback is what a caller reading a single value wants. It is a trap for one reading a *list*: an
+     * `UnparsedLiteral` answers `getSingle` by reparsing itself, but refuses `getAll` with "UnparsedLiterals
+     * must be converted before use". A syntax that reads a list should call [convertToAnyType] instead and
+     * report the refusal itself, at parse time, rather than reach that exception while the script runs.
+     */
+    @Suppress("UNCHECKED_CAST")
+    fun withAnyType(expression: Expression<*>): Expression<Any> =
+        convertToAnyType(expression) ?: expression as Expression<Any>
 
     /**
      * Resolves [columnName] in [table].

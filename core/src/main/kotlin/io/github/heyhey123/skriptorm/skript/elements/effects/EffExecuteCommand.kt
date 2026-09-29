@@ -29,7 +29,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 send "There are %{_answer::n}% users."
 """
 )
-@Since("1.2.0")
+@Since("1.3.0")
 class EffExecuteCommand : EffRawStatementBase() {
 
     companion object {

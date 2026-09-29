@@ -36,10 +36,12 @@ every 5 seconds:
         log "SKRIPTORM_SELFTEST=FAIL raw create count read '%{_rows}%' instead of the server's 0"
 
     # Two rows in one statement: the parameters are bound by position, and the count is what the server
-    # affected.
+    # affected. The values come from a list variable rather than out of literals, because a list written out
+    # of literals cannot be read by a statement that runs later; the single-value statements below can.
     in connection "raw":
+        set {_params::*} to 1, "Alice", 30, 2, "Bob", 40
         set {_rows} to 7
-        execute update "INSERT INTO raw_probe (id, name, age) VALUES (?, ?, ?), (?, ?, ?)" with (1, "Alice", 30, 2, "Bob", 40) and store affected rows in {_rows}
+        execute update "INSERT INTO raw_probe (id, name, age) VALUES (?, ?, ?), (?, ?, ?)" with {_params::*} and store affected rows in {_rows}
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL raw insert: %last database error%"
     if {_rows} is not 2:

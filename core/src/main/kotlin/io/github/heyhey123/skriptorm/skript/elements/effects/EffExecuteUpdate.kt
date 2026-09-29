@@ -25,7 +25,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 execute update "UPDATE users SET age = ? WHERE name = ?" with (30, "Alice") and store affected rows in {_rows}
 """
 )
-@Since("1.2.0")
+@Since("1.3.0")
 class EffExecuteUpdate : EffRawStatementBase() {
 
     companion object {
