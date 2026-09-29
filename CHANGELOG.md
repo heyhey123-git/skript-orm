@@ -13,6 +13,15 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-09-29
+
+A release about what a script can do when the declaration is not enough, and about failing where the mistake
+is. Raw statements let a script write SQL or a command document itself, for the migrations, indexes and
+vendor-specific statements no declaration can express — and they are unsafe by design, which the documentation
+says before anything else. Two refusals join them: a connection property nothing reads is now reported instead
+of dropped, and a registration that no longer matches its table is reported on the declaration rather than
+later, by the server, against an insert.
+
 ### Added
 
 - **Raw statements: SQL and command documents a script writes itself.** `execute query`, `execute update`
@@ -50,6 +59,8 @@ the previous release used, because the notes are the release body and nothing el
 - **Startup reports which database implementations loaded.** A server owner who expected a type and does not
   see it in the list has the answer without reading the changelog, and an implementation that failed to load
   is named with the reason its initializer gave rather than passing in silence.
+
+**Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.2.0...v1.3.0
 
 ## [1.2.0] - 2026-09-19
 
