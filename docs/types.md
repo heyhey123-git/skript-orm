@@ -89,6 +89,7 @@ Scripts can read and write SQL NULL, with a separate rule for each direction:
 A value that does not fit the column type fails the operation. `last database error` identifies the column and expected type. Range checks and precision loss need to be considered separately:
 
 - **Integer range checks happen before the statement is sent.** `tinyint` holds −128…127, `int` holds −2147483648…2147483647, and `bigint` holds 64-bit integers. Out-of-range values produce an error rather than being cut down to fit. **Fractions written to integer columns are still truncated toward zero**: writing `1.7` to an `int` column stores `1`, consistent with Skript's integer conversion.
+- **A number written to a `string` column is stored as its digits.** `42` and `42.0` both store `"42"`, and `1.5` stores `"1.5"`, so the whole-number form a script writes is the whole-number form it reads back. Skript has no conversion from a number to text, so without this rule the value would be refused — as a number literal that cannot be parsed as text, or as a variable that "does not fit" a text column. A value that is not a number is unaffected: text is written as the text it is.
 - **`float` uses four bytes; `double` can represent integers exactly up to 2^53.** Writing `0.1` to a `float` column returns `0.10000000149011612`, and writing a `bigint`-sized number to a `double` column can lose low bits. These are precision limits of the types, not errors the plugin can prevent.
 
 See [Errors and waiting](errors-and-waiting.md).
