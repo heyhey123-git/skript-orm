@@ -310,6 +310,8 @@ private object TransactionNoDataTypes : DataTypes() {
 /** Satisfies the lifecycle's "queries must be initialized" check; no test here executes a query. */
 private object TransactionQueries : Queries {
 
+    override val typeName: String = "Unused"
+
     override fun selectById(id: Any): SelectById = unusedTransactionQuery()
     override fun selectOne(where: WhereClause?): SelectOne = unusedTransactionQuery()
     override fun selectMany(where: WhereClause?): SelectMany = unusedTransactionQuery()

@@ -3,6 +3,9 @@ package io.github.heyhey123.skriptorm.skript
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffDeleteById
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffDeleteUnfiltered
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffDisconnect
+import io.github.heyhey123.skriptorm.skript.elements.effects.EffExecuteCommand
+import io.github.heyhey123.skriptorm.skript.elements.effects.EffExecuteQuery
+import io.github.heyhey123.skriptorm.skript.elements.effects.EffExecuteUpdate
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffInsertIfAbsentFromVariable
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffInsertManyFromVariable
 import io.github.heyhey123.skriptorm.skript.elements.effects.EffInsertOneFromVariable
@@ -47,6 +50,9 @@ internal fun registerElements(addon: SkriptAddon) {
     EffDeleteById.register(addon)
     EffDeleteUnfiltered.register(addon)
     EffDisconnect.register(addon)
+    EffExecuteCommand.register(addon)
+    EffExecuteQuery.register(addon)
+    EffExecuteUpdate.register(addon)
     EffInsertIfAbsentFromVariable.register(addon)
     EffInsertManyFromVariable.register(addon)
     EffInsertOneFromVariable.register(addon)

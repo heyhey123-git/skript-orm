@@ -898,6 +898,8 @@ private object NoDataTypes : DataTypes() {
 /** Satisfies the lifecycle's "queries must be initialized" check; no test here executes a query. */
 private object UnusedQueries : Queries {
 
+    override val typeName: String = "Unused"
+
     override fun selectById(id: Any): SelectById = unusedQuery()
     override fun selectOne(where: WhereClause?): SelectOne = unusedQuery()
     override fun selectMany(where: WhereClause?): SelectMany = unusedQuery()

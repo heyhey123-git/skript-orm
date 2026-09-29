@@ -9,6 +9,27 @@ import io.github.heyhey123.skriptorm.condition.WhereClause
 interface Queries {
 
     /**
+     * The type name a script connected with, for messages that have to name the backend — such as the
+     * refusal a raw statement of the wrong kind meets.
+     *
+     * It is the name from [io.github.heyhey123.skriptorm.database.DatabaseFactory.typeName], not a class
+     * name, because it is the name the script wrote and the only one it can act on. It names the backend;
+     * it is never what decides whether a statement is accepted.
+     */
+    val typeName: String
+
+    /**
+     * The shape of this backend's own raw entry point, or null when it has none.
+     *
+     * This is the whole of what the core knows about backends: it never asks what kind of database it is
+     * talking to, and it enumerates nothing. An implementation that takes raw SQL overrides [rawQuery] and
+     * [rawUpdate]; one that takes command documents overrides [rawCommand]. The methods that are left
+     * alone refuse, and this value is what lets the refusal name the alternative that does exist.
+     */
+    val rawForm: RawForm?
+        get() = null
+
+    /**
      * Selects an entity by its unique identifier.
      *
      * @param id The primary key of the entity to select.
@@ -110,4 +131,56 @@ interface Queries {
      * @return A DeleteById query object.
      */
     fun deleteById(id: Any): DeleteById
+
+    /**
+     * Builds a raw SQL statement that returns rows.
+     *
+     * The default refuses. An implementation that speaks SQL overrides it; one that does not has no way to
+     * send a statement it cannot construct, and says so by name — a script told "not supported by database
+     * 'MongoDB'" can act on that, while one told nothing at all cannot.
+     *
+     * @param statement the statement text, as the script wrote it
+     * @param parameters the values to bind to its `?` placeholders, in order
+     */
+    fun rawQuery(statement: String, parameters: List<Any?>): RawQuery =
+        throw UnsupportedOperationException(rawRefusal("SQL statements"))
+
+    /**
+     * Builds a raw SQL statement that changes the database, such as `ALTER TABLE` or `UPDATE`.
+     *
+     * @param statement the statement text, as the script wrote it
+     * @param parameters the values to bind to its `?` placeholders, in order
+     */
+    fun rawUpdate(statement: String, parameters: List<Any?>): RawUpdate =
+        throw UnsupportedOperationException(rawRefusal("SQL statements"))
+
+    /**
+     * Builds a raw command for a document backend.
+     *
+     * The default refuses, for the reason [rawQuery] gives; a document backend overrides it.
+     *
+     * @param command the command document, written as JSON text
+     */
+    fun rawCommand(command: String): RawCommand =
+        throw UnsupportedOperationException(rawRefusal("commands"))
+
+    /**
+     * What a backend that cannot serve this kind of raw statement reports.
+     *
+     * It names the backend and the alternative that backend does take. The alternative comes from
+     * [rawForm], which the implementation declared, so this function knows no backends: it cannot go stale
+     * when one is added, and it never decides what a connection accepts.
+     */
+    private fun rawRefusal(kind: String): String {
+        val alternative = when (rawForm) {
+            RawForm.SQL_STATEMENT ->
+                "It takes raw SQL statements instead: 'execute query …' and 'execute update …'."
+            RawForm.COMMAND_DOCUMENT ->
+                "It takes raw commands instead: 'execute command \"…\"'."
+            null ->
+                "It takes no raw statements."
+        }
+        return "Raw $kind are not supported by database '$typeName'. $alternative " +
+            "See the Raw statements page for what a raw statement does and does not guarantee."
+    }
 }

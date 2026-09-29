@@ -49,6 +49,45 @@ internal object DatabaseWork {
     }
 
     /**
+     * The connection a raw statement runs against, and the transaction when there is one.
+     *
+     * A raw statement names no table, so there is nothing to resolve before it runs: what is left is the
+     * connection and, if one is in effect, the transaction that belongs to it. Reporting a missing
+     * connection is the same report every declared statement makes.
+     */
+    class ConnectionTarget(
+        val database: Database,
+        val transaction: Transaction?
+    ) {
+
+        /** Runs [block] on the transaction's pinned connection, or one borrowed from the pool. */
+        suspend fun <T> withQueries(block: suspend (Queries) -> T): T =
+            DatabaseWork.withQueries(database, transaction, block)
+    }
+
+    /**
+     * Resolves the connection a raw statement runs against, or reports why there is none.
+     *
+     * Returns null when the caller should carry on with its next item; a message for `last database error`
+     * has already been stored at that point.
+     */
+    fun resolveConnection(event: Event, producer: RuntimeErrorProducer): ConnectionTarget? {
+        if (skipInactiveTransaction(event, producer)) return null
+
+        val database = ConnectionScope.resolve(event) ?: run {
+            report(event, producer, ConnectionScope.noConnectionMessage())
+            return null
+        }
+
+        if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
+            report(event, producer, "Database lifecycle is shutting down.")
+            return null
+        }
+
+        return ConnectionTarget(database, ConnectionScope.transaction(event))
+    }
+
+    /**
      * Resolves the table [tableNameExpr] names, reporting a failure the way Skript itself reports one.
      *
      * [producer] is the effect or section the statement was written as. Reporting through it is what puts
