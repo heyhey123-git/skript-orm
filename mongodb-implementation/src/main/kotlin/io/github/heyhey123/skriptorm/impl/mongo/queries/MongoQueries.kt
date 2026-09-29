@@ -3,11 +3,25 @@ package io.github.heyhey123.skriptorm.impl.mongo.queries
 import com.mongodb.client.MongoDatabase
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.queries.RawCommand
+import io.github.heyhey123.skriptorm.queries.RawForm
 import io.github.heyhey123.skriptorm.queries.SelectById
 import io.github.heyhey123.skriptorm.queries.SelectMany
 import io.github.heyhey123.skriptorm.queries.SelectOne
 
-class MongoQueries(val database: MongoDatabase) : Queries {
+/**
+ * The query factory of a MongoDB connection, which takes raw commands.
+ *
+ * [rawForm] is what tells a refusal which alternative to name; [rawQuery] and [rawUpdate] are deliberately
+ * not overridden, so a SQL statement written for a relational backend is refused by the shared default
+ * rather than parsed as a command document.
+ */
+class MongoQueries(
+    val database: MongoDatabase,
+    override val typeName: String = "MongoDB"
+) : Queries {
+
+    override val rawForm: RawForm = RawForm.COMMAND_DOCUMENT
 
     override fun selectById(id: Any): SelectById = MongoSelectById(id, database)
 
@@ -40,4 +54,6 @@ class MongoQueries(val database: MongoDatabase) : Queries {
     override fun delete(limit: Int?, where: WhereClause?) = MongoDelete(limit, where, database)
 
     override fun deleteById(id: Any) = MongoDeleteById(id, database)
+
+    override fun rawCommand(command: String): RawCommand = MongoRawCommand(command, database)
 }

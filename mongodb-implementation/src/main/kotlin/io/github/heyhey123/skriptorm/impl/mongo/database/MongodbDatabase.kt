@@ -25,6 +25,12 @@ class MongodbDatabase(
 ) : Database() {
 
     /**
+     * The type name scripts connected with, passed to the query factory so that a message can name the
+     * backend a script asked for rather than the class that happens to implement it.
+     */
+    private val typeName: String = "MongoDB"
+
+    /**
      * How long one statement may take, read once so that an unusable value is refused when the
      * connection is created rather than at the first statement.
      */
@@ -58,7 +64,7 @@ class MongodbDatabase(
         val opened = MongoClients.create(MongoConnection.clientSettings(settings, databaseName, properties))
         client = opened
         database = opened.getDatabase(databaseName)
-        queries = MongoQueries(database!!)
+        queries = MongoQueries(database!!, typeName)
     }
 
     override fun doDisconnect() {

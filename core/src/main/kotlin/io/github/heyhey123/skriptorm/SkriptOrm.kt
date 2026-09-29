@@ -3,6 +3,7 @@ package io.github.heyhey123.skriptorm
 import ch.njol.skript.Skript
 import ch.njol.skript.util.Version
 import io.github.heyhey123.skriptorm.database.Database
+import io.github.heyhey123.skriptorm.logging.DatabaseImplementations
 import io.github.heyhey123.skriptorm.logging.LogoPrinter
 import io.github.heyhey123.skriptorm.skript.registerElements
 import io.github.heyhey123.skriptorm.type.nbt.NbtSupport
@@ -53,7 +54,18 @@ class SkriptOrm : JavaPlugin() {
         LogoPrinter.print(pluginMeta.version)
         registerElements(registerSkriptAddon())
         reportNbtSupport()
+        reportDatabaseImplementations()
+    }
 
+    /**
+     * Loads the database implementations this jar carries and reports what came of it.
+     *
+     * The names are written out because nothing here may depend on the implementations themselves: this
+     * module compiles without them, and which ones the jar carries is the build's decision. A name that does
+     * not match a class therefore fails at runtime rather than at compile time, and used to fail without a
+     * word — a type a script could not connect to, and a console that said nothing about why.
+     */
+    private fun reportDatabaseImplementations() {
         val candidates = listOf(
             "io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabaseFactory",
             "io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlDatabaseFactory",
@@ -61,11 +73,9 @@ class SkriptOrm : JavaPlugin() {
             "io.github.heyhey123.skriptorm.impl.mongo.database.MongodbDatabaseFactory"
         )
 
-        for (candidate in candidates) {
-            try {
-                Class.forName(candidate)
-            } catch (_: ClassNotFoundException) {
-            }
+        val report = DatabaseImplementations.discover(candidates, javaClass.classLoader)
+        DatabaseImplementations.lines(report).forEach { line ->
+            if (report.complete) logger.info(line) else logger.warning(line)
         }
     }
 
