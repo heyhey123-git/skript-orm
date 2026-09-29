@@ -16,6 +16,11 @@ import kotlin.math.abs
  * a value that does not fit can be refused. It is the same conversion Skript would have done, with one
  * difference: the plugin says so instead of storing a number the script never wrote.
  *
+ * A `string` column takes the number's digits, because a column that stores text stores `42` as `"42"`.
+ * Skript itself has no converter from a number to a string, so without this a literal number is
+ * refused as unparseable and a number read from a variable is refused as not fitting the column — for
+ * a column that can hold the digits perfectly well, in a script that is asking for the obvious thing.
+ *
  * What deliberately stays as Skript does it everywhere else:
  *
  * - a fraction written into a whole-number column is cut towards zero (`int` column, `1.7`, stores `1`);
@@ -35,11 +40,20 @@ object NumericValues {
     fun isNumeric(domainType: Class<*>): Boolean = domainType in NUMERIC_DOMAINS
 
     /**
+     * Whether [domainType] is the text type, which a number is written to as its digits.
+     *
+     * A `values` entry for such a column is parsed as an object rather than as text, because a number
+     * is an object and Skript has no conversion from one to text: parsing `42` as a string fails, and
+     * parsing it as anything else succeeds and hands the number over to be written out here.
+     */
+    fun isText(domainType: Class<*>): Boolean = domainType == String::class.java
+
+    /**
      * The number a column of [column]'s type can hold.
      *
      * @throws IllegalArgumentException if [value] does not fit the column, or is not a finite number
      */
-    fun narrow(column: Column<*>, value: Number): Number = when (column.type.domainType) {
+    fun narrow(column: Column<*>, value: Number): Any = when (column.type.domainType) {
         Byte::class.javaObjectType ->
             whole(column, value, Byte.MIN_VALUE.toLong(), Byte.MAX_VALUE.toLong()).toByte()
 
@@ -59,9 +73,27 @@ object NumericValues {
 
         Double::class.javaObjectType -> finite(column, value)
 
+        String::class.java -> digitsOf(column, value)
+
         else -> throw IllegalArgumentException(
             "Column '${column.name}' is ${column.type.typeCode}, which does not hold a number."
         )
+    }
+
+    /**
+     * The digits of [value], which is what a text column stores.
+     *
+     * A whole number written as a `double` keeps its whole form: Skript reads `42` as a number whose
+     * runtime type depends on how it was written, and a text column should receive `42` rather than
+     * `42.0` for the same literal. What was written as a fraction keeps its fraction.
+     */
+    private fun digitsOf(column: Column<*>, value: Number): String {
+        val number = finite(column, value)
+        return if (number == Math.floor(number) && abs(number) < 1e15) {
+            value.toLong().toString()
+        } else {
+            value.toString()
+        }
     }
 
     /**

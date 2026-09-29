@@ -101,10 +101,16 @@ class NumericValuesTest {
     }
 
     @Test
-    fun `a column that is not a number is not narrowed at all`() {
-        assertFailsWith<IllegalArgumentException> {
-            NumericValues.narrow(column(StringDataType(), "name"), 5)
-        }
+    fun `a number written to a text column becomes its digits`() {
+        assertEquals("42", NumericValues.narrow(column(StringDataType(), "name"), 42))
+        assertEquals("42", NumericValues.narrow(column(StringDataType(), "name"), 42L))
+        assertEquals("42", NumericValues.narrow(column(StringDataType(), "name"), 42.0))
+        assertEquals("1.5", NumericValues.narrow(column(StringDataType(), "name"), 1.5))
+        assertEquals("-7", NumericValues.narrow(column(StringDataType(), "name"), -7))
+    }
+
+    @Test
+    fun `a column that holds neither a number nor its digits is not narrowed at all`() {
         assertFailsWith<IllegalArgumentException> {
             NumericValues.narrow(column(UuidDataType(), "uid"), 5)
         }

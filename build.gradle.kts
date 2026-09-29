@@ -527,6 +527,10 @@ val serverTestChecks = buildMap {
     // rather than an error message, because it asserts what it read back and says `failed` when any of
     // it does not hold, in both modes.
     put("sqlite round trip", "ok")
+    // A number written to a text column is written as its digits rather than refused: Skript cannot parse
+    // a number as text, so the value is parsed as a number and written out here. It reports a word rather
+    // than an error message for the same reason the round trip above does.
+    put("sqlite number into string", "ok")
     // The raw statements on the same SQLite connection: their verdict is a word too, because they assert
     // both what the server returned and that each guard refused before anything was sent. They run in
     // both modes for the same reason the round trip does — they need no database server.

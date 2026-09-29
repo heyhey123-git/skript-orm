@@ -49,6 +49,25 @@ every 5 seconds:
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL sqlite insert one: %last database error%"
 
+    # A text column takes a number's digits. Skript cannot parse a number as text, so without this the
+    # literal form was refused as unparseable and the variable form as not fitting the column, both for
+    # a column that can hold the digits perfectly well. The row is inserted and removed here so that it
+    # cannot join any of the reads below, which assert on the set of rows the script wrote.
+    in connection "sqlite":
+        insert one entity into table "orm_sqlite_probe" and wait:
+            values:
+                id: -1
+                name: 42
+                age: 30
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST detail: sqlite number into string -> failed"
+    else:
+        log "SKRIPTORM_SELFTEST detail: sqlite number into string -> ok"
+    in connection "sqlite":
+        delete one entity from table "orm_sqlite_probe" by id -1 and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL sqlite number into string cleanup: %last database error%"
+
     in connection "sqlite":
         insert one entity into table "orm_sqlite_probe" and wait:
             values:

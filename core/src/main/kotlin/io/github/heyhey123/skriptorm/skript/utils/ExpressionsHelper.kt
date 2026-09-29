@@ -53,17 +53,28 @@ object ExpressionsHelper {
      * cannot be told apart from one that was written that way. [NumericValues.narrow] does the narrowing
      * later instead, where the column is known and a value that does not fit can be refused.
      *
+     * A text column takes a value written as text, and a number written into one as its digits: Skript
+     * has no conversion from a number to text, so `42` is parsed as a number and written out later.
+     *
      * @return the parsed expression, or `null` when Skript cannot parse it
      * @throws IllegalArgumentException if [columnName] is not in [table]
      */
     fun parseExpression(table: Table, columnName: String, valueStr: String): Expression<*>? {
         val column = requireColumn(table, columnName)
-        val type = if (NumericValues.isNumeric(column.type.domainType)) {
-            Number::class.java
-        } else {
-            column.type.domainType
+        if (NumericValues.isNumeric(column.type.domainType)) {
+            return SkriptParser(valueStr, SkriptParser.ALL_FLAGS, ParseContext.DEFAULT)
+                .parseExpression(Number::class.java)
         }
-        return SkriptParser(valueStr, SkriptParser.ALL_FLAGS, ParseContext.DEFAULT).parseExpression(type)
+
+        val asWritten = SkriptParser(valueStr, SkriptParser.ALL_FLAGS, ParseContext.DEFAULT)
+            .parseExpression(column.type.domainType)
+        if (asWritten != null || !NumericValues.isText(column.type.domainType)) return asWritten
+
+        // A text column takes a number's digits, and Skript cannot parse a number as text: `42` comes
+        // back unparseable. It parses as a number, which the write then writes out as the digits the
+        // column stores. Anything that is not a number was already read as the text it is above.
+        return SkriptParser(valueStr, SkriptParser.ALL_FLAGS, ParseContext.DEFAULT)
+            .parseExpression(Number::class.java)
     }
 
     /**
