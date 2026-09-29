@@ -83,20 +83,24 @@ the KDoc on `MINIMUM_SKRIPT_VERSION` for why a version-qualified `depend` entry 
 
 ### The forum posts
 
-`docs/minebbs-resource.bbcode.txt` and `docs/skunity-resource.bbcode.txt` are the resource posts, kept in
-the repository but deliberately untracked: they are pasted into a forum by hand and nothing reads them.
+Each resource post is two files, both kept in the repository and deliberately untracked: they are pasted
+into a forum by hand and nothing reads them.
 
-A post describes what the plugin is, and nothing about which version did what. What a release added or
-changed is written in the update description the forum asks for when publishing one, not here: a post
-carries no version and no release notes, so a release does not edit it at all unless the syntax itself
-changed. The description, requirements and install steps say only what does not change, and the feature
-list says what the plugin is rather than what it recently gained. Keeping it that way is the point — a
-reader sees the same post they saw before, and what is new is where new things are read: the update
-description, whose full record is `CHANGELOG.md`.
+- `docs/minebbs-resource.bbcode.txt` and `docs/skunity-resource.bbcode.txt` are the resource description,
+  which says what the plugin is. It carries no version and no release notes, so a release does not edit it.
+- `docs/minebbs-update.bbcode.txt` and `docs/skunity-update.bbcode.txt` are the update description, the text
+  the forum asks for when a version is published. It holds the version being published and nothing earlier:
+  rewriting it for each release is the whole point, and a reader arriving from a notification wants the
+  current release rather than a history.
 
-A post is edited only when it would otherwise be wrong: a feature removed, a pattern renamed, a
-requirement or a supported backend changed. Then the feature list or the pattern list is corrected,
-because leaving it would describe syntax that no longer exists.
+Everything a version added or changed is written here, in the update description, tersely — a sentence or
+two per change, saying what it does and why it matters to someone deciding whether to update. Somebody
+weighing an upgrade reads that and not the changelog; `CHANGELOG.md` is where the full account lives, one
+section per released version, and it is what a release publishes as its notes.
+
+A resource description is edited only when it would otherwise be wrong: a feature removed, a pattern
+renamed, a requirement or a supported backend changed. Leaving it would describe syntax that no longer
+exists.
 
 ---
 
