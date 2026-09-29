@@ -12,9 +12,18 @@ object JdbcDatabaseFactory : DatabaseFactory {
     override val typeName: String
         get() = "JDBC"
 
+    /** The driver class name this type cannot work without, plus the shared statement timeout. */
+    override val acceptedConnectionProperties: Set<String> = setOf(DRIVER_PROPERTY, JdbcDatabase.STATEMENT_TIMEOUT_PROPERTY)
+
     override fun create(properties: Map<String, String>): JdbcDatabase {
-        val driver = properties["driver"]
-            ?: throw IllegalArgumentException("JDBC driver class name must be provided in properties with key 'driver'")
+        val driver = properties[DRIVER_PROPERTY]
+            ?: throw IllegalArgumentException(
+                "Database 'JDBC' requires the connection property '$DRIVER_PROPERTY', naming the driver " +
+                    "class to use, for example \"org.sqlite.JDBC\"."
+            )
         return JdbcDatabase(driver, GenericJdbcDialect, JdbcDatabase.statementTimeoutSeconds(properties))
     }
+
+    /** The property that names the driver class for this type. */
+    const val DRIVER_PROPERTY: String = "driver"
 }

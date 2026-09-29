@@ -15,7 +15,8 @@ create a connection to database "MySQL" with properties:
 
 - `"MySQL"` 是实现名称。jar 注册了四种实现：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
-- 块中的其他字面量属性会传给实现，**无法识别的属性会被静默忽略**。例如，将 `statement timeout` 误写为 `statment timeout`，既不会生效，也不会报错。各实现读取的额外属性包括 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`。
+- 块中的其他字面量属性会传给实现，**实现不读取的属性会被当场拒绝**：语句会失败并报 `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`，不会建立任何连接。因此把 `statement timeout` 误写为 `statment timeout` 会在这里被拦下，而不是默默无效。各实现读取的额外属性包括 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`；`url`、`username`、`password` 三种实现都读。
+- 在 `"MySQL"` 与 `"PostgreSQL"` 上，**库名写在 url 路径里**（`jdbc:mysql://localhost:3306/mydb`）。`database: "mydb"` 是 MongoDB 的属性，在这里会被拒绝，并提示应该怎么写。
 - 这个 section 始终等待完成：下一行执行时，连接要么可用，要么已报告失败。这里既不需要 `and wait`，也不接受它。
 - **不能在 `database transaction` 中创建连接。** 此时 section 会报 `A connection cannot be created inside a database transaction. Roll it back first.`，不会建立连接，以免替换连接破坏正在运行的事务。
 

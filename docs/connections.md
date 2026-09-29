@@ -17,10 +17,16 @@ create a connection to database "MySQL" with properties:
 - `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"PostgreSQL"`, `"MongoDB"` and
   `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
-- Other literal properties are passed to the implementation. **Unknown properties are silently ignored**:
-  misspelling `statement timeout` as `statment timeout` has no effect and produces no error.
-  Supported extra properties are `statement timeout`, `driver` for `"JDBC"`, and MongoDB's
-  `database` and `auth database`.
+- Other literal properties are passed to the implementation, and **one that the implementation does not
+  read is refused**: the statement fails with
+  `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`
+  and nothing is connected. A misspelling such as `statment timeout` is therefore caught here rather than
+  quietly doing nothing. Supported extra properties are `statement timeout`, `driver` for `"JDBC"`, and
+  MongoDB's `database` and `auth database`. `url`, `username` and `password` are read by every
+  implementation.
+- On `"MySQL"` and `"PostgreSQL"`, the database **belongs in the url path**
+  (`jdbc:mysql://localhost:3306/mydb`). `database: "mydb"` is a MongoDB property and is refused here,
+  naming what to write instead.
 - The section always waits: when the next line runs, the connection is either live or failed. `and wait`
   is neither needed nor accepted here.
 - **It is refused inside a `database transaction`.** The section reports

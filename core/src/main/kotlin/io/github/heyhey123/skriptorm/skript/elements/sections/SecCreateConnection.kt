@@ -10,6 +10,7 @@ import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.SkriptOrm
+import io.github.heyhey123.skriptorm.database.ConnectionProperties
 import io.github.heyhey123.skriptorm.database.ConnectionSettings
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.database.DatabaseRegistry
@@ -148,12 +149,24 @@ class SecCreateConnection : Section() {
         }
 
         val settings = ConnectionSettings(
-            url = connectionProperties.getValue("url"),
-            username = connectionProperties.getValue("username"),
-            password = connectionProperties.getValue("password")
+            url = connectionProperties.getValue(ConnectionProperties.URL),
+            username = connectionProperties.getValue(ConnectionProperties.USERNAME),
+            password = connectionProperties.getValue(ConnectionProperties.PASSWORD)
         )
-        val implementationProperties = connectionProperties.filterKeys {
-            it != "url" && it != "username" && it != "password"
+        val implementationProperties = connectionProperties.filterKeys { it !in ConnectionProperties.ALWAYS_READ }
+        // Checked while the implementation is being resolved rather than when the connection is used:
+        // a property nothing reads is a mistake in the script, and the script is still on this line.
+        // Anything else lets a connection succeed with a property silently dropped, which is how a
+        // `database:` written for MySQL used to become a server with no default database.
+        try {
+            ConnectionPropertiesParser.requireAcceptedBy(
+                implementationProperties,
+                DatabaseRegistry.factory(databaseName)
+            )
+        } catch (error: IllegalArgumentException) {
+            SkriptDatabaseErrors.set(actualEvent, error)
+            this.error(SkriptDatabaseErrors.messageOf(error))
+            return walk(actualEvent, false)
         }
 
         val database = try {

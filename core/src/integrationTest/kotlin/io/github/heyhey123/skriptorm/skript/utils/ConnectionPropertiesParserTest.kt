@@ -1,5 +1,7 @@
 package io.github.heyhey123.skriptorm.skript.utils
 
+import io.github.heyhey123.skriptorm.database.Database
+import io.github.heyhey123.skriptorm.database.DatabaseFactory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -96,8 +98,9 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
     }
 
     /**
-     * A property an implementation does not know is passed through and ignored, so a name written with
-     * different spacing has to mean the same property rather than become a second one that nothing reads.
+     * A property name is looked up by name, and an implementation reads the names it knows, so a name
+     * written with different spacing has to mean the same property rather than become a second one that
+     * [ConnectionPropertiesParser.requireAcceptedBy] then refuses.
      */
     @Test
     fun `extra spaces inside a property name do not make it a different property`() {
@@ -166,6 +169,86 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
             ConnectionPropertiesParser.collectFrom(section)
         }
         assertEquals("Connection property 'extra' must be a value, not a block.", thrown.message)
+    }
+
+    @Test
+    fun `an implementation is asked about a property it does not read`() {
+        val factory = StubFactory(accepted = setOf("statement timeout"))
+
+        assertFailsWith<IllegalArgumentException> {
+            ConnectionPropertiesParser.requireAcceptedBy(
+                mapOf("url" to "jdbc:mysql://localhost:3306/mydb", "database" to "sicilia_db"),
+                factory
+            )
+        }
+    }
+
+    @Test
+    fun `a property nothing reads is refused by name and the readable ones are listed`() {
+        val factory = StubFactory(accepted = setOf("statement timeout", "driver"))
+
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            ConnectionPropertiesParser.requireAcceptedBy(
+                mapOf(
+                    "url" to "jdbc:sqlite:data.db",
+                    "username" to "",
+                    "password" to "",
+                    "databse" to "sicilia_db"
+                ),
+                factory
+            )
+        }
+
+        assertEquals(
+            "Connection property 'databse' is not read by database 'Stub'. " +
+                "It reads: driver, password, statement timeout, url, username.",
+            thrown.message
+        )
+    }
+
+    @Test
+    fun `an implementation that knows why a property is wrong says so instead`() {
+        val factory = StubFactory(accepted = setOf("statement timeout")) {
+            "Connection property '$it' belongs to another implementation."
+        }
+
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            ConnectionPropertiesParser.requireAcceptedBy(mapOf("database" to "sicilia_db"), factory)
+        }
+
+        assertEquals("Connection property 'database' belongs to another implementation.", thrown.message)
+    }
+
+    @Test
+    fun `the three properties every implementation reads are always accepted`() {
+        val factory = StubFactory(accepted = emptySet())
+
+        // No throw: url, username and password are how a connection is opened, not something an
+        // implementation opts into, so a factory never has to list them.
+        ConnectionPropertiesParser.requireAcceptedBy(
+            mapOf("url" to "jdbc:sqlite:data.db", "username" to "root", "password" to "secret"),
+            factory
+        )
+    }
+
+    /**
+     * An implementation with no driver, no dialect and no connection behind it: the check under test asks
+     * a factory what it reads, which is a question a stub can answer where a real implementation would
+     * need a server.
+     */
+    private class StubFactory(
+        private val accepted: Set<String>,
+        private val rejection: ((String) -> String?)? = null
+    ) : DatabaseFactory {
+
+        override val typeName: String = "Stub"
+
+        override val acceptedConnectionProperties: Set<String> = accepted
+
+        override fun describeRejectedProperty(name: String): String? = rejection?.invoke(name)
+
+        override fun create(properties: Map<String, String>): Database =
+            error("The stub factory never opens a connection.")
     }
 
     private companion object {

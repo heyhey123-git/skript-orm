@@ -37,11 +37,20 @@ object DatabaseRegistry {
      * @return The created database instance.
      * @throws IllegalArgumentException if the database type is unsupported.
      */
-    fun get(typeName: String, properties: Map<String, String>): Database {
-        val factory = factories[typeName]
-            ?: throw IllegalArgumentException("Unsupported database type: $typeName")
-        return factory.create(properties)
-    }
+    fun get(typeName: String, properties: Map<String, String>): Database =
+        factory(typeName).create(properties)
+
+    /**
+     * The implementation registered under [typeName].
+     *
+     * Read on its own by the callers that have to ask the implementation something before it exists,
+     * such as which connection properties it reads: creating an instance to find that out would open a
+     * connection, and the property is exactly what the connection must not be opened with.
+     *
+     * @throws IllegalArgumentException if the database type is unsupported.
+     */
+    fun factory(typeName: String): DatabaseFactory = factories[typeName]
+        ?: throw IllegalArgumentException("Unsupported database type: $typeName")
 
     /**
      * Check if a database type is supported.

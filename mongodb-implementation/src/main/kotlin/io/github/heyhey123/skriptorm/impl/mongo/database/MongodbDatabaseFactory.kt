@@ -17,5 +17,15 @@ object MongodbDatabaseFactory : DatabaseFactory {
     override val typeName: String
         get() = "MongoDB"
 
+    /**
+     * The database and the database the credentials belong to, both read by [MongoConnection], plus the
+     * statement timeout every implementation shares.
+     */
+    override val acceptedConnectionProperties: Set<String> = setOf(
+        MongoConnection.DATABASE_PROPERTY,
+        MongoConnection.AUTH_DATABASE_PROPERTY,
+        MongoConnection.STATEMENT_TIMEOUT_PROPERTY
+    )
+
     override fun create(properties: Map<String, String>) = MongodbDatabase(properties)
 }

@@ -51,6 +51,7 @@ class DatabaseRegistryTest {
 
     private fun factory(name: String, create: (Map<String, String>) -> Database) = object : DatabaseFactory {
         override val typeName = name
+        override val acceptedConnectionProperties = emptySet<String>()
         override fun create(properties: Map<String, String>) = create(properties)
     }
 
