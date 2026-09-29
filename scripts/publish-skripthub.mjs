@@ -133,7 +133,7 @@ const resolveAddon = async () => {
 }
 
 /** The body of a write: the fields the generated file owns, plus what the existing row must keep. */
-const bodyFor = (entry, row) => {
+const bodyFor = (entry, row, addon) => {
   const body = {
     title: entry.title,
     description: entry.description,
@@ -141,10 +141,12 @@ const bodyFor = (entry, row) => {
     syntax_type: entry.syntaxType,
     // The one field SkriptHub cannot infer: a new element has none, so it starts empty and is filled in
     // by hand where an element needs another plugin loaded.
-    required_plugins: (row?.required_plugins ?? []).map((plugin) => (typeof plugin === 'string' ? plugin : plugin.name))
+    required_plugins: (row?.required_plugins ?? []).map((plugin) => (typeof plugin === 'string' ? plugin : plugin.name)),
+    // Every element belongs to an addon and the API refuses a create without this field. An update can
+    // take it from the row being replaced; a create has no row, so it uses the addon this run resolved.
+    addon: row?.addon ?? addon
   }
   if (entry.since) body.compatible_addon_version = entry.since
-  if (row?.addon) body.addon = row.addon
   if (row?.compatible_minecraft_version != null) body.compatible_minecraft_version = row.compatible_minecraft_version
   if (row?.type_usage != null) body.type_usage = row.type_usage
   if (row?.return_type != null) body.return_type = row.return_type
@@ -231,7 +233,7 @@ try {
   if (!dryRun) {
     for (const { entry, row } of plan.updates) {
       try {
-        await request('PUT', '/syntax/' + row.id + '/', bodyFor(entry, row))
+        await request('PUT', '/syntax/' + row.id + '/', bodyFor(entry, row, addon))
       } catch (error) {
         failures.push(entry.title + ': ' + error.message)
       }
@@ -239,7 +241,7 @@ try {
 
     if (plan.creates.length) {
       // One call, because the endpoint takes a list; every element of it is created or none is.
-      const body = plan.creates.map((entry) => bodyFor(entry, null))
+      const body = plan.creates.map((entry) => bodyFor(entry, null, addon))
       try {
         await request('POST', '/syntax/', body)
       } catch (error) {
@@ -282,6 +284,11 @@ if (failures.length) {
   say()
   say('**' + failures.length + ' failure(s)**')
   for (const failure of failures) say('- ' + failure)
+  // Also on stderr, so the reason reaches the workflow annotation. Written to the summary alone it
+  // reached nobody who was looking at the run from a commit: the check reported "exit code 1" and the
+  // list of what went wrong sat on a page that has to be opened by hand.
+  console.error(failures.length + ' SkriptHub failure(s):')
+  for (const failure of failures) console.error('- ' + failure)
 }
 
 // The workflow appends this to the run summary, so it has to survive being read on its own.

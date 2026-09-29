@@ -81,6 +81,21 @@ an upgrade.
 Skript's own floor is checked at runtime in `SkriptOrm.onEnable`, not declared in `plugin.yml`: see
 the KDoc on `MINIMUM_SKRIPT_VERSION` for why a version-qualified `depend` entry cannot work.
 
+### The forum posts
+
+`docs/minebbs-resource.bbcode.txt` and `docs/skunity-resource.bbcode.txt` are the resource posts, kept in
+the repository but deliberately untracked: they are pasted into a forum by hand and nothing reads them.
+They are written so that a release changes one section of them and nothing else. What a version added or
+changed goes into its release-notes section, which is the only part maintained per release; the
+description, requirements and install steps say only what does not change, and the feature list says what
+the plugin is rather than what it gained. Keeping it that way is the point: a reader can see what is new
+without the rest of the post being rewritten around them, so a new feature is never folded into a
+description that then has to be re-read to be trusted.
+
+Each post carries the last two versions, so a reader upgrading from the previous release sees both what
+changed and what they missed. When a feature is removed or a pattern renamed, the feature list and the
+pattern list are edited then, because leaving them would describe syntax that no longer exists.
+
 ---
 
 ## 2. Domain values and storage values
