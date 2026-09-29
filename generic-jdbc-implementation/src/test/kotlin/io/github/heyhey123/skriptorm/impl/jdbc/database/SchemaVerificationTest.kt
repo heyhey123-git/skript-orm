@@ -8,6 +8,7 @@ import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /**
@@ -230,6 +231,33 @@ class SchemaVerificationTest {
 
         assertEquals(listOf("id", "NAME"), actual.columns.map { it.name })
         assertEquals(listOf<String?>("skriptorm_test"), metadata.catalogPatterns)
+    }
+
+    /**
+     * A table that is not where the connection can see it ends the registration, and the message names what
+     * is there. Reading *some* table's columns instead would report a column difference in a table nobody
+     * identified: the script would be told its `age` column is missing from a table it had never named,
+     * which is what the first continuous-integration round reported about `performance_schema`.
+     */
+    @Test
+    fun `a table that does not exist where the connection looks is refused, naming what is there`() {
+        val metadata = FakeMetadata(
+            catalog = "sicilia_db",
+            tables = listOf(
+                FakeTable("sicilia_db", null, "players"),
+                FakeTable("sicilia_db", null, "user_settings")
+            ),
+            columns = listOf(FakeColumn("players", "id", "INT", false, 10)),
+            primaryKey = listOf("players" to "id")
+        )
+
+        val thrown = assertFailsWith<IllegalArgumentException> {
+            SchemaVerification.readWith(metadata.metadata, "users")
+        }
+
+        val message = thrown.message.orEmpty()
+        assertTrue("Registered table 'users' does not exist in database 'sicilia_db'" in message, message)
+        assertTrue("'players'" in message && "'user_settings'" in message, message)
     }
 
     private fun actual(

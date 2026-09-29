@@ -30,6 +30,14 @@ import java.sql.DatabaseMetaData
 internal object SchemaVerification {
 
     /**
+     * How many table names a "this table does not exist" message may name.
+     *
+     * Enough to recognise a mistaken name or a mistaken database, few enough that a script's mistake does
+     * not print a catalogue into the console.
+     */
+    private const val CANDIDATE_LIMIT = 20
+
+    /**
      * What the server reports for one column, in the terms this comparison needs.
      */
     data class ActualColumn(
@@ -124,9 +132,9 @@ internal object SchemaVerification {
      * Reads the table the server holds.
      *
      * The table is looked up before its columns are, because a table lives in a catalog on MySQL and in a
-     * schema on PostgreSQL, and the same call has to find it on both. A table the lookup cannot find is
-     * reported as one with no columns, which makes every declared column a difference: a table that is not
-     * there is the largest mismatch of all.
+     * schema on PostgreSQL, and the same call has to find it on both. A table the lookup cannot find is not
+     * read: a comparison against a location nobody confirmed would report whatever that location happens to
+     * hold, which is a wrong answer rather than a missing one.
      */
     fun read(connection: Connection, table: String): ActualTable =
         readWith(connection.metaData, table)
@@ -140,8 +148,7 @@ internal object SchemaVerification {
      * the registered `users`.
      */
     fun readWith(metadata: DatabaseMetaData, table: String): ActualTable {
-        val catalog = metadata.connection.catalog
-        val location = locate(metadata, catalog, table)
+        val location = locate(metadata, metadata.connection.catalog, table)
         val columns = mutableListOf<ActualColumn>()
         metadata.getColumns(location.catalog, location.schema, table, null).use { rows ->
             while (rows.next()) {
@@ -180,8 +187,12 @@ internal object SchemaVerification {
      * a case-sensitive filesystem compares the pattern as written and stores what the DDL wrote, so asking
      * for `users` can miss a table the same server hands over as `USERS`.
      *
-     * The location comes from the server's own answer rather than from [Connection.getCatalog] alone,
-     * because PostgreSQL answers that with null: it has no catalogs, and its table is found by schema.
+     * A table that cannot be found ends the registration here. There is deliberately no fallback to the
+     * connection's own catalog and schema: that is a guess, and a guess that then reads *some* table's
+     * columns makes a refusal look like a column difference in a table that was never identified. What the
+     * server does hold is named instead, so the reason is not left to be discovered.
+     *
+     * @throws IllegalArgumentException when no table with that name exists where the connection can see it
      */
     private fun locate(metadata: DatabaseMetaData, catalog: String?, table: String): Location {
         val found = linkedMapOf<String, Location>()
@@ -196,8 +207,37 @@ internal object SchemaVerification {
             .firstOrNull { it.key.equals(table, ignoreCase = true) }
             ?.let { return it.value }
 
-        val connection = metadata.connection
-        return Location(catalog ?: connection.catalog, connection.schema)
+        // Asked for by catalogue instead of by name, which is what finds a table the driver will not match
+        // a differently-cased pattern against. The result is capped: a script's mistake must not print a
+        // catalogue's contents into the console.
+        val elsewhere = mutableListOf<String>()
+        if (catalog != null) {
+            metadata.getTables(catalog, null, null, null).use { rows ->
+                while (rows.next() && elsewhere.size <= CANDIDATE_LIMIT) {
+                    rows.getString("TABLE_NAME")?.let { elsewhere += it }
+                }
+            }
+        }
+        elsewhere.firstOrNull { it == table }?.let { return Location(catalog, null) }
+        elsewhere.firstOrNull { it.equals(table, ignoreCase = true) }
+            ?.let { return Location(catalog, null) }
+
+        throw IllegalArgumentException(cannotLocate(table, catalog, elsewhere))
+    }
+
+    private fun cannotLocate(table: String, catalog: String?, held: List<String>): String {
+        val where = if (catalog != null) "database '$catalog'" else "the connected database"
+        val listing = when {
+            held.isEmpty() -> "It holds no tables."
+            held.size > CANDIDATE_LIMIT ->
+                "It holds more than $CANDIDATE_LIMIT tables; this one is not among the first " +
+                    "$CANDIDATE_LIMIT."
+            else -> "It holds: ${held.joinToString(", ") { "'$it'" }}."
+        }
+        return "Registered table '$table' does not exist in $where, so there is nothing to compare the " +
+            "declaration with. $listing Registration is 'CREATE TABLE IF NOT EXISTS', which is a no-op " +
+            "when the table exists and was expected to create it here; the table name, the database the " +
+            "connection selected, or the privileges of its user are what to check."
     }
 
     /**
