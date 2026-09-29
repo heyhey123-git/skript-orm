@@ -160,9 +160,11 @@ class SecRegisterTable : Section() {
         }
         val tableName = tableNameExpr.getSingle(actualEvent)
             ?: return fail(actualEvent, "Table name is null.")
-        if (database.tables.containsKey(tableName)) {
-            return fail(actualEvent, "Table '$tableName' is already registered.")
-        }
+        // Registering what is already there is how a script that declares its tables in `on load` is
+        // reloaded, which is the normal thing to do with one: the declaration reaches a connection that
+        // still holds the table, and there is nothing left to do. It succeeds, exactly as registering a
+        // table that is already in the database succeeds, so the error slot is cleared rather than set.
+        if (database.tables.containsKey(tableName)) return next
 
         val table = try {
             Table(

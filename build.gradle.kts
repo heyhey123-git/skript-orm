@@ -488,6 +488,10 @@ val serverTestNoTransactionChecks = mapOf(
 
 val serverTestChecks = buildMap {
     put("register table", serverTestExpectedMessage)
+    // Re-registering the same table on the same connection succeeds and reports nothing, because that is
+    // what reloading a script whose tables are declared in `on load` does. Without a database it stops at
+    // the connection lookup first, exactly as the line above it does.
+    put("register table again", serverTestExpectedMessage)
     // This one names an implementation that is not installed, so it reports the same in both modes.
     put("create connection", "Database 'NoSuchDatabase' is not supported.")
     put("insert one", serverTestExpectedMessage)

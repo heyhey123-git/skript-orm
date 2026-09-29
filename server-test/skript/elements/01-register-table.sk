@@ -13,4 +13,13 @@ every 5 seconds:
         name: string(64), not null
         age: int, nullable
     log "SKRIPTORM_SELFTEST detail: register table -> %last database error%"
+
+    # Registering it a second time on the same connection is how a script that declares its tables in
+    # `on load` is reloaded, so it has to succeed rather than report that the table is already there. The
+    # declaration is deliberately left as it is: re-declaring does not change a schema.
+    register a database table "orm_selftest":
+        id: bigint, primary key, auto increment, not null
+        name: string(64), not null
+        age: int, nullable
+    log "SKRIPTORM_SELFTEST detail: register table again -> %last database error%"
     set {skriptorm::selftest::done::register-table} to true

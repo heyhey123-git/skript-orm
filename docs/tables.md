@@ -85,10 +85,15 @@ not the key, and which column is the primary key. It does not compare `auto incr
 servers report through different metadata. To change the schema, run `ALTER TABLE` yourself, or drop the
 table in a development database and let the plugin recreate it.
 
-**Registrations belong to a connection.** Registering `"users"` again on the same connection fails with
-`Table 'users' is already registered.`. This can happen when two scripts register the same table on a
-shared connection, or when a script is reloaded without recreating its connection.
-The following example avoids duplicate registration by creating a fresh connection each time:
+**Registrations belong to a connection.** Registering `"users"` again on a connection that already holds it
+does nothing and succeeds: the declaration is accepted, the registered schema is left as it is, and no error
+is reported. This is what makes a script that declares its tables in `on load` safe to reload — the tables are
+already registered on the connection it reaches, and re-declaring them is the expected result rather than a
+mistake.
+
+To change a schema, reconnect so the registration is created afresh, or drop the table and let the plugin
+create it again. Re-declaring a table with different columns does not change the existing one, so a table
+whose declaration was edited keeps the schema it was created with:
 
 ```sk
 on load:
@@ -102,10 +107,10 @@ on load:
         name: string(64), not null
 ```
 
-`create a connection` always creates a fresh connection with no registered tables. A script that
-connects before registering can therefore be reloaded: it replaces the connection rather than
-registering on the old one. Only duplicate registration on the same connection is rejected.
-See [Connections](connections.md).
+`create a connection` always creates a fresh connection with no registered tables. A script that connects
+before registering therefore registers on a connection the plugin just made, and one that only registers —
+reaching a connection that already holds the tables — is a no-op rather than an error. See
+[Connections](connections.md).
 
 A statement that is not built from a registration is a [raw statement](raw-statements.md). It is sent as
 written, so it is not compared with the table it names — not the columns, not the types, not the table's

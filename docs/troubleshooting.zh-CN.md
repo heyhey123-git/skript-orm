@@ -18,23 +18,6 @@ ALTER TABLE users ADD COLUMN joined DATE NULL;
 
 如果开发库的数据可以丢弃，也可以删表后让插件重建。线上库请使用原有的迁移工具，插件不负责迁移。见 [表](tables.zh-CN.md)。
 
-## “Table 'users' is already registered.”
-
-表注册信息属于**连接**，而 `create a connection` 每次都会建立新连接。这个错误表示你在同一条连接上重复注册了同名表，例如第二个脚本重复注册，或脚本 reload 后直接注册，没有重新连接。将连接和注册放在同一个 `on load` 中，可在 reload 时替换连接，避免这类重复注册：
-
-```sk
-on load:
-    create a connection to database "MySQL" with properties:
-        url: "jdbc:mysql://localhost:3306/mydb"
-        username: "root"
-        password: "123456"
-    register a database table "users":
-        id: bigint, primary key, auto increment, not null
-        name: string(64), not null
-```
-
-见 [表](tables.zh-CN.md)。
-
 ## “Table 'users' not found.”
 
 这张表尚未**在当前连接上**注册。常见原因有三种：负责连接与注册的脚本没有运行；脚本在此前失败，此时应查看失败时的 `last database error`；连接后来被替换，新连接中还没有注册任何表。

@@ -18,23 +18,6 @@ ALTER TABLE users ADD COLUMN joined DATE NULL;
 
 If the data in a development database is disposable, you can drop the table and let the plugin recreate it. For a live database, use your existing migration tools; the plugin does not handle migrations. See [Tables](tables.md).
 
-## "Table 'users' is already registered."
-
-Table registrations belong to a **connection**, and `create a connection` creates a new connection each time. This error means the same table name was registered twice on one connection, perhaps by a second script or after a reload without reconnecting. Connecting and registering together in `on load` replaces the connection on reload and avoids this kind of duplicate registration:
-
-```sk
-on load:
-    create a connection to database "MySQL" with properties:
-        url: "jdbc:mysql://localhost:3306/mydb"
-        username: "root"
-        password: "123456"
-    register a database table "users":
-        id: bigint, primary key, auto increment, not null
-        name: string(64), not null
-```
-
-See [Tables](tables.md).
-
 ## "Table 'users' not found."
 
 The table has not been registered **on the current connection**. The script responsible for connecting and registering may not have run, or it may have failed earlier; check `last database error` at the point of failure. Another possibility is that the connection was replaced, leaving the new connection with no registered tables.
