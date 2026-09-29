@@ -7,6 +7,7 @@
 
 - [连接](Connections)
 - [表](Tables)
+- [原始语句](Raw-Statements)
 - [写入行](Writing-Rows)
 - [读取行](Reading-Rows)
 - [更新与删除](Updating-And-Deleting)
@@ -32,6 +33,7 @@
 
 - [Connections](Connections-EN)
 - [Tables](Tables-EN)
+- [Raw statements](Raw-Statements-EN)
 - [Writing rows](Writing-Rows-EN)
 - [Reading rows](Reading-Rows-EN)
 - [Updating and deleting](Updating-And-Deleting-EN)

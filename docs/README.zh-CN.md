@@ -14,6 +14,7 @@
 | --- | --- |
 | [连接](connections.zh-CN.md) | 建立连接、具名连接、切换与断开连接。 |
 | [表](tables.zh-CN.md) | 列语法、类型、主键与修饰符，以及注册表的限制。 |
+| [原始语句](raw-statements.zh-CN.md) | 由脚本自己写的语句：SQL 与 MongoDB 命令、它们跳过了什么、又仍然保证什么。 |
 | [写入行](writing.zh-CN.md) | 插入一行或多行、从变量插入、upsert，以及 `values` 块的写法。 |
 | [读取行](reading.zh-CN.md) | 单行、多行、分页与按 id 查询，`where` 块及结果结构。 |
 | [更新与删除](updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |

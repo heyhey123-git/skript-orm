@@ -10,6 +10,7 @@ README.zh-CN.md	Home
 docs/getting-started.zh-CN.md	Getting-Started
 docs/connections.zh-CN.md	Connections
 docs/tables.zh-CN.md	Tables
+docs/raw-statements.zh-CN.md	Raw-Statements
 docs/writing.zh-CN.md	Writing-Rows
 docs/reading.zh-CN.md	Reading-Rows
 docs/updating-and-deleting.zh-CN.md	Updating-And-Deleting
@@ -26,6 +27,7 @@ README.md	Home-EN
 docs/getting-started.md	Getting-Started-EN
 docs/connections.md	Connections-EN
 docs/tables.md	Tables-EN
+docs/raw-statements.md	Raw-Statements-EN
 docs/writing.md	Writing-Rows-EN
 docs/reading.md	Reading-Rows-EN
 docs/updating-and-deleting.md	Updating-And-Deleting-EN

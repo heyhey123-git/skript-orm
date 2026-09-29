@@ -88,6 +88,7 @@ and hands results back as ordinary Skript variables and values.
 | [Getting started](docs/getting-started.md) | The shortest path from an empty script to a stored row. |
 | [Connections](docs/connections.md) | Connection properties, named connections, switching, disconnecting. |
 | [Tables](docs/tables.md) | Column syntax, every type, keys and modifiers, and what registering does not do. |
+| [Raw statements](docs/raw-statements.md) | Statements you write yourself: what they skip, what they still owe, and why they are unsafe. |
 | [Writing rows](docs/writing.md) | Insert one, insert many, insert from a variable, upsert, `values` blocks. |
 | [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
 | [Updating and deleting](docs/updating-and-deleting.md) | Update and delete by condition or by id, and limits. |

@@ -651,6 +651,12 @@ different operation.
   is a prompt to think, not an instruction to restructure.
 - **Changing behaviour that was never declared.** If a new guarantee is needed — atomicity for a
   batch, ordering for a query — state it in the API before implementing it.
+- **Using a raw statement to get around a refusal.** A raw statement exists for the things a declaration
+  cannot express — a migration, an index, a statement only one server understands. It is the one place
+  where the addon's guarantees are known not to hold, and it must not become the way to make a refused
+  declaration work: a schema that does not match, a property an implementation does not read, or a column
+  a table does not have is fixed in the script or in the database, not bypassed with SQL. If a refusal
+  turns out to be wrong, fix the refusal.
 
 ---
 

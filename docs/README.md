@@ -16,6 +16,7 @@ Use the remaining pages as a reference when you need them.
 | --- | --- |
 | [Connections](connections.md) | Connecting, named connections, switching, and disconnecting. |
 | [Tables](tables.md) | Column syntax, types, keys, modifiers, and the limits of table registration. |
+| [Raw statements](raw-statements.md) | Statements written by the script itself: SQL and MongoDB commands, what they skip, and what they still owe. |
 | [Writing rows](writing.md) | Single and bulk inserts, inserting from variables, upsert, and `values` blocks. |
 | [Reading rows](reading.md) | Single-row, multi-row, paginated, and primary-key queries; `where` blocks and result structure. |
 | [Updating and deleting](updating-and-deleting.md) | Updates and deletes by condition or primary key, and row limits. |

@@ -77,6 +77,7 @@ command /adduser <text> <integer>:
 | [快速上手](docs/getting-started.zh-CN.md) | 从空脚本开始，保存第一行数据。 |
 | [连接](docs/connections.zh-CN.md) | 连接属性、具名连接、切换与断开连接。 |
 | [表](docs/tables.zh-CN.md) | 列语法、全部类型、主键与修饰符，以及注册表**不会**做的事。 |
+| [原始语句](docs/raw-statements.zh-CN.md) | 自己写的语句：跳过了什么、仍然保证什么，以及为什么它是 unsafe 的。 |
 | [写入行](docs/writing.zh-CN.md) | 插入一行或多行、从变量插入、upsert，以及 `values` 块的写法。 |
 | [读取行](docs/reading.zh-CN.md) | 单行、多行、分页与按 id 查询，`where` 块及结果结构。 |
 | [更新与删除](docs/updating-and-deleting.zh-CN.md) | 按条件或按 id 更新、删除，以及 limit。 |
