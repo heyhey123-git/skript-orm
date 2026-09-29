@@ -30,6 +30,10 @@ class JdbcDataCursorTest {
     @Test
     fun `get by name and index requests boxed storage class and converts`() {
         val resultSet = mockk<ResultSet>()
+        // Read untyped first, which is how a value that is not there is told from one that is: a driver
+        // may refuse the typed conversion outright for a NULL, so the absence is checked before asking.
+        every { resultSet.getObject("ticks") } returns 40
+        every { resultSet.getObject(2) } returns 60
         every { resultSet.getObject("ticks", Int::class.javaObjectType) } returns 40
         every { resultSet.getObject(2, Int::class.javaObjectType) } returns 60
         every { resultSet.wasNull() } returns false
@@ -43,11 +47,13 @@ class JdbcDataCursorTest {
     @Test
     fun `sql null bypasses converter`() {
         val resultSet = mockk<ResultSet>()
-        every { resultSet.getObject("value", Int::class.javaObjectType) } returns 0
+        every { resultSet.getObject("value") } returns null
         every { resultSet.wasNull() } returns true
         val cursor = cursor(resultSet = resultSet)
 
         assertNull(cursor.get("value", IntJdbcDataType()))
+        // The typed read is what a driver refuses for a value that is not there, so it must not be made.
+        verify(exactly = 0) { resultSet.getObject("value", Int::class.javaObjectType) }
     }
 
     @Test
@@ -64,6 +70,10 @@ class JdbcDataCursorTest {
 
         assertSame(blob, cursor.get("payload", dataType))
         assertSame(blob, cursor.get(3, dataType))
+        // Neither read is made for a Blob, typed or untyped: the untyped one would answer an array where
+        // the converter expects a blob.
+        verify(exactly = 0) { resultSet.getObject(any<String>()) }
+        verify(exactly = 0) { resultSet.getObject(any<Int>()) }
         verify(exactly = 0) { resultSet.getObject(any<String>(), any<Class<*>>()) }
         verify(exactly = 0) { resultSet.getObject(any<Int>(), any<Class<*>>()) }
     }
