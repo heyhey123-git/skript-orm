@@ -23,7 +23,12 @@ open class JdbcDatabase(
     val driver: String,
     val dialect: JdbcDialect,
     /** How long one statement may take, in seconds. Zero leaves the driver's default, which is none. */
-    val statementTimeoutSeconds: Int = DEFAULT_STATEMENT_TIMEOUT_SECONDS
+    val statementTimeoutSeconds: Int = DEFAULT_STATEMENT_TIMEOUT_SECONDS,
+    /**
+     * The type name scripts connected with, passed to the query factory so that a message can name the
+     * backend a script asked for rather than the class that happens to implement it.
+     */
+    val typeName: String = "JDBC"
 ) : Database() {
 
     companion object {
@@ -93,7 +98,7 @@ open class JdbcDatabase(
             }
             dataSource = HikariDataSource(config)
 
-            queries = JdbcQueries(PooledConnectionSource(dataSource!!, statementTimeoutSeconds), dialect)
+            queries = JdbcQueries(PooledConnectionSource(dataSource!!, statementTimeoutSeconds), dialect, typeName)
         } catch (e: ClassNotFoundException) {
             throw ClassNotFoundException("JDBC Driver class not found: $driver", e)
         } catch (e: Exception) {

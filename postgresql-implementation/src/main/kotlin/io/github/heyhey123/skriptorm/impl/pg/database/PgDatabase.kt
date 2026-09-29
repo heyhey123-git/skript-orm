@@ -6,7 +6,7 @@ import io.github.heyhey123.skriptorm.type.DataTypes
 
 class PgDatabase(
     statementTimeoutSeconds: Int = JdbcDatabase.DEFAULT_STATEMENT_TIMEOUT_SECONDS
-) : JdbcDatabase("org.postgresql.Driver", PgJdbcDialect, statementTimeoutSeconds) {
+) : JdbcDatabase("org.postgresql.Driver", PgJdbcDialect, statementTimeoutSeconds, "PostgreSQL") {
 
     override val dataTypes: DataTypes = PgDataTypes
 }

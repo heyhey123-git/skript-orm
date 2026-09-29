@@ -519,6 +519,10 @@ val serverTestChecks = buildMap {
     // rather than an error message, because it asserts what it read back and says `failed` when any of
     // it does not hold, in both modes.
     put("sqlite round trip", "ok")
+    // The raw statements on the same SQLite connection: their verdict is a word too, because they assert
+    // both what the server returned and that each guard refused before anything was sent. They run in
+    // both modes for the same reason the round trip does — they need no database server.
+    put("raw sql", "ok")
     if (serverTestUsesDatabase) {
         putAll(serverTestDatabaseChecks)
         // A run whose implementation has no transactions reports the same lines as any other database
