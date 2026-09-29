@@ -14,11 +14,6 @@ import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `select many` for the case with no filter, written without a colon.
- *
- * @see EffSelectOneUnfiltered for why this form exists beside its section.
- */
 @Name("Select Many Entities Without A Filter")
 @Description("Selects every row using row-index and column-name keys such as {_users::1::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Selects always wait and expose failures as the last database error.")
 @Example(

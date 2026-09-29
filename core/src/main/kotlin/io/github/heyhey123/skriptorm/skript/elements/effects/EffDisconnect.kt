@@ -15,23 +15,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * Closes a connection, waits for it, and lets the trigger carry on.
- *
- * Three forms share this element because they differ only in which connection they choose: the one in
- * effect, one named by the script, or all of them.
- *
- * The unqualified form resolves the way every other statement does, so inside `in connection "logs":`
- * it closes `"logs"`, after `use connection "logs"` it closes `"logs"`, and with neither it closes the
- * default. It used to always close the default, which made `[current]`, the one word of its pattern
- * that promises otherwise, a lie, and had a destructive statement act on a connection the script was
- * not using.
- *
- * The connection is resolved before the work is handed off, on the server thread, because that is where
- * the scopes live. It cannot be kept in a field either: Skript reuses one element instance for every
- * event that reaches it, so two triggers would overwrite each other's target. The closure
- * [DatabaseWork.run] takes is what carries it.
- */
 @Name("Disconnect Database")
 @Description("Disconnects a database connection asynchronously. Without a name it closes the connection in effect: the innermost 'in connection' scope, then a 'use connection' from this event, then the default one. The named form closes one connection, and the all form closes every connection. The following trigger item runs after disconnection finishes. Failures are reported as a runtime error and exposed as the last database error.")
 @Example("disconnect from the current database")

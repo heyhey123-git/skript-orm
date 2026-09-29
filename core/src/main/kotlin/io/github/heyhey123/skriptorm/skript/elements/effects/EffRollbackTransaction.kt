@@ -15,17 +15,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * Undoes the transaction the script is inside, and leaves its section.
- *
- * It is the only way a script ends a transaction other than reaching the end of the body, and it is
- * why `commit` is not offered: a commit that carried on with the body would leave the statements after
- * it in a transaction that no longer exists, and every answer to "which transaction are they in now"
- * is a surprise.
- *
- * Where it goes is the statement after the transaction section, which is found while the script is
- * parsed, the same way `exit` finds the sections it leaves.
- */
 @Name("Rollback Database Transaction")
 @Description("Rolls back the database transaction the script is inside and leaves its section, so the statements after the section run on the connection again. Can only be written inside a 'database transaction' section. Failures are reported as a runtime error and exposed as the last database error.")
 @Example(

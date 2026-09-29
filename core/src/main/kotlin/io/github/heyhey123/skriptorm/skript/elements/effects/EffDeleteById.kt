@@ -15,12 +15,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `delete one ... by id`, written without a colon.
- *
- * This form never had a body to give: the row is named by its primary key. It is offered as an effect for
- * that reason, and the section stays for scripts written before this one existed.
- */
 @Name("Delete One Entity By ID Without A Colon")
 @Description("Deletes one row by its registered primary-key value. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(

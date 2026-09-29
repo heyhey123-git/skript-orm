@@ -14,14 +14,6 @@ import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `select one` for the case with no filter, written without a colon.
- *
- * A section needs a colon, and Skript warns about every section with nothing indented under it. There is
- * nothing to indent when there is no `where` block, so the statement is offered as an effect for that
- * case; a script that wants a filter writes the section instead. Skript picks between the two by the node
- * it read, so they never compete even though their patterns match the same words.
- */
 @Name("Select One Entity Without A Filter")
 @Description("Selects at most one row and stores it by column name, such as {_user::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Selects always wait and expose failures as the last database error.")
 @Example(

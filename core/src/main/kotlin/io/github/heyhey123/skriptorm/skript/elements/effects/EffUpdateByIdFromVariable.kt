@@ -16,11 +16,6 @@ import io.github.heyhey123.skriptorm.skript.utils.WriteValues
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `update one ... by id` taking its values from a variable, written without a colon.
- *
- * @see EffInsertOneFromVariable for why this form exists beside its section.
- */
 @Name("Update One Entity By ID From A Variable Without A Colon")
 @Description("Updates one row by its registered primary-key value, taking the new values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Only the columns the variable holds are touched. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(

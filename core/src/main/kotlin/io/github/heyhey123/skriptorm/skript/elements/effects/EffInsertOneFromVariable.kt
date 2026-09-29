@@ -15,12 +15,6 @@ import io.github.heyhey123.skriptorm.skript.utils.WriteValues
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `insert one` taking its values from a variable, written without a colon.
- *
- * The rows come from the variable, so there is nothing to put in a body, and a section without one is what
- * Skript warns about. The `values` spelling keeps its section, because it has a body to give.
- */
 @Name("Insert One Entity From A Variable Without A Colon")
 @Description("Inserts one row, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(

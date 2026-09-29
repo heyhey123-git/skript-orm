@@ -12,13 +12,6 @@ import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `execute query`, the raw statement that returns rows.
- *
- * It is written without a colon because it has no body to give, like `select ... by id`. Nothing about the
- * statement is checked against a declaration: it names no table, so the plugin has nothing to compare it
- * with. See the Raw statements page before using it.
- */
 @Name("Execute Raw Query")
 @Description("Sends a SQL statement of your own to the connected database and stores the rows it returns, keyed by the column label and numbered from one, such as {_rows::1::name}. Values are bound to ? placeholders by the with clause. UNSAFE: the statement is sent as written — it is not checked against any registered table, and the plugin does not translate it for the implementation. It does not accept where, and it fails when the connection takes commands instead of SQL.")
 @Example(

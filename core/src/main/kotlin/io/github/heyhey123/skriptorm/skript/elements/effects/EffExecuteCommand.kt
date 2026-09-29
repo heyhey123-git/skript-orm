@@ -12,16 +12,6 @@ import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `execute command`, the raw statement a document backend takes.
- *
- * It is a separate statement from `execute query` rather than a spelling of it, because a command document
- * and a SQL statement are different things: one is answered with a document and reports what it changed
- * inside that answer, the other returns rows or a count. Keeping them apart is also what lets each be
- * refused by the connection that cannot take it, with the alternative named.
- *
- * It is written without a colon because it has no body to give. See the Raw statements page before using it.
- */
 @Name("Execute Raw Command")
 @Description("Sends a command document of your own to the connected document database, written as JSON text, and stores the document the server answers with. UNSAFE: the command is sent as written — it is not checked against any registered table, and the plugin does not interpret it. There are no parameters: the command is the whole statement. It fails when the connection takes SQL statements instead of commands.")
 @Example(

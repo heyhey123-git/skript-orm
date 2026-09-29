@@ -14,13 +14,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `delete entities` without a `where`, written without a colon.
- *
- * A delete that keeps no rows back has no condition to name, so there is nothing to put in a body, and a
- * section without one is what Skript warns about. The section keeps its colon form, which is still the
- * way to write one that carries a `where` block.
- */
 @Name("Delete Entities Without A Colon")
 @Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(

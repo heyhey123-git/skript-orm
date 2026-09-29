@@ -11,15 +11,12 @@ import io.github.heyhey123.skriptorm.table.Table
 object ExpressionsHelper {
 
     /**
-     * Gives [expression] a type, so that a bare literal can be read while the script runs.
+     * Gives [expression] a type, so that a bare literal can be read while the script runs. Skript leaves such
+     * a literal unparsed until something says what type it should take, and reading one that was never
+     * converted throws instead of returning the value. Anything already parsed comes back as it is.
      *
-     * Skript leaves a literal such as the `1` in `by id 1` unparsed until something says what type it
-     * should take, and reading one that was never converted throws instead of returning the value. A
-     * `%object%` pattern is exactly where that happens, because it is the syntax that has to decide.
-     * Anything already parsed comes back as it is.
-     *
-     * @return the converted expression, or null when the literal cannot be read as any type — which is the
-     *   caller's to report, since only the caller can say what the value was for
+     * @return the converted expression, or null when the literal cannot be read as any type — which the
+     *   caller reports, since only it can say what the value was for
      */
     @Suppress("UNCHECKED_CAST")
     fun convertToAnyType(expression: Expression<*>): Expression<Any>? {
@@ -30,10 +27,9 @@ object ExpressionsHelper {
     /**
      * [convertToAnyType], falling back to the expression as it stands.
      *
-     * That fallback is what a caller reading a single value wants. It is a trap for one reading a *list*: an
-     * `UnparsedLiteral` answers `getSingle` by reparsing itself, but refuses `getAll` with "UnparsedLiterals
-     * must be converted before use". A syntax that reads a list should call [convertToAnyType] instead and
-     * report the refusal itself, at parse time, rather than reach that exception while the script runs.
+     * The fallback suits a caller reading a single value and is a trap for one reading a list: an
+     * `UnparsedLiteral` answers `getSingle` but refuses `getAll`. A list reader should call [convertToAnyType]
+     * and report the null itself, at parse time.
      */
     @Suppress("UNCHECKED_CAST")
     fun withAnyType(expression: Expression<*>): Expression<Any> =

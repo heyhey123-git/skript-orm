@@ -25,23 +25,6 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 import java.time.Duration
 
-/**
- * Runs its body as one database transaction.
- *
- * Every statement inside runs on the connection the transaction pinned, which is what makes them see
- * each other's uncommitted work and what makes them all or nothing. Reaching the end of the body
- * commits, `exit`, `stop` or `return` rolls back, and a statement that fails puts the transaction into
- * rollback-only: the statements after it do nothing rather than running work that is about to be
- * thrown away.
- *
- * The statements inside run on one connection, so they cannot run at the same time and they cannot
- * overtake each other. That is the same thing every statement outside a transaction does: every statement
- * waits for its work, and the transaction is what makes them one unit on top of that.
- *
- * A transaction section reached from inside another one joins it rather than starting a second, which
- * is what happens when a function that opens one is called from inside one. Only the section that
- * began the transaction commits it.
- */
 @Name("Database Transaction")
 @Description("Runs the code inside as one database transaction on the connection in effect, or on a named one. Reaching the end of the body commits; `exit`, `stop` and `return` roll back. A statement that fails makes the rest of the body's database statements do nothing, and the transaction is rolled back when the body ends. The timeout defaults to 30 seconds and rolls the transaction back on its own if it is still open after that.")
 @Example(

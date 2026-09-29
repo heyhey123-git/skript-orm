@@ -13,21 +13,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * Switches the connection the rest of the event runs against.
- *
- * This is the effect form of `in connection`, and the difference between them is how long the switch
- * lasts. This one lasts until the event is over, so a command that names its database once at the top
- * does not have to repeat it; the section lasts for its own body, so it is what a script uses when it
- * reads from one database and writes to another.
- *
- * It does no database work, so unlike every other statement in this addon it does not wait: the very
- * next statement already runs against the connection it named.
- *
- * A name that is unknown, or that belongs to a connection which has been disconnected, changes
- * nothing and reports through `last database error`. Keeping the previous connection is deliberate:
- * the alternative would be running the rest of the script against a database it did not choose.
- */
 @Name("Use Database Connection")
 @Description("Makes a named connection the one the rest of the current event uses. Takes effect immediately, without waiting. An unknown or disconnected name changes nothing and is reported as the last database error. Statements inside an 'in connection' section keep using that section's connection.")
 @Example(

@@ -25,16 +25,9 @@ import org.bukkit.event.Event
  * What the raw statement effects share: the statement, its values, the guards before it is sent, and the
  * hand-off that runs it off the server thread.
  *
- * A raw statement is not resolved against a table — there is no declaration behind it — so this walks the
- * steps a declared write does minus the table: clear the error slot, read the statement and its values on
- * the server thread, refuse what can be refused before anything is sent, resolve the connection, run, then
- * report the outcome and walk the continuation.
- *
- * The guards are the ones a raw statement can actually honour: the statement has to say something, and the
- * number of values has to match the number of placeholders. Nothing else is checked, because nothing else
- * can be — see [io.github.heyhey123.skriptorm.queries.RawStatement]. Which raw form this connection takes is
- * decided by its own query factory, so a statement of the wrong shape is refused by the backend with the
- * alternative named, rather than by a list of backends kept here.
+ * A raw statement is resolved against no table, so the only checks here are the ones it can honour: the
+ * statement has to say something, and the number of values has to match the placeholders. See
+ * [io.github.heyhey123.skriptorm.queries.RawStatement] for what that leaves unchecked.
  */
 abstract class EffRawStatementBase : Effect() {
 
@@ -62,15 +55,11 @@ abstract class EffRawStatementBase : Effect() {
     ): Boolean {
         statementExpr = expressions[0] as Expression<String>
 
-        // The `with` clause is optional, and Skript pads an omitted group with null rather than leaving the
-        // slot out — so the slot being at an index says nothing about whether it was written. A statement
-        // without parameters, which is the common case for DDL, has no expression here at all.
+        // The `with` clause is optional, so Skript pads the omitted slot with null rather than leaving it out;
+        // its absence says nothing about whether it was written.
         //
-        // The values are read as a list while the script runs, and a list built from literals cannot be read
-        // that way: `with (18, "A")` arrives as a `LiteralList` whose elements are unparsed, and asking it for
-        // its values throws "UnparsedLiterals must be converted before use". A single value arrives as an
-        // ordinary literal and a list variable arrives already converted, so those are what this takes, and a
-        // literal list is refused here — on its own line, at parse time — instead of while the statement runs.
+        // A list written out of literals arrives as an unparsed `LiteralList`, which throws when its values are
+        // read. A single value and a list variable both arrive readable, so a literal list is refused here.
         val parameters = parameterIndex(matchedPattern)
         val parameterSlot = if (parameters >= 0) expressions[parameters] else null
         if (parameterSlot != null) {

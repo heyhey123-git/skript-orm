@@ -13,18 +13,6 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * Chooses which connection statements use when nothing names one.
- *
- * The first connection that succeeds becomes the default on its own, so this is only needed once a
- * script has more than one and wants a different one to answer unqualified statements. It changes
- * what later events resolve to; the event it runs in is unaffected unless it also says
- * `use connection`, because a statement that already resolved its connection keeps it.
- *
- * The connection that loses the role is closed when it has no name to be reached by: no statement can
- * resolve to it afterwards, so holding its pool open would only be a leak. That close is part of the
- * statement, which is why this one waits where `use connection` does not.
- */
 @Name("Make Database Connection The Default")
 @Description("Makes a named connection the one statements use when neither a scope nor a 'use connection' effect names one. The first connection created is already the default, so this is only needed to choose a different one. The connection that loses the role is disconnected when it has no name of its own, because nothing can reach it afterwards; a named one keeps running. An unknown or disconnected name changes nothing and is reported as the last database error, and the statement is refused while a database transaction is open.")
 @Example(

@@ -8,21 +8,12 @@ import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `execute update`, the raw statement that changes the database and reports how many rows it affected.
- *
- * This is also the statement for the things no declaration can express — `ALTER TABLE`, `CREATE INDEX`, a
- * statement only one server understands — which is why the count is optional: a server reports zero for
- * statements it does not count, and a script that does not care should not have to say so.
- *
- * It is written without a colon because it has no body to give, like `delete entities`. See the Raw
- * statements page before using it.
- */
 @Name("Execute Raw Update")
 @Description("Sends a SQL statement of your own to the connected database, such as ALTER TABLE or UPDATE. Values are bound to ? placeholders by the with clause. The number of affected rows may be stored, which is what the server reports and is 0 for statements it does not count. The statement waits and exposes failures as the last database error. UNSAFE: the statement is sent as written — it is not checked against any registered table, and the plugin does not translate it for the implementation. It fails when the connection takes commands instead of SQL.")
 @Example(
     """execute update "ALTER TABLE users ADD COLUMN age INT NULL"
-execute update "UPDATE users SET age = ? WHERE name = ?" with (30, "Alice") and store affected rows in {_rows}
+set {_values::*} to 30, "Alice"
+execute update "UPDATE users SET age = ? WHERE name = ?" with {_values::*} and store affected rows in {_rows}
 """
 )
 @Since("1.3.0")

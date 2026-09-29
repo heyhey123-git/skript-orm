@@ -14,11 +14,6 @@ import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
-/**
- * `select page` for the case with no filter, written without a colon.
- *
- * @see EffSelectOneUnfiltered for why this form exists beside its section.
- */
 @Name("Select Page Without A Filter")
 @Description("Selects a one-based page with positive size, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Results use page-local row-index and column-name keys, pagination requires a registered primary key, and selects always wait.")
 @Example(
