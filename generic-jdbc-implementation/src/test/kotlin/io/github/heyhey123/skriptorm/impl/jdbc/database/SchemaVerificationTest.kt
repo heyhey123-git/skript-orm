@@ -166,6 +166,70 @@ class SchemaVerificationTest {
         )
     }
 
+    /**
+     * The failure continuous integration found, pinned: MySQL has a `performance_schema` holding a table
+     * for each instrument, and one of them is `USER`. Searching for `users` with no catalog pattern
+     * searches every schema, so that table was taken for the registered one, and every declared column was
+     * reported missing from a table the script had never named.
+     */
+    @Test
+    fun `a table of another schema is not taken for the registered one`() {
+        val metadata = FakeMetadata(
+            catalog = "skriptorm_test",
+            tables = listOf(
+                FakeTable("performance_schema", null, "USER"),
+                FakeTable("skriptorm_test", null, "users")
+            ),
+            columns = listOf(
+                FakeColumn("users", "id", "BIGINT", false, 19),
+                FakeColumn("users", "name", "VARCHAR", false, 64),
+                FakeColumn("users", "age", "INT", true, 10)
+            ),
+            primaryKey = listOf("users" to "id")
+        )
+
+        val actual = SchemaVerification.readWith(metadata.metadata, "users")
+
+        assertEquals(listOf("id", "name", "age"), actual.columns.map { it.name })
+        assertEquals(setOf("id"), actual.primaryKey)
+        assertTrue(
+            SchemaVerification.compare(users, actual).isEmpty(),
+            "the declared table is the one the catalog holds: ${SchemaVerification.compare(users, actual)}"
+        )
+        assertEquals(
+            listOf<String?>("skriptorm_test"),
+            metadata.catalogPatterns,
+            "the lookup must be confined to the connection's own catalog, or another schema's table answers"
+        )
+    }
+
+    /**
+     * A server that stores the name in another case is still the registered table. The metadata call asks
+     * for the name as written and MySQL on a case-sensitive filesystem compares it as written, so `users`
+     * does not find a table the server hands over as `USERS` — and the answer must still be the one in the
+     * connection's own catalog, not the first match anywhere.
+     */
+    @Test
+    fun `a table the server stores under another case is found in its own catalog`() {
+        val metadata = FakeMetadata(
+            catalog = "skriptorm_test",
+            tables = listOf(
+                FakeTable("performance_schema", null, "USER"),
+                FakeTable("skriptorm_test", null, "USERS")
+            ),
+            columns = listOf(
+                FakeColumn("USERS", "id", "BIGINT", false, 19),
+                FakeColumn("USERS", "NAME", "VARCHAR", false, 64)
+            ),
+            primaryKey = listOf("USERS" to "id")
+        )
+
+        val actual = SchemaVerification.readWith(metadata.metadata, "users")
+
+        assertEquals(listOf("id", "NAME"), actual.columns.map { it.name })
+        assertEquals(listOf<String?>("skriptorm_test"), metadata.catalogPatterns)
+    }
+
     private fun actual(
         table: Table,
         vararg replaced: Pair<String, SchemaVerification.ActualColumn>

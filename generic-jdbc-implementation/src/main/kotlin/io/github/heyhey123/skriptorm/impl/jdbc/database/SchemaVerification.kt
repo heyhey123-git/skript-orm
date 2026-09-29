@@ -123,14 +123,25 @@ internal object SchemaVerification {
     /**
      * Reads the table the server holds.
      *
-     * The table is looked up before its columns are, because the columns of a table can be read by
-     * catalog alone on MySQL and by schema alone on PostgreSQL, and the same call has to work on both.
-     * A table the lookup cannot find is reported as one with no columns, which makes every declared column
-     * a difference: a table that is not there is the largest mismatch of all.
+     * The table is looked up before its columns are, because a table lives in a catalog on MySQL and in a
+     * schema on PostgreSQL, and the same call has to find it on both. A table the lookup cannot find is
+     * reported as one with no columns, which makes every declared column a difference: a table that is not
+     * there is the largest mismatch of all.
      */
-    fun read(connection: Connection, table: String): ActualTable {
-        val metadata = connection.metaData
-        val location = locate(metadata, table)
+    fun read(connection: Connection, table: String): ActualTable =
+        readWith(connection.metaData, table)
+
+    /**
+     * [read], taking the metadata rather than a connection.
+     *
+     * The two are separate so that the part a server can get wrong — where the table is, and which one was
+     * found — is unit-testable. That part has been wrong once: the catalogue search ran with no catalogue
+     * pattern, which on MySQL searches every schema it can see, so `performance_schema.USER` was taken for
+     * the registered `users`.
+     */
+    fun readWith(metadata: DatabaseMetaData, table: String): ActualTable {
+        val catalog = metadata.connection.catalog
+        val location = locate(metadata, catalog, table)
         val columns = mutableListOf<ActualColumn>()
         metadata.getColumns(location.catalog, location.schema, table, null).use { rows ->
             while (rows.next()) {
@@ -158,23 +169,44 @@ internal object SchemaVerification {
     /**
      * Where [table] lives, as the catalog and schema a metadata read has to be given.
      *
-     * Taken from the server rather than from [Connection.getCatalog], which PostgreSQL answers with null
-     * because it has no catalogs at all: passing that back as the catalog pattern would ask for a table in
-     * no catalog, and a schema-qualified PostgreSQL table would not be found.
+     * Every lookup stays inside the connection's own catalog. [DatabaseMetaData.getTables] with a null
+     * catalog searches every schema the account can see, and MySQL installs one called `performance_schema`
+     * that holds a table for each instrument; a declared `users` matched its `USER`, and the comparison then
+     * reported every declared column missing from a table the script had never named. A registration only
+     * ever concerns the table the connection is already using, so a table found anywhere else is not the one
+     * that was registered and must not be compared with it.
+     *
+     * Within that catalog the name is matched as the server reports it, and only then without case: MySQL on
+     * a case-sensitive filesystem compares the pattern as written and stores what the DDL wrote, so asking
+     * for `users` can miss a table the same server hands over as `USERS`.
+     *
+     * The location comes from the server's own answer rather than from [Connection.getCatalog] alone,
+     * because PostgreSQL answers that with null: it has no catalogs, and its table is found by schema.
      */
-    private fun locate(metadata: DatabaseMetaData, table: String): Location {
-        metadata.getTables(null, null, table, null).use { rows ->
+    private fun locate(metadata: DatabaseMetaData, catalog: String?, table: String): Location {
+        val found = linkedMapOf<String, Location>()
+        metadata.getTables(catalog, null, table, null).use { rows ->
             while (rows.next()) {
-                val name = rows.getString("TABLE_NAME")
-                if (name != null && name.equals(table, ignoreCase = true)) {
-                    return Location(rows.getString("TABLE_CAT"), rows.getString("TABLE_SCHEM"))
-                }
+                val name = rows.getString("TABLE_NAME") ?: continue
+                found[name] = Location(rows.getString("TABLE_CAT"), rows.getString("TABLE_SCHEM"))
             }
         }
-        return Location(metadata.connection.catalog, metadata.connection.schema)
+        found[table]?.let { return it }
+        found.entries
+            .firstOrNull { it.key.equals(table, ignoreCase = true) }
+            ?.let { return it.value }
+
+        val connection = metadata.connection
+        return Location(catalog ?: connection.catalog, connection.schema)
     }
 
-    private data class Location(val catalog: String?, val schema: String?)
+    /**
+     * Where a table is: the catalog and schema a metadata read has to be given.
+     *
+     * Both are nullable because no server has both: MySQL has a catalog and no schema, PostgreSQL the other
+     * way round, and SQLite neither.
+     */
+    data class Location(val catalog: String?, val schema: String?)
 
     /**
      * The type name the dialect writes for [column], or null when it is not a type this implementation
