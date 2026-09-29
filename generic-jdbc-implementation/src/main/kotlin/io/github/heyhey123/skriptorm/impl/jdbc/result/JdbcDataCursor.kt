@@ -66,12 +66,23 @@ class JdbcDataCursor(
      * for it. Without that, every row carrying a Blob-backed column is unreadable, including the rows
      * where that column is SQL NULL, since the driver rejects the requested conversion before it
      * looks at the value. Every other storage type uses the JDBC 4.2 typed read.
+     *
+     * A SQL NULL is found before that read is made, because a driver may reject the requested
+     * conversion for a value that is not there at all: SQLite's does exactly that for an `INTEGER`
+     * column, so a row whose nullable number was never written could not be read back. The untyped
+     * read is the one call that reports absence rather than a conversion.
      */
-    private fun readStorage(column: String, storageType: Class<*>): Any? =
-        if (storageType == Blob::class.java) resultSet.getBlob(column) else resultSet.getObject(column, boxed(storageType))
+    private fun readStorage(column: String, storageType: Class<*>): Any? {
+        if (storageType == Blob::class.java) return resultSet.getBlob(column)
+        if (resultSet.getObject(column) == null) return null
+        return resultSet.getObject(column, boxed(storageType))
+    }
 
-    private fun readStorage(index: Int, storageType: Class<*>): Any? =
-        if (storageType == Blob::class.java) resultSet.getBlob(index) else resultSet.getObject(index, boxed(storageType))
+    private fun readStorage(index: Int, storageType: Class<*>): Any? {
+        if (storageType == Blob::class.java) return resultSet.getBlob(index)
+        if (resultSet.getObject(index) == null) return null
+        return resultSet.getObject(index, boxed(storageType))
+    }
 
     override fun close() {
         if (closed) return
