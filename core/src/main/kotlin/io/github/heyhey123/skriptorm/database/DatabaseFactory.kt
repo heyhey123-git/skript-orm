@@ -20,21 +20,17 @@ interface DatabaseFactory {
      * connection with none selected. The set is therefore the contract, and
      * [io.github.heyhey123.skriptorm.skript.utils.ConnectionPropertiesParser] is where it is enforced.
      *
+     * It says what this implementation reads and nothing about any other. Which implementation a property
+     * does belong to is documentation, not something one implementation should hold about another: an
+     * implementation that named another one's properties would go stale the moment that other one changed,
+     * and would have to be edited to answer a question it does not own. The refusal names this
+     * implementation and the names in this set, which is what a script can act on.
+     *
      * [ConnectionProperties.URL], [ConnectionProperties.USERNAME] and [ConnectionProperties.PASSWORD] are
      * always accepted and need not be listed: they are how a connection is opened, not something an
      * implementation opts into.
      */
     val acceptedConnectionProperties: Set<String>
-
-    /**
-     * Why this implementation cannot honour [name], or null when it can.
-     *
-     * The default is null, which leaves the refusal to the caller and produces the generic
-     * "not read by this implementation" message listing [acceptedConnectionProperties]. An
-     * implementation overrides this only when it has something more useful to say, which is the case for
-     * a property that belongs to another implementation and has a replacement here.
-     */
-    fun describeRejectedProperty(name: String): String? = null
 
     /**
      * Create a new instance of the Database.

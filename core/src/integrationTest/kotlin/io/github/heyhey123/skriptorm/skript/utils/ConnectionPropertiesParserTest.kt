@@ -171,16 +171,28 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
         assertEquals("Connection property 'extra' must be a value, not a block.", thrown.message)
     }
 
+    /**
+     * The refusal answers from what the implementation declares and from nothing else. This is the one
+     * message for every name it does not read, including a name another implementation would have read:
+     * an implementation that described another one's properties would have to be edited every time that
+     * other one changed, to answer a question it does not own.
+     */
     @Test
-    fun `an implementation is asked about a property it does not read`() {
+    fun `a property the implementation does not read is refused by name, and only by its own names`() {
         val factory = StubFactory(accepted = setOf("statement timeout"))
 
-        assertFailsWith<IllegalArgumentException> {
+        val thrown = assertFailsWith<IllegalArgumentException> {
             ConnectionPropertiesParser.requireAcceptedBy(
                 mapOf("url" to "jdbc:mysql://localhost:3306/mydb", "database" to "sicilia_db"),
                 factory
             )
         }
+
+        assertEquals(
+            "Connection property 'database' is not read by database 'Stub'. " +
+                "It reads: password, statement timeout, url, username.",
+            thrown.message
+        )
     }
 
     @Test
@@ -207,19 +219,6 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
     }
 
     @Test
-    fun `an implementation that knows why a property is wrong says so instead`() {
-        val factory = StubFactory(accepted = setOf("statement timeout")) {
-            "Connection property '$it' belongs to another implementation."
-        }
-
-        val thrown = assertFailsWith<IllegalArgumentException> {
-            ConnectionPropertiesParser.requireAcceptedBy(mapOf("database" to "sicilia_db"), factory)
-        }
-
-        assertEquals("Connection property 'database' belongs to another implementation.", thrown.message)
-    }
-
-    @Test
     fun `the three properties every implementation reads are always accepted`() {
         val factory = StubFactory(accepted = emptySet())
 
@@ -237,15 +236,12 @@ class ConnectionPropertiesParserTest : SkriptConfigTestBase() {
      * need a server.
      */
     private class StubFactory(
-        private val accepted: Set<String>,
-        private val rejection: ((String) -> String?)? = null
+        private val accepted: Set<String>
     ) : DatabaseFactory {
 
         override val typeName: String = "Stub"
 
         override val acceptedConnectionProperties: Set<String> = accepted
-
-        override fun describeRejectedProperty(name: String): String? = rejection?.invoke(name)
 
         override fun create(properties: Map<String, String>): Database =
             error("The stub factory never opens a connection.")

@@ -90,6 +90,11 @@ object ConnectionPropertiesParser {
      * fail later, on the first statement that needed one, with a message that named neither the property
      * nor the connection. A typo in a property name was the same failure with less to go on.
      *
+     * The refusal says which implementation was asked for, which property it did not read, and which names
+     * that implementation does read. It says nothing about where the refused property belongs: an
+     * implementation answers for itself, and a name it does not read is a name it does not own. Which
+     * implementation reads what is in the documentation, where it can be kept correct in one place.
+     *
      * @param properties the properties [collectFrom] returned
      * @param factory the implementation the connection was asked for
      * @throws IllegalArgumentException naming the property, and every name that would have been read
@@ -98,8 +103,6 @@ object ConnectionPropertiesParser {
         val accepted = ConnectionProperties.ALWAYS_READ + factory.acceptedConnectionProperties
         for (name in properties.keys) {
             if (name in accepted) continue
-            val specific = factory.describeRejectedProperty(name)
-            if (specific != null) throw IllegalArgumentException(specific)
             throw IllegalArgumentException(
                 "Connection property '$name' is not read by database '${factory.typeName}'. " +
                     "It reads: ${accepted.sorted().joinToString(", ")}."

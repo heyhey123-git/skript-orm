@@ -21,7 +21,7 @@ object JdbcDatabaseFactory : DatabaseFactory {
                 "Database 'JDBC' requires the connection property '$DRIVER_PROPERTY', naming the driver " +
                     "class to use, for example \"org.sqlite.JDBC\"."
             )
-        return JdbcDatabase(driver, GenericJdbcDialect, JdbcDatabase.statementTimeoutSeconds(properties))
+        return JdbcDatabase(driver, GenericJdbcDialect, JdbcDatabase.statementTimeoutSeconds(properties), typeName)
     }
 
     /** The property that names the driver class for this type. */

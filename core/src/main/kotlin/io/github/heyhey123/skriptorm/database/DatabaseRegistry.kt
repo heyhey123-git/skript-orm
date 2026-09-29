@@ -59,4 +59,13 @@ object DatabaseRegistry {
      * @return True if the database type is supported, false otherwise.
      */
     fun isSupported(typeName: String): Boolean = typeName in factories.keys
+
+    /**
+     * Every registered implementation, in no particular order.
+     *
+     * Read by the startup report, which says what a server actually has: the names here are the ones a
+     * script writes after `database`, so this is what a server owner needs when a type they expected is
+     * missing.
+     */
+    fun registered(): Collection<DatabaseFactory> = factories.values.toList()
 }
