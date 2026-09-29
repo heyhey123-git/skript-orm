@@ -123,5 +123,10 @@ every 5 seconds:
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL raw cleanup: %last database error%"
 
+    # Closed here rather than left open: a named connection outlives the script that made it, and this one
+    # connects without a name of its own in the runs that have no server, where it would answer the
+    # unqualified statements of every script after it.
+    disconnect from connection "raw"
+
     log "SKRIPTORM_SELFTEST detail: raw sql -> ok"
     set {skriptorm::selftest::done::raw-sql} to true
