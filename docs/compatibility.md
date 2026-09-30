@@ -9,7 +9,8 @@
 | **Paper** | 26.2 or newer. The plugin declares `api-version: '26.2'` and is compiled against that server line. |
 | **Skript** | 2.16.2 or newer. Below that the plugin logs why and disables itself, so an old Skript shows up as a plugin that is present but not enabled. |
 | **Java** | Whatever the server runs; the plugin is built for the Java version Paper 26.2 uses. |
-| **MySQL** | The shipped implementation targets MySQL, and is tested against MySQL 8 in CI. MariaDB and other MySQL-compatible servers have not been tested. |
+| **MySQL** | Supported through `"MySQL"`, with the MySQL driver the server already has. Tested against MySQL 8 in CI. |
+| **MariaDB** | Supported through `"MariaDB"`, which downloads MariaDB Connector/J on the first start. Tested against MariaDB 11 in CI. |
 | **PostgreSQL** | Supported through `"PostgreSQL"`, and tested against PostgreSQL in CI, both the implementation and a full run of the addon on a real server. |
 | **MongoDB** | Supported through `"MongoDB"`, and tested against MongoDB 8 in CI. Its driver is downloaded on the first start, the same way PostgreSQL's is. |
 | **SkBee** | Optional. Only `nbtcompound` columns need it. |
@@ -17,32 +18,35 @@
 ## The type names a script can write
 
 `create a connection to database "..."` takes the type name of an implementation, matched exactly and
-case-sensitively, and the released jar registers four:
+case-sensitively, and the released jar registers five:
 
 | Type name | What it is |
 | --- | --- |
 | `"MySQL"` | MySQL's dialect with the server's existing MySQL driver. The product and type share a name, but serve different purposes in this documentation. |
+| `"MariaDB"` | The same dialect as `"MySQL"`, with the MariaDB driver the plugin downloads for it. Pick the type that names your server: each connector claims only its own URL scheme. |
 | `"PostgreSQL"` | PostgreSQL's dialect, with the driver the plugin downloads for it. See [What is inside the jar](#what-is-inside-the-jar). |
 | `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [MongoDB](#mongodb). |
 | `"JDBC"` | A driver you name yourself in a `driver` property, and a dialect that writes portable SQL (`"double quoted"` identifiers, `LIMIT 1` for one row, `LIMIT ? OFFSET ?` for paging), refusing whatever has no portable form. |
 
 Any other name is refused when the section runs, with `Database '<name>' is not supported.` There is no
-type called `"MariaDB"` or `"SQLite"`; those are products, and the table under "Database products" is
-about them. `"MongoDB"` is both, the way `"MySQL"` is.
+type called `"SQLite"`; that is a product with no implementation here. `"MySQL"`, `"MariaDB"` and
+`"MongoDB"` are each both, the way the table under "Database products" describes them.
 
 ## What is inside the jar
 
 The released jar bundles the plugin, its Kotlin runtime, the connection pool, and all implementation
-modules in this repository: MySQL, generic JDBC, PostgreSQL, and MongoDB.
+modules in this repository: the JDBC module that registers MySQL, MariaDB and the generic type,
+PostgreSQL, and MongoDB.
 **Database drivers are not bundled.** They are provided as follows:
 
 - MySQL and the generic type use the driver the server already has. Paper ships MySQL Connector/J and
   makes it visible to plugins, so there is nothing to install for it, and `"JDBC"` is for a driver the
   server carries that this jar knows nothing about.
-- PostgreSQL and MongoDB have their drivers declared in `plugin.yml` as `libraries` entries and
+- MariaDB, PostgreSQL and MongoDB have their drivers declared in `plugin.yml` as `libraries` entries and
   downloaded by Paper once, on the first start, into the server's `libraries/` directory, where they are
   loaded onto the plugin's classpath. That list is generated from the modules the jar bundles: in the
-  default build it is `org.postgresql:postgresql:42.7.11` and
+  default build it is `org.mariadb.jdbc:mariadb-java-client:3.4.4`,
+  `org.postgresql:postgresql:42.7.11` and
   `org.mongodb:mongodb-driver-sync:5.6.1`, and a build of modules that need no driver writes
   `libraries: []`. The source is the server's mirror of Maven Central:
   `PAPER_DEFAULT_CENTRAL_REPOSITORY`, or the `org.bukkit.plugin.java.LibraryLoader.centralURL` system
@@ -92,13 +96,13 @@ requirement: the plugin enables with or without it.
 ## Database products
 
 This table lists database products a connection can access, rather than accepted type names.
-Use one of the four types listed under "The type names a script can write", even when the product
+Use one of the five types listed under "The type names a script can write", even when the product
 and type happen to share a name.
 
 | | |
 | --- | --- |
 | MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
-| MariaDB | Untested. Try `"MySQL"`, which generates MySQL syntax such as `ON DUPLICATE KEY UPDATE` and `LIMIT` on updates and deletes. It may work, but this has not been verified. |
+| MariaDB | Supported. Write `"MariaDB"`; the driver is downloaded on the first start. The dialect generates the MySQL syntax MariaDB also accepts, such as `ON DUPLICATE KEY UPDATE` and `LIMIT` on updates and deletes. Tested in CI against MariaDB 11. |
 | PostgreSQL | Supported. Write `"PostgreSQL"`; the driver is downloaded on the first start. Tested in CI against a real server, and the addon is driven against it on a real Paper server as well. |
 | MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start. Its transactions are not implemented here, so a `database transaction` section reports the refusal. Tested in CI against MongoDB 8. |
 | SQLite and others | SQLite works through `"JDBC"` and Paper's included driver. It accepts the SQL this dialect generates; server tests cover inserts, reads, paging, updates and deletes in both test modes. The dialect still excludes auto increment, `insert ... if absent`, `upsert`, and write limits. Other products require a driver not included with the server. |
@@ -147,5 +151,6 @@ also applies, but some SQL-specific assumptions do not. The main differences are
 
 Shared syntax does not imply identical behavior. Conflict handling in `upsert` and `insert ... if absent`,
 limits on updates and deletes, and the meaning of an absent row depend on the implementation.
-The relevant pages identify MySQL-specific behavior rather than presenting it as universal.
+The relevant pages identify MySQL behavior rather than presenting it as universal; since `"MariaDB"`
+uses the same dialect, everything they say about MySQL applies to it as well.
 MongoDB differences are collected under [MongoDB](#mongodb) above.

@@ -14,8 +14,8 @@ create a connection to database "MySQL" with properties:
     password: "123456"
 ```
 
-- `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"PostgreSQL"`, `"MongoDB"` and
-  `"JDBC"`; see [The implementation name](#the-implementation-name) below.
+- `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"MariaDB"`, `"PostgreSQL"`,
+  `"MongoDB"` and `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
 - Other literal properties are passed to the implementation, and **one that the implementation does not
   read is refused**: the statement fails with
@@ -24,7 +24,7 @@ create a connection to database "MySQL" with properties:
   quietly doing nothing. Supported extra properties are `statement timeout`, `driver` for `"JDBC"`, and
   MongoDB's `database` and `auth database`. `url`, `username` and `password` are read by every
   implementation.
-- On `"MySQL"` and `"PostgreSQL"`, the database **belongs in the url path**
+- On `"MySQL"`, `"MariaDB"` and `"PostgreSQL"`, the database **belongs in the url path**
   (`jdbc:mysql://localhost:3306/mydb`). `database: "mydb"` is a MongoDB property and is refused here,
   naming what to write instead.
 - The section always waits: when the next line runs, the connection is either live or failed. `and wait`
@@ -50,17 +50,18 @@ specified, so a script with one database usually needs no connection-switching s
 
 The quoted value is an implementation **type name**, not an arbitrary database product name.
 It selects the code used to build statements and read results. Matching is exact and case-sensitive.
-The jar registers four types:
+The jar registers five types:
 
 | Type name | What it brings |
 | --- | --- |
 | `"MySQL"` | MySQL's dialect: backtick identifiers, `ON DUPLICATE KEY UPDATE` for `upsert`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, and `LIMIT` paging. The plugin locates the server's MySQL driver (`com.mysql.cj.jdbc.Driver` or the older `com.mysql.jdbc.Driver`). Use this type for MySQL. |
+| `"MariaDB"` | The same dialect as `"MySQL"`, since MariaDB accepts that SQL, with MariaDB Connector/J downloaded on first startup. The url has to be a `jdbc:mariadb://` one: the connector refuses a `jdbc:mysql://` url, and the MySQL driver refuses a `jdbc:mariadb://` one. Use this type for MariaDB. |
 | `"PostgreSQL"` | PostgreSQL's dialect: `ON CONFLICT`, `EXCLUDED`, and `GENERATED … AS IDENTITY`. Row limits use `ctid` because PostgreSQL has no `UPDATE ... LIMIT`. The driver is downloaded on first startup. |
 | `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [Compatibility](compatibility.md#mongodb). Connection properties are listed below. |
 | `"JDBC"` | A driver specified through the `driver` property, with portable SQL: `"double quoted"` identifiers, `LIMIT 1` for a single row, and `LIMIT ? OFFSET ?` for paging. This row-limit syntax works in MySQL, MariaDB, SQLite, PostgreSQL and H2. Operations without a portable form are rejected: `insert ... if absent`, `upsert ... by id`, write limits, and `auto increment`. |
 
-The types also differ in how drivers are provided. PostgreSQL and MongoDB drivers are downloaded
-for the plugin; a `"JDBC"` driver class must already be on the server's classpath.
+The types also differ in how drivers are provided. The MariaDB, PostgreSQL and MongoDB drivers are
+downloaded for the plugin; a `"JDBC"` driver class must already be on the server's classpath.
 Use `"JDBC"` for SQLite, whose driver is included with Paper:
 
 ```sk
@@ -69,8 +70,9 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-Only `"JDBC"` requires a driver class name. None of the four drivers is bundled in this jar.
-PostgreSQL and MongoDB drivers are downloaded on first startup, with no class name needed.
+Only `"JDBC"` requires a driver class name, and no driver is bundled in this jar.
+The MariaDB, PostgreSQL and MongoDB drivers are downloaded on first startup, with no class name needed;
+`"MySQL"` uses the one the server already has.
 See [Compatibility](compatibility.md#what-is-inside-the-jar) for details and options if the server
 cannot reach the download mirror.
 
@@ -82,9 +84,9 @@ Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
   generates, so a file connection supports all of the type's operations. Its limitations still apply:
   no auto increment, `insert ... if absent`, `upsert`, or write limits. The script must supply the key.
 
-`"mysql"` is rejected with `Database 'mysql' is not supported.`. `"MariaDB"` and `"SQLite"` are also
-rejected because they are not registered type names. `"MongoDB"` and `"MySQL"` are both product names
-and type names, but the distinction matters: scripts must use one of the four types above.
+`"mysql"` is rejected with `Database 'mysql' is not supported.`. `"SQLite"` is also rejected because it
+is not a registered type name. `"MySQL"`, `"MariaDB"` and `"MongoDB"` are both product names and type
+names, but the distinction matters: scripts must use one of the five types above.
 [Compatibility](compatibility.md) lists types and database products separately.
 
 ## MongoDB properties
@@ -266,7 +268,8 @@ create a connection to database "MySQL" with properties:
 - The timeout prevents an unfinished statement from holding a pooled connection indefinitely,
   potentially until the server restarts.
 - What it guarantees is that the script stops waiting, not that the server stopped working: the driver
-  cancels the statement, and MySQL does that by killing the query from another connection.
+  cancels the statement, and MySQL does that by killing the query from another connection. MariaDB needs
+  no second connection — its connector asks the server to limit the statement, and the server aborts it.
 - On SQL backends, it covers one statement after that statement has acquired a connection. Waiting for a free
   one is bounded by the pool instead: **30 seconds**, after which the statement fails with
   `HikariPool-1 - Connection is not available, request timed out after 30000ms`. `statement timeout: 0`
@@ -274,15 +277,16 @@ create a connection to database "MySQL" with properties:
   by the server's own limits and by `socketTimeout` in the url.
 - On MongoDB the same property becomes the driver's socket read timeout, and the connection's
   `closeWaitTimeout` is that timeout plus five seconds, exactly as it is on the SQL side. What differs is
-  what the two sides do when it expires: MySQL cancels the statement from another connection, while
-  MongoDB's driver only stops waiting for the response — the server finishes the statement it was sent.
+  what the two sides do when it expires: on SQL the driver cancels the statement, while MongoDB's driver
+  only stops waiting for the response — the server finishes the statement it was sent.
   Either way the property bounds how long a script waits, not what the server does. It is applied over the
   url, so a `socketTimeoutMS` written into a connection string is replaced by this property and by its
   30-second default; set the value here instead, and `statement timeout: 0` leaves the url's own value
   alone.
 - MySQL's `innodb_lock_wait_timeout` defaults to 50 seconds, longer than this, so a statement waiting on
   a lock is cancelled by this timeout first and reports a timeout rather than a lock wait. Raise this
-  value past 50 if you would rather read MySQL's own message.
+  value past 50 if you would rather read MySQL's own message. MariaDB's server aborts the statement the
+  same way, and its `innodb_lock_wait_timeout` also defaults to 50 seconds.
 - The value must be a whole number of seconds. Anything else is refused with `Connection property
   'statement timeout' must be a whole number of seconds, but was 'x'.`, and a negative value with
   `Connection property 'statement timeout' must not be negative, but was -1.`

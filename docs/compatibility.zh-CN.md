@@ -9,30 +9,32 @@
 | **Paper** | 26.2 或更高。插件声明 `api-version: '26.2'`，并针对该服务端版本系列编译。 |
 | **Skript** | 2.16.2 或更高。版本过低时，插件会记录原因并自行禁用，因此可能显示为已安装但未启用。 |
 | **Java** | 使用 Paper 26.2 所需的 Java 版本，插件也针对该版本构建。 |
-| **MySQL** | 内置实现面向 MySQL，并在 CI 中通过 MySQL 8 测试。MariaDB 等 MySQL 兼容服务端尚未测试。 |
+| **MySQL** | 通过 `"MySQL"` 支持，使用服务端已有的 MySQL 驱动。已在 CI 中通过 MySQL 8 测试。 |
+| **MariaDB** | 通过 `"MariaDB"` 支持，其驱动 MariaDB Connector/J 在首次启动时下载。已在 CI 中通过 MariaDB 11 测试。 |
 | **PostgreSQL** | 通过 `"PostgreSQL"` 支持。CI 既测试实现本身，也在真实服务端上运行完整插件测试。 |
 | **MongoDB** | 通过 `"MongoDB"` 支持，并在 CI 中通过 MongoDB 8 测试。驱动与 PostgreSQL 一样，在首次启动时下载。 |
 | **SkBee** | 可选，仅 `nbtcompound` 列需要。 |
 
 ## 脚本能写的类型名
 
-`create a connection to database "..."` 接受实现的**类型名**，必须精确匹配，且区分大小写。发布的 jar 注册了四种类型：
+`create a connection to database "..."` 接受实现的**类型名**，必须精确匹配，且区分大小写。发布的 jar 注册了五种类型：
 
 | 类型名 | 它是什么 |
 | --- | --- |
 | `"MySQL"` | MySQL 方言，使用服务端已有的 MySQL 驱动。这里的产品名与类型名相同，但两者含义不同。 |
+| `"MariaDB"` | 与 `"MySQL"` 相同的方言，使用插件下载的 MariaDB 驱动。类型应与所用服务端对应：两种驱动只认各自的 URL 前缀。 |
 | `"PostgreSQL"` | PostgreSQL 方言，驱动由插件下载。见 [jar 里有什么](#jar-里有什么)。 |
 | `"MongoDB"` | 通过插件下载的阻塞式 MongoDB Java 驱动访问 MongoDB，不使用 SQL。部分语句的行为有所不同，见 [MongoDB](#mongodb)。 |
 | `"JDBC"` | 通过 `driver` 属性指定驱动，使用通用 SQL 方言：`"双引号"` 标识符、单行查询的 `LIMIT 1`、分页的 `LIMIT ? OFFSET ?`。不具备通用写法的操作不受支持。 |
 
-其他名称会在 section 执行时被拒绝，报 `Database '<名字>' is not supported.`。`"MariaDB"` 和 `"SQLite"` 是产品名，不是已注册的类型名，详见下方“数据库产品”。`"MongoDB"` 与 `"MySQL"` 则既是产品名，也是类型名。
+其他名称会在 section 执行时被拒绝，报 `Database '<名字>' is not supported.`。`"SQLite"` 是产品名，没有对应的实现。`"MySQL"`、`"MariaDB"` 与 `"MongoDB"` 则既是产品名，也是类型名，详见下方“数据库产品”。
 
 ## jar 里有什么
 
-发布的 jar 包含插件本体、Kotlin 运行时、连接池，以及本仓库的**所有实现模块**：MySQL 方言、通用 JDBC、PostgreSQL 和 MongoDB。它**不包含数据库驱动**，驱动按以下方式提供：
+发布的 jar 包含插件本体、Kotlin 运行时、连接池，以及本仓库的**所有实现模块**：注册 MySQL、MariaDB 与通用类型的 JDBC 模块、PostgreSQL 和 MongoDB。它**不包含数据库驱动**，驱动按以下方式提供：
 
 - MySQL 和通用 JDBC 使用服务端已有的驱动。Paper 自带 MySQL Connector/J，插件可直接使用，无需另行安装。`"JDBC"` 则用于访问服务端 classpath 上、未由本插件专门提供的驱动。
-- PostgreSQL 与 MongoDB 的驱动声明在 `plugin.yml` 的 `libraries` 中，由 Paper 在首次启动时下载到服务端的 `libraries/` 目录，再加载到插件 classpath。清单根据 jar 包含的模块生成，默认构建列出 `org.postgresql:postgresql:42.7.11` 和 `org.mongodb:mongodb-driver-sync:5.6.1`；若所选模块均无需下载驱动，则为 `libraries: []`。下载源由**服务端**的 Maven Central 镜像设置决定：`PAPER_DEFAULT_CENTRAL_REPOSITORY` 或 `org.bukkit.plugin.java.LibraryLoader.centralURL` 系统属性，默认使用 Google 的 Central 镜像。下载后会从本地 `libraries/` 复用，无需每次启动都下载。
+- MariaDB、PostgreSQL 与 MongoDB 的驱动声明在 `plugin.yml` 的 `libraries` 中，由 Paper 在首次启动时下载到服务端的 `libraries/` 目录，再加载到插件 classpath。清单根据 jar 包含的模块生成，默认构建列出 `org.mariadb.jdbc:mariadb-java-client:3.4.4`、`org.postgresql:postgresql:42.7.11` 和 `org.mongodb:mongodb-driver-sync:5.6.1`；若所选模块均无需下载驱动，则为 `libraries: []`。下载源由**服务端**的 Maven Central 镜像设置决定：`PAPER_DEFAULT_CENTRAL_REPOSITORY` 或 `org.bukkit.plugin.java.LibraryLoader.centralURL` 系统属性，默认使用 Google 的 Central 镜像。下载后会从本地 `libraries/` 复用，无需每次启动都下载。
 
 Paper 无法解析这些库时，会将其视为致命错误并拒绝加载插件。如果服务端无法访问镜像，可调整上述镜像设置；注意，这会影响该服务端上**所有插件**的库下载。也可以手动准备依赖，较可靠的做法是从已成功启动过的服务端复制整个 `libraries/` 目录。
 
@@ -57,12 +59,12 @@ Paper 无法解析这些库时，会将其视为致命错误并拒绝加载插�
 
 ## 数据库产品
 
-本节列出连接可以访问的数据库产品，而非可填写的类型名。类型名以“脚本能写的类型名”中的四种为准，即使两者名称相同，也应区分用途。
+本节列出连接可以访问的数据库产品，而非可填写的类型名。类型名以“脚本能写的类型名”中的五种为准，即使两者名称相同，也应区分用途。
 
 | | |
 | --- | --- |
 | MySQL | 支持。使用 `"MySQL"`，已在 CI 中通过 MySQL 8 测试。 |
-| MariaDB | 未测试。可尝试 `"MySQL"`，其语句使用 MySQL 写法，包括 `ON DUPLICATE KEY UPDATE` 及更新、删除中的 `LIMIT`。可能可用，但尚无测试验证。 |
+| MariaDB | 支持。使用 `"MariaDB"`，驱动在首次启动时下载。该方言生成的 `ON DUPLICATE KEY UPDATE`、更新与删除中的 `LIMIT` 等写法 MariaDB 同样支持。已在 CI 中通过 MariaDB 11 测试。 |
 | PostgreSQL | 支持。使用 `"PostgreSQL"`，驱动在首次启动时下载。CI 使用真实数据库测试，也在真实 Paper 服务端上运行完整插件测试。 |
 | MongoDB | 支持。使用 `"MongoDB"`，驱动在首次启动时下载。本实现尚不支持事务，`database transaction` section 会报错。已在 CI 中通过 MongoDB 8 测试。 |
 | SQLite 等 | SQLite 可通过 `"JDBC"` 和 Paper 自带驱动访问，支持该方言生成的 SQL。服务端测试在两种模式下验证插入、读取、分页、更新和删除。不支持的操作仍包括 auto increment、`insert ... if absent`、`upsert` 及写操作的 limit。其他产品需要另行提供服务端未自带的驱动。 |
@@ -85,4 +87,4 @@ Paper 无法解析这些库时，会将其视为致命错误并拒绝加载插�
 
 ## 依赖实现的行为
 
-语法相同，不代表所有实现的行为都相同。`upsert` 与 `insert ... if absent` 的冲突处理、更新与删除是否支持 limit，以及“行不存在”的含义，都由具体实现决定。文档会在相关位置注明 MySQL 的行为，避免将其当作通用规则；MongoDB 的区别见上方 [MongoDB](#mongodb)。
+语法相同，不代表所有实现的行为都相同。`upsert` 与 `insert ... if absent` 的冲突处理、更新与删除是否支持 limit，以及“行不存在”的含义，都由具体实现决定。文档会在相关位置注明 MySQL 的行为，避免将其当作通用规则；`"MariaDB"` 使用同一方言，这些说明对它同样适用。MongoDB 的区别见上方 [MongoDB](#mongodb)。

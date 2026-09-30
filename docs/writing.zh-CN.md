@@ -101,7 +101,7 @@ insert entity if absent into table "users" and wait:
 | 仅在不存在时创建，保留已有行 | `insert entity if absent` |
 | 判断是否创建了新行 | `insert entity if absent ... and store affected rows in {_rows}`：`1` 表示已插入，`0` 表示键已存在。也可以读回数据比较，但只有 `if absent` 会保留已有行供比较 |
 
-两者都遵循具体实现的冲突规则，语法说明中也有注明。以上介绍的是 MySQL 的行为。
+两者都遵循具体实现的冲突规则，语法说明中也有注明。以上介绍的是 MySQL 的行为；`"MariaDB"` 使用同一方言，这些行为完全一致。
 
 ## 等待
 

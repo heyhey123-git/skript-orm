@@ -23,9 +23,9 @@ on load:
         stop
 ```
 
-- `"MySQL"` is an implementation type name. The jar registers four: `"MySQL"`, `"PostgreSQL"`,
-  `"MongoDB"` and `"JDBC"`. Names must match exactly; an arbitrary database *product* name will not work.
-  See [Connections](connections.md#the-implementation-name).
+- `"MySQL"` is an implementation type name. The jar registers five: `"MySQL"`, `"MariaDB"`,
+  `"PostgreSQL"`, `"MongoDB"` and `"JDBC"`. Names must match exactly; an arbitrary database *product*
+  name will not work. See [Connections](connections.md#the-implementation-name).
 - `url` is required. `username` and `password` may be empty strings if the database does not require them.
 - The section always waits. After a successful connection, later statements in the same trigger can
   use it. A script that accesses the database before the connection is ready gets `No database connected.`.

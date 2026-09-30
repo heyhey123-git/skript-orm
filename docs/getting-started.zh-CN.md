@@ -21,7 +21,7 @@ on load:
         stop
 ```
 
-- `"MySQL"` 是数据库实现的类型名。jar 注册了四种类型：`"MySQL"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
+- `"MySQL"` 是数据库实现的类型名。jar 注册了五种类型：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
   名称必须精确匹配，不能任意填写数据库**产品**名。见 [连接](connections.zh-CN.md) 中的“实现名称”一节。
 - `url` 必填。不需要账号密码的数据库可将 `username` 与 `password` 设为空字符串。
 - 这个 section 始终等待完成。连接成功后，同一 trigger 中的后续语句即可使用它。若另一个脚本在连接建立前执行数据库操作，会得到 `No database connected.`。通常将连接写在 `on load` 中，并注意脚本的加载顺序。

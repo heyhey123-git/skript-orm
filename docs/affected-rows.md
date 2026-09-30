@@ -47,6 +47,8 @@ Use `insert ... if absent` to distinguish a new insert from an existing row cons
 
 Some backends cannot provide per-row counts for a batch. In that case, the result is **no number**, rather than an inaccurate count.
 
+The driver can also be asked to rewrite a batch, by adding `rewriteBatchedStatements=true` to a `"MySQL"` url. Connector/J then answers `SUCCESS_NO_INFO` for every row of that batch, so the count becomes no number — faster, but no longer exact. The plugin does not set the option: `"MariaDB"` reaches the server's bulk execute without it and counts every row.
+
 ## Set, unset and zero
 
 The variable is **cleared when the statement starts**, before any validation that might reject it. A count is stored only after the statement finishes and an exact count is available:

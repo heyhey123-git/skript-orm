@@ -13,6 +13,18 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+### Added
+
+- **MariaDB is a type of its own, `"MariaDB"`, because its driver sends a batch insert differently.**
+  MariaDB Connector/J is downloaded on the first start, like the PostgreSQL and MongoDB drivers, and the
+  type shares the MySQL dialect, since MariaDB accepts the SQL it generates. Write the url as
+  `jdbc:mariadb://…`: each connector claims one scheme, and a mismatch is refused when the connection is
+  created instead of being handed to the wrong driver. The reason for a separate type is a batch insert:
+  Connector/J sends one row at a time unless it is configured to rewrite the batch, and a rewritten batch
+  reports no per-row count, while the MariaDB connector reaches the server's own bulk execute with no
+  configuration and still counts every row. That is the difference a large `insert many` shows, and the
+  reason a MariaDB server reached through `"MySQL"` could be many times slower than PostgreSQL.
+
 ### Fixed
 
 - **A table registered twice is no longer an error.** Registering a table the script already registered is

@@ -101,7 +101,7 @@ insert entity if absent into table "users" and wait:
 | Create the row only if missing; preserve an existing row | `insert entity if absent` |
 | Check whether a row was created | `insert entity if absent ... and store affected rows in {_rows}`: `1` means inserted, `0` means the key already exists. You can also read the data back for comparison, but only `if absent` preserves the existing row for that comparison. |
 
-Both follow the implementation's conflict rules, as noted in their syntax descriptions. The behaviour above is specific to MySQL.
+Both follow the implementation's conflict rules, as noted in their syntax descriptions. The behaviour above is specific to MySQL, and applies to `"MariaDB"` unchanged, since both use the same dialect.
 
 ## Waiting
 

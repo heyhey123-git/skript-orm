@@ -47,6 +47,8 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
 
 部分后端无法为批量操作提供逐行计数，此时**不返回数字**，而不是给出不准确的行数。
 
+驱动也可以被要求重写批量语句：在 `"MySQL"` 的 url 上加上 `rewriteBatchedStatements=true`。此时 Connector/J 会对该批次的每一行都回答 `SUCCESS_NO_INFO`，行数因此变成没有数字——更快，但不再精确。插件不设置这个选项：`"MariaDB"` 无需任何选项就能走到服务端的批量执行，并逐行给出计数。
+
 ## 有数字、没数字、零
 
 变量在**语句开始时就会被清空**，早于任何可能拒绝操作的检查；只有语句执行完成且能提供精确行数时，才会写入数字：
