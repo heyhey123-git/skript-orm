@@ -13,6 +13,14 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-10-01
+
+A release about where a batch insert goes and what it reports. MariaDB becomes a type of its own, because its
+connector reaches the server's own bulk execute with no configuration, where Connector/J sends one row at a
+time — the difference a large `insert many` showed as a MariaDB server being many times slower than
+PostgreSQL. Three fixes come with it: a table declared twice is no longer an error, a number written into a
+text column keeps its digits, and a column that holds nothing reads back as unset.
+
 ### Added
 
 - **MariaDB is a type of its own, `"MariaDB"`, because its driver sends a batch insert differently.**
@@ -39,6 +47,8 @@ the previous release used, because the notes are the release body and nothing el
 - **A number column that holds nothing reads back as unset instead of failing.** A `NULL` in a column read as
   a number, a date or a boolean is now reported as no value, where it used to reach the converter and fail
   the statement.
+
+**Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 
 ## [1.3.0] - 2026-09-29
 
