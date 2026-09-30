@@ -13,6 +13,18 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [Unreleased]
 
+### Fixed
+
+- **A table registered twice is no longer an error.** Registering a table the script already registered is
+  now ignored, so a reload or a shared script that declares the same table again keeps working instead of
+  failing at parse time. The first registration is the one that counts.
+- **A number written into a text column is stored as the number it is.** `42` now reaches a `string` column
+  as `42`, not `42.0`, and a fractional value keeps its fraction. The digits a script wrote are the digits
+  the column holds.
+- **A number column that holds nothing reads back as unset instead of failing.** A `NULL` in a column read as
+  a number, a date or a boolean is now reported as no value, where it used to reach the converter and fail
+  the statement.
+
 ## [1.3.0] - 2026-09-29
 
 A release about what a script can do when the declaration is not enough, and about failing where the mistake

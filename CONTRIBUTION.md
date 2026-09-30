@@ -309,6 +309,14 @@ no server either.
 ./gradlew test
 ```
 
+MockK instruments the test JVM through ByteBuddy, which prefers attaching to its own process and only
+falls back to starting a second JVM to attach for it. That fallback needs to start a process and read
+another process's command line, so it fails under a sandbox, in a container without the attach
+facilities, and on a JDK that refuses to load an agent into a running VM — in all three cases as a bare
+`NoClassDefFoundError: JvmMockKGateway` on every test that touches MockK, which names neither MockK nor
+the real cause. `build.gradle.kts` therefore passes the two flags that keep ByteBuddy on the self-attach
+path. Reaching for the fallback means those flags were dropped, not that MockK is broken.
+
 **Skript tests** (`core`) exercise the parse phase of a section against Skript's real config parser,
 which the unit tests deliberately do not have on their classpath:
 

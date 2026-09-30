@@ -135,6 +135,20 @@ subprojects {
     kotlin {
         jvmToolchain(25)
     }
+
+    // MockK instruments the test JVM through ByteBuddy. ByteBuddy tries the virtual machine
+    // interface, then attaching to its own process, and only then falls back to starting a second
+    // JVM to attach for it. That last fallback fails wherever a process may not be started or may
+    // not read another process's command line, and the failure surfaces as a bare
+    // `NoClassDefFoundError: JvmMockKGateway` in every test that uses MockK.
+    //
+    // Both flags belong to the self-attach path, which needs nothing from outside its own JVM: the
+    // JDK declines to attach a VM to itself without the first, and since JDK 21 it also declines to
+    // load an agent into a running VM without the second.
+    tasks.withType<Test>().configureEach {
+        useJUnitPlatform()
+        jvmArgs("-Djdk.attach.allowAttachSelf=true", "-XX:+EnableDynamicAgentLoading")
+    }
 }
 
 dependencies {
@@ -191,10 +205,6 @@ tasks {
 
     build {
         dependsOn(shadowJar)
-    }
-
-    test {
-        useJUnitPlatform()
     }
 }
 
