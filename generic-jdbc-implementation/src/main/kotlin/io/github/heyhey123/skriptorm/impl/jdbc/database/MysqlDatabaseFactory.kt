@@ -4,9 +4,6 @@ import io.github.heyhey123.skriptorm.database.DatabaseFactory
 import io.github.heyhey123.skriptorm.database.DatabaseRegistry
 
 object MysqlDatabaseFactory : DatabaseFactory {
-    init {
-        DatabaseRegistry.register(this)
-    }
 
     val driverName = run {
         try {
@@ -20,6 +17,10 @@ object MysqlDatabaseFactory : DatabaseFactory {
                 throw ClassNotFoundException("MySQL JDBC Driver not found. Please include the MySQL Connector/J library in your classpath.").initCause(e)
             }
         }
+    }
+
+    init {
+        DatabaseRegistry.register(this)
     }
 
     override val typeName: String

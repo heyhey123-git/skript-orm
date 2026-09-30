@@ -70,6 +70,11 @@ val bundledModules: List<String> = run {
 // Handed to `:core`, which expands plugin.yml, instead of letting it work the list out again: the modules
 // this jar carries are decided here.
 val driverLibraries: String = buildList {
+    if ("generic-jdbc-implementation" in bundledModules) {
+        // MariaDB's driver only. MySQL's is the one the server already has, and the generic type is for a
+        // driver this jar knows nothing about, so neither belongs in a download list.
+        add("org.mariadb.jdbc:mariadb-java-client:${libs.versions.mariadb.client.get()}")
+    }
     if ("postgresql-implementation" in bundledModules) {
         add("org.postgresql:postgresql:${libs.versions.postgresql.driver.get()}")
     }

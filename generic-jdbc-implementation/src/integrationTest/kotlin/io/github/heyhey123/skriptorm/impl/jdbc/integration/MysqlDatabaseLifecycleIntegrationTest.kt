@@ -49,7 +49,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
 
     @BeforeEach
     fun bindServer() {
-        endpoint = MysqlTestServer.requireEndpoint()
+        endpoint = MysqlTestServer.of(MysqlTestServer.Product.MYSQL).requireEndpoint()
         resetLifecycle()
     }
 

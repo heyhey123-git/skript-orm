@@ -34,6 +34,10 @@ mockk = "1.14.9"
 hikari = "7.0.2"
 slf4j = "2.0.17"
 mysql-connector = "9.5.0"
+# Pinned rather than ranged. MariaDB publishes no stable 3.5.x, so the obvious `3.5.+` resolves to a
+# `3.5.11-SNAPSHOT`, and `+` resolves to that same snapshot. A snapshot driver is not something to
+# hand a server that downloads it on startup. Bumping this is a one-line change.
+mariadb-client = "3.4.4"
 mongodb-driver = "5.6.1"
 postgresql-driver = "42.7.11"
 testcontainers = "1.21.3"
@@ -55,6 +59,10 @@ hikari = { module = "com.zaxxer:HikariCP", version.ref = "hikari" }
 slf4j-api = { module = "org.slf4j:slf4j-api", version.ref = "slf4j" }
 slf4j-simple = { module = "org.slf4j:slf4j-simple", version.ref = "slf4j" }
 mysql-connector = { module = "com.mysql:mysql-connector-j", version.ref = "mysql-connector" }
+# Not an alternative to `mysql-connector` and not interchangeable with it: SQL syntax is shared, the
+# JDBC URL scheme is not (`jdbc:mariadb:` here, `jdbc:mysql:` there), and their batch behaviour
+# differs. Both are dependencies, because a user may connect to either server.
+mariadb-client = { module = "org.mariadb.jdbc:mariadb-java-client", version.ref = "mariadb-client" }
 # The blocking MongoDB driver, not the Kotlin coroutine one. The coroutine driver's API is built on
 # kotlinx.coroutines, and this plugin shades and relocates that library, so the driver would implement
 # the original `Flow` interface while the bundled module called the relocated one. The blocking driver
@@ -64,6 +72,7 @@ postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postg
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-core = { module = "org.testcontainers:testcontainers" }
 testcontainers-mysql = { module = "org.testcontainers:mysql" }
+testcontainers-mariadb = { module = "org.testcontainers:mariadb" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
 testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
 

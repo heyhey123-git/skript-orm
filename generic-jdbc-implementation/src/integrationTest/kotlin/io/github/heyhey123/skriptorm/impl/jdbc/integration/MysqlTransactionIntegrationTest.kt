@@ -17,6 +17,8 @@ import kotlin.test.assertNotNull
  */
 class MysqlTransactionIntegrationTest : MysqlIntegrationTestBase() {
 
+    override val product = MysqlTestServer.Product.MYSQL
+
     @Test
     fun `a committed transaction keeps what it wrote`() = runBlocking<Unit> {
         recreateTable()

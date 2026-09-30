@@ -18,6 +18,8 @@ import kotlin.test.assertTrue
  */
 class MysqlCrudIntegrationTest : MysqlIntegrationTestBase() {
 
+    override val product = MysqlTestServer.Product.MYSQL
+
     @Test
     fun `insertOne writes one row that selectById finds`() = runBlocking<Unit> {
         recreateTable()

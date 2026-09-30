@@ -69,6 +69,7 @@ class SkriptOrm : JavaPlugin() {
         val candidates = listOf(
             "io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabaseFactory",
             "io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlDatabaseFactory",
+            "io.github.heyhey123.skriptorm.impl.jdbc.database.MariadbDatabaseFactory",
             "io.github.heyhey123.skriptorm.impl.pg.database.PgDatabaseFactory",
             "io.github.heyhey123.skriptorm.impl.mongo.database.MongodbDatabaseFactory"
         )

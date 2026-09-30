@@ -194,8 +194,16 @@ object GenericJdbcDialect : JdbcDialect {
 }
 
 /**
- * MySQL rendering with backtick identifiers, LIMIT/OFFSET, a duplicate key treated as "already there",
- * ON DUPLICATE KEY UPDATE, limited writes, and AUTO_INCREMENT.
+ * Rendering for the MySQL family: backtick identifiers, LIMIT/OFFSET, a duplicate key treated as
+ * "already there", ON DUPLICATE KEY UPDATE, limited writes, and AUTO_INCREMENT.
+ *
+ * Serves MariaDB as well as MySQL. The two share this syntax deliberately rather than by accident,
+ * and the parts below are the ones where they had to agree: MariaDB reports the same `ER_DUP_ENTRY`
+ * code, takes the same LIMIT on UPDATE and DELETE, and — the one that is easy to get wrong — accepts
+ * `VALUES(col)` in an upsert. MySQL 8.0.20 deprecated that spelling in favour of
+ * `INSERT ... AS alias`, which MariaDB does not have; the alias form is planned there but was still
+ * unreleased as of MariaDB 11.8 (`MDEV-29919`, fixed in 13.2). `VALUES(col)` is therefore the only
+ * form both servers accept, and it stays.
  */
 object MysqlJdbcDialect : JdbcDialect {
 

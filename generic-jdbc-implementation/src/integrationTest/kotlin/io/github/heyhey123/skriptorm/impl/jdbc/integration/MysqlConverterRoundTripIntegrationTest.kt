@@ -47,6 +47,8 @@ import kotlin.test.assertTrue
  */
 class MysqlConverterRoundTripIntegrationTest : MysqlIntegrationTestBase() {
 
+    override val product = MysqlTestServer.Product.MYSQL
+
     @BeforeEach
     fun startServer() {
         MockBukkit.mock()

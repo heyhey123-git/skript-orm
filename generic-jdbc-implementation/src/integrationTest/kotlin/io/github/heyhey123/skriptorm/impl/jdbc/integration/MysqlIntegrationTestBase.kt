@@ -29,8 +29,14 @@ import kotlin.test.assertEquals
 private val IDLE_TIMEOUT: Duration = Duration.ofSeconds(5)
 
 /**
- * Base class for integration tests that exercise the JDBC implementation against a real MySQL
- * server.
+ * Base class for integration tests that exercise the JDBC implementation against a real
+ * MySQL-family server.
+ *
+ * One dialect serves both products, so the tests are shared and the product is what a subclass
+ * names: `"MySQL"` and `"MariaDB"` are separate connection types with separate drivers, and a
+ * statement one driver accepts is not evidence for the other. [product] is abstract rather than
+ * defaulted for that reason — a test class that does not say which server it runs against would
+ * otherwise be counted as coverage of MySQL by accident.
  *
  * Every test gets its own connection pool and its own lifecycle, so a test that fails mid-flight
  * cannot leave the global [Database] state behind for the next one. Tests own their tables and may
@@ -41,6 +47,9 @@ private val IDLE_TIMEOUT: Duration = Duration.ofSeconds(5)
  * the explicit type argument stops an expression-bodied test from silently vanishing from the run.
  */
 abstract class MysqlIntegrationTestBase {
+
+    /** The server this test class runs against. */
+    protected abstract val product: MysqlTestServer.Product
 
     protected lateinit var dataSource: HikariDataSource
         private set
@@ -77,7 +86,7 @@ abstract class MysqlIntegrationTestBase {
 
     @BeforeEach
     fun openDatabase() {
-        val endpoint = MysqlTestServer.requireEndpoint()
+        val endpoint = MysqlTestServer.of(product).requireEndpoint()
         runBlocking {
             // A previous test class may have aborted before its teardown ran. Shutting down is not
             // conditional on there being a default connection: a named one can outlive it.
@@ -119,11 +128,11 @@ abstract class MysqlIntegrationTestBase {
             }
         }
 
-    /** Row count read straight from MySQL, independent of the implementation's own path. */
+    /** Row count read straight from the server, independent of the implementation's own path. */
     protected fun rawRowCount(tableName: String = usersTable.name): Long =
         queryLong("SELECT COUNT(*) FROM ${MysqlJdbcDialect.quoteIdentifier(tableName)}")
 
-    /** The columns MySQL reports for [table]. */
+    /** The columns the server reports for [table]. */
     protected fun columnMetadata(table: String): List<ColumnMeta> =
         dataSource.connection.use { connection ->
             connection.metaData.getColumns(connection.catalog, null, table, null).use { rows ->
@@ -142,7 +151,7 @@ abstract class MysqlIntegrationTestBase {
             }
         }
 
-    /** The primary key columns MySQL reports for [table]. */
+    /** The primary key columns the server reports for [table]. */
     protected fun primaryKeys(table: String): List<String> =
         dataSource.connection.use { connection ->
             connection.metaData.getPrimaryKeys(connection.catalog, null, table).use { rows ->
@@ -180,7 +189,7 @@ abstract class MysqlIntegrationTestBase {
         val uid: UUID?
     )
 
-    /** What MySQL reports for one column. */
+    /** What the server reports for one column. */
     protected data class ColumnMeta(
         val name: String,
         val typeName: String,
@@ -215,8 +224,8 @@ abstract class MysqlIntegrationTestBase {
         }
 
     /**
-     * Builds an insert map for [usersTable]. `id` is omitted when null so MySQL assigns the next
-     * auto-increment value; every other column is written explicitly, including SQL NULL.
+     * Builds an insert map for [usersTable]. `id` is omitted when null so the server assigns the
+     * next auto-increment value; every other column is written explicitly, including SQL NULL.
      */
     protected fun userValues(
         name: String,

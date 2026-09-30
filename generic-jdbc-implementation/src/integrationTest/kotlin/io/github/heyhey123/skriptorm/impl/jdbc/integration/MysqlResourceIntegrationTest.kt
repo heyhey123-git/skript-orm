@@ -23,6 +23,8 @@ import kotlin.test.assertTrue
  */
 class MysqlResourceIntegrationTest : MysqlIntegrationTestBase() {
 
+    override val product = MysqlTestServer.Product.MYSQL
+
     @Test
     fun `an open cursor holds its connection until it is closed`() = runBlocking<Unit> {
         recreateTable()

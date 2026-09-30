@@ -27,6 +27,8 @@ import kotlin.test.assertTrue
  */
 class MysqlNamedConnectionIntegrationTest : MysqlIntegrationTestBase() {
 
+    override val product = MysqlTestServer.Product.MYSQL
+
     private val namedTable = Table(
         "named_connection_probe",
         listOf(
@@ -132,7 +134,7 @@ class MysqlNamedConnectionIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     private suspend fun connectNamed(name: String): JdbcDatabase {
-        val endpoint = MysqlTestServer.requireEndpoint()
+        val endpoint = MysqlTestServer.of(product).requireEndpoint()
         val named = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
         Database.connectNamed(name, named, endpoint.settings)
         return named
