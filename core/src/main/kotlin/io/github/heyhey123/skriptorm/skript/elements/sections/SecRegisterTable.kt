@@ -30,7 +30,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Register Database Table")
-@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Registering is idempotent: an existing table is left as it is, and the declaration is then compared with it, so a declaration that no longer matches the table fails here instead of at the first statement that uses the difference. Failures are exposed as the last database error.")
+@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Registering is idempotent: a declaration that matches the table already registered is ignored, and any other existing table is left as it is while the declaration is compared with it, so a declaration that no longer matches the table fails here instead of at the first statement that uses the difference. Failures are exposed as the last database error.")
 @Example(
     """register a database table "users":
     id: bigint, primary key, auto increment, not null
@@ -160,11 +160,6 @@ class SecRegisterTable : Section() {
         }
         val tableName = tableNameExpr.getSingle(actualEvent)
             ?: return fail(actualEvent, "Table name is null.")
-        // Registering what is already there is how a script that declares its tables in `on load` is
-        // reloaded, which is the normal thing to do with one: the declaration reaches a connection that
-        // still holds the table, and there is nothing left to do. It succeeds, exactly as registering a
-        // table that is already in the database succeeds, so the error slot is cleared rather than set.
-        if (database.tables.containsKey(tableName)) return next
 
         val table = try {
             Table(
@@ -185,6 +180,15 @@ class SecRegisterTable : Section() {
         } catch (error: IllegalArgumentException) {
             return fail(actualEvent, error.message ?: "Invalid table definition.")
         }
+
+        // A script that declares its tables in `on load` declares them again every time it is reloaded,
+        // and the connection still holds the tables it registered. That declaration is the one already in
+        // effect, so there is nothing left to do and the error slot is cleared rather than set. A
+        // declaration that differs is not that case: it is registered, which compares it with the table
+        // in the database and reports the difference here, instead of leaving the changed declaration
+        // silently ignored.
+        val registered = database.tables[tableName]
+        if (registered != null && registered.sameDeclarationAs(table)) return next
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
             return fail(actualEvent, "Database lifecycle is shutting down.")

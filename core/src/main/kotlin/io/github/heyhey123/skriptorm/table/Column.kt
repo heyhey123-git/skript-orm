@@ -38,4 +38,16 @@ data class Column<T : Any>(
             "Column '$name' size must be greater than zero."
         }
     }
+
+    /**
+     * Whether [other] declares this same column: the same type code and size, and the same primary key,
+     * auto-increment and nullability flags. Types are compared by code, so a second instance of the same
+     * logical type declares the same column. A null [other] declares no column at all.
+     */
+    fun sameDeclarationAs(other: Column<*>?): Boolean = other != null &&
+        type.typeCode == other.type.typeCode &&
+        size == other.size &&
+        isPrimaryKey == other.isPrimaryKey &&
+        isAutoIncrement == other.isAutoIncrement &&
+        isNullable == other.isNullable
 }

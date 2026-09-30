@@ -53,4 +53,12 @@ class Table(
      * @return The column if found, null otherwise.
      */
     fun getColumnByName(columnName: String): Column<*>? = columns[columnName]
+
+    /**
+     * Whether [other] declares this same table: the same name and, for every column, the same type and
+     * constraints. Column order is not part of a declaration, because a column is looked up by name.
+     */
+    fun sameDeclarationAs(other: Table): Boolean = name == other.name &&
+        columns.size == other.columns.size &&
+        columns.all { (columnName, column) -> column.sameDeclarationAs(other.columns[columnName]) }
 }

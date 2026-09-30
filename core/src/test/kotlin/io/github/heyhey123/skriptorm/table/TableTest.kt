@@ -1,12 +1,15 @@
 package io.github.heyhey123.skriptorm.table
 
+import io.github.heyhey123.skriptorm.type.BigIntDataType
 import io.github.heyhey123.skriptorm.type.IntDataType
 import io.github.heyhey123.skriptorm.type.StringDataType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class TableTest {
 
@@ -98,5 +101,72 @@ class TableTest {
         val table = Table("用户表", listOf(column))
 
         assertSame(column, table.getColumnByName("显示名"))
+    }
+
+    @Test
+    fun `a declaration matches the same columns in any order`() {
+        val declaration = Table(
+            "users",
+            listOf(
+                Column("id", BigIntDataType(), isPrimaryKey = true, isAutoIncrement = true, isNullable = false),
+                Column("name", StringDataType(), isNullable = false, size = 64)
+            )
+        )
+        val same = Table(
+            "users",
+            listOf(
+                Column("name", StringDataType(), isNullable = false, size = 64),
+                Column("id", BigIntDataType(), isPrimaryKey = true, isAutoIncrement = true, isNullable = false)
+            )
+        )
+
+        assertTrue(same.sameDeclarationAs(declaration), "column order is not part of a declaration")
+    }
+
+    @Test
+    fun `a declaration differs when any part of the table differs`() {
+        val registered = Table(
+            "users",
+            listOf(
+                Column("id", IntDataType(), isPrimaryKey = true, isNullable = false),
+                Column("name", StringDataType(), size = 64)
+            )
+        )
+        val differences = mapOf(
+            "another table name" to Table("customers", registered.columns.values.toList()),
+            "a different column name" to Table(
+                "users",
+                listOf(registered.getColumnByName("id")!!, Column("label", StringDataType(), size = 64))
+            ),
+            "a different type" to Table(
+                "users",
+                listOf(registered.getColumnByName("id")!!, Column("name", BigIntDataType(), size = 64))
+            ),
+            "a different size" to Table(
+                "users",
+                listOf(registered.getColumnByName("id")!!, Column("name", StringDataType()))
+            ),
+            "a different nullability" to Table(
+                "users",
+                listOf(Column("id", IntDataType(), isPrimaryKey = true), Column("name", StringDataType(), size = 64))
+            ),
+            "a different primary key" to Table(
+                "users",
+                listOf(Column("id", IntDataType(), isNullable = false), Column("name", StringDataType(), size = 64))
+            ),
+            "an extra column" to Table(
+                "users",
+                listOf(
+                    registered.getColumnByName("id")!!,
+                    registered.getColumnByName("name")!!,
+                    Column("age", IntDataType())
+                )
+            ),
+            "a missing column" to Table("users", listOf(registered.getColumnByName("id")!!))
+        )
+
+        differences.forEach { (reason, declared) ->
+            assertFalse(declared.sameDeclarationAs(registered), reason)
+        }
     }
 }

@@ -27,9 +27,12 @@ the previous release used, because the notes are the release body and nothing el
 
 ### Fixed
 
-- **A table registered twice is no longer an error.** Registering a table the script already registered is
-  now ignored, so a reload or a shared script that declares the same table again keeps working instead of
-  failing at parse time. The first registration is the one that counts.
+- **A table registered twice is no longer an error.** A declaration that matches the table the script
+  already registered is ignored, so a reload or a shared script that declares the same table again keeps
+  working instead of reporting `Table 'users' is already registered.` and skipping the declaration. A
+  declaration that differs is registered instead, which compares it with the table in the database, so a
+  change the table does not hold is reported rather than silently ignored. The first registration is the
+  one that counts.
 - **A number written into a text column is stored as the number it is.** `42` now reaches a `string` column
   as `42`, not `42.0`, and a fractional value keeps its fraction. The digits a script wrote are the digits
   the column holds.
