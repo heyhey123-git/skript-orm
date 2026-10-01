@@ -24,7 +24,8 @@ A single harness measuring “the plugin” measures nothing in particular, beca
 | off-thread milliseconds | wall clock | B, C |
 | trigger latency | wall clock, as the script sees it | B, C |
 | throughput | per value and per row | A, B, C |
-| statements and round trips per operation | counted, not timed | B |
+| statements and rows handed to the driver | counted, not timed | B |
+| statements and round trips the server received | counted, not timed | B |
 | allocations per operation | bytes, not time | A, B |
 | peak heap | after the case, after a collection | B, C |
 | MSPT percentiles (p50, p99, max) | the server's own ticks | C |
@@ -35,7 +36,7 @@ Trigger latency is reported next to the two halves rather than instead of them, 
 
 Some metrics are noise and some are not. Wall-clock on a shared machine moves by ten to twenty percent between identical runs; a statement count does not move at all. **The suite therefore treats counts and allocations as findings and time as a hint**, and the reason is a measurement from this session.
 
-A benchmark of `insert many` — 5000 rows of two columns, twenty times, the same script and the same table definition on every backend — measured **17.04 seconds against MySQL and 1.99 seconds against PostgreSQL and MariaDB**, about 170 microseconds per row against 20. The plugin sends MySQL and MariaDB the same SQL, since the two share a dialect, and in that run both connections pointed at the same server. What differed was the driver: unless it is told to rewrite a batch, the batch leaves as one statement per row, so the slow run sent 5000 statements per batch. The count is the whole explanation, and no timing metric could have shown it — the timing metric only said “MySQL is slow”, which was already known.
+A benchmark of `insert many` — 5000 rows of two columns, twenty times, the same script and the same table definition on every backend — measured **17.04 seconds against MySQL and 1.99 seconds against PostgreSQL and MariaDB**, about 170 microseconds per row against 20. The plugin sends MySQL and MariaDB the same SQL, since the two share a dialect, and in that run both connections pointed at the same server. What differed was the driver: unless it is told to rewrite a batch, the batch leaves as one statement per row, so the slow run sent 5000 statements per batch. That count is the server's, not the JDBC layer's: the plugin handed the driver **one** batch and the driver turned it into five thousand statements, so a counter sitting at the JDBC layer would have reported one, correctly, and explained nothing. The count is the whole explanation, and no timing metric could have shown it — the timing metric only said “MySQL is slow”, which was already known.
 
 That count is arithmetic today, not a counter: the JDBC path hands rows over with `addBatch` and the driver decides what becomes of them, so the per-backend statement count is **to be measured** in phase 1. The arithmetic and the driver's own source agree that the difference is there; a number the suite can gate on needs the counter. See [Affected rows](affected-rows.md).
 
@@ -44,7 +45,8 @@ That count is arithmetic today, not a counter: the JDBC path hands rows over wit
 | Purpose | Tool | Why this one |
 | --- | --- | --- |
 | Microbenchmarks (A) | JMH, wired by hand | the harness that JDK engineers use; warmup, forks and dead-code elimination are its job, not ours |
-| Statement and round-trip counts (B) | `datasource-proxy`, or `p6spy` | a JDBC proxy between the pool and the driver counts what was really sent, without changing the code under test |
+| Statements and rows handed to the driver (B) | `datasource-proxy`, or a counting driver wrapper | counts the plugin's own splitting without changing the code under test — but at this level a batch is one call whether it carries one row or five thousand |
+| Statements and round trips the server received (B) | the database's own session counters, or a packet capture | the only level at which the driver's batching is visible, which is where the MySQL difference lived; it follows the driver version and its options, so it is reported with each run rather than gated |
 | Percentiles over tick samples (C) | HdrHistogram | JMH reports its own confidence intervals; a sampling loop needs a histogram of its own |
 | Real databases (B) | Testcontainers, with reuse enabled | the integration tests already start real instances; reuse stops every run paying for startup |
 | History, comparison, pull-request comment, failure | `benchmark-action/github-action-benchmark` | stores each result, compares it against the history, comments on the pull request and fails the job past a threshold |
