@@ -63,6 +63,22 @@ loop 100 times:
     # ... use this page ...
 ```
 
+### What storing a result costs
+
+The query runs off the server thread; storing its answer does not. Skript writes a list variable one value at a time, and only on the server thread, because the name of a variable may contain expressions that only that thread can resolve. Measured on this plugin's own test server, one value costs about 1.4 microseconds in a global variable (`{users::*}`), 1.1 in an ephemeral one (`{-users::*}`) and 1.0 in a local one (`{_users::*}`). A six-column result is six values per row, so 5000 rows is 30 000 values, about 47 milliseconds of the server — most of a tick. Values are what cost, not rows: 5000 rows of a two-column table cost about 15 milliseconds.
+
+Where that time goes is worth knowing before trying to shrink it. About a quarter is persistence — serializing the change and queueing it for the save — together with the lock and the bookkeeping around the store, and the rest is Skript's own variable tree, which is what the store is for. Only the tree can be built somewhere else.
+
+**Above 10 000 values the result is built that way.** The tree is assembled on the thread that read the rows, and the server thread then attaches it in one step: it takes the write lock once, detaches what the variable held, and puts the new subtree in its place. Measured, that is about a quarter less of the tick — 30 000 values went from 47 to 36 milliseconds, and 9000 from 14.9 to 12.8 — while below the threshold the two ways measure the same (600 values: 1.25 milliseconds against 1.35). That is why there is a threshold rather than one way of storing everything.
+
+The path has conditions, and the plugin checks them on a real result instead of assuming them:
+
+- It applies to **global list variables**. A result stored in a local or ephemeral variable is written value by value.
+- The **first** result above the threshold after the server starts is written value by value. The technique depends on the running Skript's variable store looking a particular way, which the plugin confirms once before using it.
+- If it does not look that way — a different Skript version, or another plugin replacing the store — every result is written value by value. Nothing else changes and no setting has to be adjusted.
+
+The properties of the store are kept either way: the change still notifies persistence for every value, in the order the values arrived, so a saved variable and a variable in memory do not drift apart.
+
 ## Select by id
 
 ```sk
