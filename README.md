@@ -81,6 +81,64 @@ and hands results back as ordinary Skript variables and values.
 - **Errors available to scripts.** Every statement waits, so `last database error` contains any error
   from that operation before the next line runs. Successful statements leave it unset.
 
+## Performance and limits
+
+This is a high-performance library, and its limits are deliberate. When a result is too large to store
+without spending the server's own tick on it, the plugin refuses the read and says so rather than storing
+part of it, because a server that stutters is what players notice. Refusing is protection, not a failure.
+
+Every number below was measured on the machine and in the period it names, one server at a time, and where
+it is written as a range the spread was real. [Benchmarking and stress testing](docs/benchmarking.md) records
+how they were taken and the policy they follow: **counts and allocations are findings that may gate a build,
+while timing is reported and never gates it**, because wall clock moves by ten to twenty percent between
+identical runs on a shared machine and a count does not. Nothing here is a promise about another machine.
+
+**Writing, on a real Paper server.** A statement is timed inside the script, on the tick the effect ran on,
+so what is read is the overhang past a normal tick. On a six-column table that overhang grew with the batch:
+about 10 milliseconds for 100 rows, and 100 to 110 milliseconds for 10 000. 5000 rows — the size both limits
+land on — overran by 70 to 90 milliseconds cold; warm, on the JVM's second pass, one run overran by about
+30 milliseconds while another kept the whole write inside a single tick and so reported no overhang at all.
+Cold and warm are different measurements, and a cost under the 50 milliseconds a tick lasts has nothing to
+lengthen.
+
+**Reading.** Up to 5000 rows are stored, and no read in that range was seen to lengthen a tick. On the
+benchmark server — the generic JDBC connection, which on the machine that ran it is SQLite — reads of 100,
+500, 1000, 2500 and 5000 rows of a six-column table each stored every row they asked for, and in none of them
+did the longest tick inside the statement exceed a tick's own length. A read of 10 000 rows stores nothing:
+the result variable is cleared, and `last database error` names the ceiling and what to do about it. That
+boundary is a measurement rather than a guess — a hundred thousand rows of a six-column table written into a
+variable one index at a time is about a second of the server not ticking through.
+
+**The 30 000-value budget is a splitting line, not a cliff.** One write binds at most 30 000 values, which is
+5000 rows of six columns and the same batch a read is held to. A batch past it is not refused: it is sent as
+several statements, and every row is written. The curve is flat there — a batch of 30 000 values was written
+in one call with the count it reported matching what the table gained, and so was a batch of 60 000, 10 000
+rows of six columns, with no step between the two.
+
+**The driver, counted rather than timed.** Through the generic JDBC connection on an in-memory database, a
+call of 5000 rows of six columns was handed to the driver as a **single statement**, the plugin reported
+5000 affected rows with an exact count, the table held 5000 rows once the call returned, and the call
+measured **9.960 ± 0.384 milliseconds**. That is the reference run in `benchmarks/baseline.json`.
+
+### What is deliberately not here
+
+- **No tick percentiles.** The observer is script-side: it can report the tick a statement ran on and the
+  longest tick in that window, but its clock resolves to 10 milliseconds, it is quantized by the tick a
+  parked trigger resumes on, and its floor is one tick. Percentiles over tick durations need an observer
+  inside the tick loop, which is a plugin in the server rather than a script, so MSPT percentiles are absent
+  rather than invented.
+- **No per-backend statement counts on the server side.** The count a database itself receives is where the
+  difference between drivers lives, and it needs a real instance of each backend. It has not been measured.
+
+**One trap worth meeting here instead of in production.** With Connector/J's default settings a batched
+insert leaves as one statement per row, so the same insert is much slower there than on PostgreSQL or MariaDB
+with the same SQL. The `insert many` benchmark — 5000 rows of two columns, twenty times, the same script and
+table definition on every backend — measured 17.04 seconds against MySQL and 1.99 seconds against PostgreSQL
+and MariaDB, and the 5000 statements per batch came from the driver rather than from this plugin. The option
+that rewrites the batch is not free either: it makes the insert faster and takes the affected-row count away.
+[Troubleshooting](docs/troubleshooting.md#insert-many-got-faster-and-affected-rows-stopped-storing) has the
+details.
+
 ## Documentation
 
 | Page | What is in it |
