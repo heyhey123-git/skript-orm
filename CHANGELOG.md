@@ -20,7 +20,10 @@ becomes a type of its own, because its connector reaches the server's own bulk e
 where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
 being many times slower than PostgreSQL. One statement now moves a budget of values rather than an unbounded
 number of rows, and the two directions treat that budget differently: a read past it is refused and stores
-nothing, and a write past it is sent as several statements so that every row is written. Six fixes
+nothing, and a write past it is sent as several statements so that every row is written. Both directions were
+measured while this was written, which is where the budget's numbers come from: reading a batch of values out
+of a variable costs about a third of a microsecond per value, and storing a result back into one about two.
+Six fixes
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
 digits, a column that holds nothing reads back as unset, a table that carries a column the declaration does
 not name is registered instead of being refused, a column with more room than the declaration asks for is
@@ -43,8 +46,11 @@ than one list shared by every server.
 ### Changed
 
 - **A read that returns more than 5000 rows is refused, and stores nothing.** `select many` and `select page`
-  used to store whatever the table held. A hundred thousand rows read into a list variable is seconds of the
-  server stopped, and the only sign of it was a watchdog line in the console. The refusal names the ceiling and
+  used to store whatever the table held. Skript writes a list variable one index at a time on the server
+  thread, so a result is spent out of the server's own tick budget: measured on a six-column table, storing
+  one value costs about two microseconds, which makes a hundred thousand rows about a second the server does
+  not tick through. 5000 rows is about fifty milliseconds of that, and it is the same batch of values one
+  write statement may bind. The refusal names the ceiling and
   leaves the variable cleared, because the alternative — storing a result that was cut in half — answers every
   later question about rows the script never saw. Narrow the result with a `where` block, or walk it with
   `select page`. A page larger than 5000 rows is refused before anything is sent, for the same reason.
@@ -52,9 +58,10 @@ than one list shared by every server.
   would throw away rows the script already assembled, and writing only what fits would leave a batch that
   neither the script nor its author can reason about: part of the rows in the table, and nothing in the script
   that says which part — the affected-row count and a console warning are easy to miss and are only there for
-  an author who thought to look. A statement binds at most 30 000 values instead, which is the batch the read
-  ceiling was measured on (5000 rows of a six-column table) and also what a driver binds parameters for, and
-  the count is the total across the statements. A batch within the budget is still one statement. Two
+  an author who thought to look. A statement binds at most 30 000 values instead, which is the batch a read
+  was measured at (5000 rows of a six-column table, about ten milliseconds to read out of a variable) and also
+  what a driver binds parameters for,
+  and the count is the total across the statements. A batch within the budget is still one statement. Two
   consequences are worth knowing: a failure part way through leaves the statements before it applied unless the
   write is inside a transaction, and a table wider than the budget carries fewer rows per statement.
 

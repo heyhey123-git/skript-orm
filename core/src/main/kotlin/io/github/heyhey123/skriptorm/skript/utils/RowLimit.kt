@@ -5,10 +5,13 @@ package io.github.heyhey123.skriptorm.skript.utils
  *
  * Skript reads and writes a list variable one index at a time, on the server thread, in one uninterrupted
  * stretch, and what that costs is counted in values rather than in rows: a hundred thousand rows of a
- * six-column table is six hundred thousand of them, and it held this server's thread for more than ten
- * seconds — long enough for the watchdog to report it and for every player to feel it. The budgets below
- * keep the worst case a hitch of about half a second instead, and half a second is what
- * [VALUES_PER_STATEMENT] is: the batch that was measured.
+ * six-column table is six hundred thousand of them. Measured on a development server, reading a batch of
+ * values out of a variable costs about a third of a microsecond per value, and storing a result into one
+ * about two, the difference being that a store clears the variable first and then reaches every index
+ * through Skript's own name lookup, which takes a fair lock and walks a tree per value. A hundred thousand
+ * rows of a six-column table is therefore about a second of the server thread in total, and the larger half
+ * of it is the result being stored; the budgets below keep each half to a hitch a server can afford rather
+ * than to seconds of one.
  *
  * A read past [ROWS] refuses, and stores nothing. The rows a script did not receive are rows it will reason
  * about anyway, and a table quietly cut in half answers every later question wrong; a refusal is something
@@ -36,10 +39,16 @@ package io.github.heyhey123.skriptorm.skript.utils
  */
 internal object RowLimit {
 
-    /** Values one statement may bind, and the batch that was measured to cost the server thread ~half a second. */
+    /**
+     * Values one statement may bind. Reading a batch this large out of a variable costs the server thread
+     * about ten milliseconds, which is the stall the split exists to bound.
+     */
     const val VALUES_PER_STATEMENT: Int = 30_000
 
-    /** Rows a single statement may store into a read result. */
+    /**
+     * Rows a single statement may store into a read result. Storing this many rows costs the server thread
+     * about fifty milliseconds on a six-column table, and proportionally more on a wider one.
+     */
     const val ROWS: Int = 5000
 
     /**
