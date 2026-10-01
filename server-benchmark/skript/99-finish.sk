@@ -9,8 +9,9 @@
 
 every 5 seconds:
     if {bench::done::curve} is set:
-        log "SKRIPTORM_BENCH=DONE"
-        stop the server
+        if {bench::done::compare} is set:
+            log "SKRIPTORM_BENCH=DONE"
+            stop the server
 
 every 180 seconds:
     log "SKRIPTORM_BENCH=FAIL the benchmark did not finish"
