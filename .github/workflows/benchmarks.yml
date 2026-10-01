@@ -4,11 +4,28 @@ name: Benchmarks
 # minutes where a test takes seconds, and a benchmark answers "how fast" while a test answers "does it
 # work". Mixing them would make the second answer wait for the first.
 #
-# Nothing here fails a run because a number moved. The suite has no measured noise band yet, and a
-# threshold guessed before the band is known is a threshold that gets deleted — taking the count gates
-# with it. What fails a run today is the harness itself: a benchmark that stops compiling, or a case
-# that cannot run. The first deterministic metric (statements and rows handed to the driver) turns the
-# `fail-on-alert` line below into a gate, and that happens when it has a number to compare against.
+# Nothing here fails a run because a number moved, and the threshold below is not yet a gate.
+#
+# The band was measured on one machine on 2026-10-02, in two back-to-back runs of
+# `./gradlew :benchmarks:jmh` with the settings this workflow uses — two forks, two warmup iterations,
+# three measurement iterations, six samples each — and nothing else running:
+#
+#   InsertManyBenchmark.insertManyOf5000   run 1  12.447 ms/op +/- 4.407   run 2  10.049 ms/op +/- 1.201
+#   RowLimitBenchmark.rowsPerStatement     run 1  11.708 ns/op +/- 3.691   run 2  11.236 ns/op +/- 0.241
+#
+# So on an idle machine the same tree moved 19 to 24 percent between runs for the insert case and 4 percent
+# for the row-limit case, while JMH's own error inside a single run reached 35 percent of the score. Two
+# things follow, and they are why `fail-on-alert` stays false. A threshold can only mean something above the
+# noise: anything below roughly 50 percent here would fire on this machine rather than on the code, and the
+# 150 percent below is above that band by a margin nobody measured — it is a placeholder, not a finding. And
+# the noise is not one number: an I/O bound case measured in milliseconds and a CPU bound case measured in
+# nanoseconds do not share a band, so a single threshold is the wrong instrument for this suite.
+#
+# Nor is a band measured on a developer machine the band a GitHub runner will show: a runner is a different
+# CPU, with different neighbours on the host, and it has no history yet. The gate therefore stays off until
+# `gh-pages` carries enough nightly runs to read the spread out of that history — set the threshold from that
+# history first, and turn the gate on after it, in that order. What fails a run today is the harness itself: a
+# benchmark that stops compiling, or a case that cannot run.
 on:
   # Every night, so the trend exists even in a week nobody touches the hot path. The minute is off the
   # hour because GitHub's scheduler is busiest then.
@@ -140,6 +157,12 @@ jobs:
           # Commenting needs a token that may write to the pull request, which a pull request from a
           # fork does not get. Comparing still happens there; only the comment is skipped.
           comment-on-alert: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          # The placeholder the note at the top of this file explains. The measured run-to-run move was 19 to
+          # 24 percent for the I/O bound case and 4 percent for the CPU bound one, with JMH's within-run error
+          # reaching 35 percent of the score, so a threshold that meant anything would have to clear roughly
+          # 50 percent — and this one is not derived from CI history either way.
           alert-threshold: '150%'
-          # Report only, for now, and deliberately: see the note at the top of this file.
+          # Report only, deliberately: a band measured on one machine is not the band a runner will show, so
+          # the gate stays off until there is CI history to measure it from. See the note at the top of this
+          # file for the numbers and for what turning it on would take.
           fail-on-alert: false

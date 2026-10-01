@@ -578,9 +578,25 @@ val serverTestChecks = buildMap {
     put("stress batch", "error=<none> valuesAsked=12000 rowsReported=12000 rowsPaged=12000")
     put("stress columns", "error=<none> valuesAsked=24000 rowsReported=4000 rowsPaged=4000")
     put("stress split", "error=<none> valuesAsked=72000 rowsReported=12000 rowsPaged=12000")
+    // The declared line is the file backend's verdict, and only that. The same case failed on MySQL,
+    // PostgreSQL and MongoDB with `rowsAffected=-1` in the run that first carried it (d0d86a6), and those
+    // three are expected to keep failing it until the cancellation path is fixed: the case asks whether the
+    // row the timed-out transaction inserted is still there, whether the connection can take a write
+    // afterwards, and whether the key is free, and it prints all three answers. Do not relax this to a
+    // prefix or a pattern to make those jobs green — the divergence is the finding.
     put(
         "stress cancel",
-        "error=The database transaction was open for longer than 5 seconds and was rolled back. rowsAffected=1"
+        "error=The database transaction was open for longer than 5 seconds and was rolled back. " +
+            "inserted=1 found=0 readError=<none> fresh=1 freshError=<none> rowsAffected=1 sameError=<none>"
+    )
+    // Why `size of` answers zero for a stored result, with the controls that separate Skript's size query
+    // from the plugin's storage: a flat list the script built reports its 20 values and loops 20 times, the
+    // plugin's result and the same shape built by the script both report 0 and loop 0 times, and walking the
+    // result's indices still counts 20 rows.
+    put(
+        "result size",
+        "built=20 flatLooped=20 mirror=0 mirrorLooped=0 read=0 readLooped=0 walked=20 local=0 copy=0 " +
+            "fast=0 firstId=1 lastId=20 fastLastId=5000"
     )
     if (serverTestUsesDatabase) {
         putAll(serverTestDatabaseChecks)

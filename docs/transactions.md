@@ -102,6 +102,12 @@ Rollback needs the same connection, so it cannot run immediately while a stateme
 
 Set a longer timeout when the transaction genuinely needs it. If it is slow because it includes too much work, consider splitting it up: move slow reads and lengthy calculations outside when they do not need transaction protection, and keep only the statements that must succeed together inside.
 
+### What the timeout is checked against
+
+The rollback is issued on the connection the transaction pinned, so it is expected to undo everything that transaction wrote, and the connection is expected to be usable afterwards. The server suite checks exactly that, and it reports three answers separately rather than one: whether the row the timed-out transaction inserted is still there, whether the connection takes a further write, and whether the key that transaction used is free.
+
+As of 2026-10-02 that check passes on the file backend and fails on MySQL, PostgreSQL and MongoDB, and the failure has not been narrowed to one of those three answers yet — the earlier form of the case could only report that the follow-up write did not happen at all. Until it is narrowed, treat a transaction that reaches its deadline as not fully documented on those backends: the rollback is attempted there, and whether a write it made survives has not been established.
+
 ## What it does not do
 
 - **It is not a lock.** A transaction commits or rolls back a group of changes together, but two scripts reading, modifying and writing the same value can still lose an update. The database's isolation level determines what each can see.

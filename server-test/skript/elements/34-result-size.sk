@@ -1,0 +1,137 @@
+# What `size of` — and `loop` — answer about a result this plugin just stored, and why both are empty.
+#
+# The observation this file exists for: a page the plugin stored reported `size of` zero while every row was
+# readable under its index. The cause is in Skript, not in the plugin, and it covers iteration as well as
+# sizing. `Variable.size(Event)` counts the values held directly in the list and then subtracts every
+# sub-entry that is a map holding no scalar of its own:
+#
+#     int size = map.size();
+#     if (map.containsKey(null)) size--;                     // the list's own value, not an entry
+#     for (Object value : map.values())
+#         if (value instanceof Map<?, ?> sublist && !sublist.containsKey(null))
+#             size--;                                        // a sub-list is not a value
+#
+# A row is exactly that: `{result::1}` is a map of columns with no scalar of its own, so a result of rows
+# reports zero and iterates zero times, however it was stored — by the plugin, by its fast attach path, or by
+# the script itself. The two-level shape is what the reads document (`{_users::1::name}`), so this is the
+# shape every user has, and the answer to "how many rows did I read" is to walk the indices, which is what
+# this plugin's own benchmark and cookbook do.
+#
+# The controls are what make that a measurement rather than a reading of the source, and they cover both
+# halves: a flat list the script built reports 20 and loops 20 times, the same two-level shape built by the
+# script reports 0 and loops 0 times, an index walk over the stored result counts 20, and a copy of the
+# result behaves like the result. The numbers are asserted, so if Skript's rule changes, or the plugin
+# changes the shape it stores, this case says so instead of the documentation quietly going stale.
+
+on load:
+    set {skriptorm::selftest::started::result-size} to true
+
+    wait 6 seconds
+
+    create a connection named "size" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        url: "jdbc:sqlite:plugins/Skript/size-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size connect: %last database error%"
+
+    in connection "size":
+        register a database table "orm_size_probe":
+            id: bigint, primary key, not null
+            name: string(64), nullable
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size register table: %last database error%"
+
+    # 5000 rows of two columns: 10 000 values, which is where the plugin's fast attach path starts, so the
+    # last control below goes through it while the small ones do not.
+    loop 5000 times:
+        set {rs::seed::%loop-number%::id} to loop-number
+        set {rs::seed::%loop-number%::name} to "row"
+    in connection "size":
+        insert many {rs::seed::*} into table "orm_size_probe" and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size seed: %last database error%"
+
+    # A small result, stored the ordinary way: 20 rows of two columns.
+    in connection "size":
+        select many entities from table "orm_size_probe" and store the results in {rs::small::*}:
+            where all:
+                id <= 20
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size small read: %last database error%"
+
+    # The same read into a local variable, since the fast path refuses locals and the ordinary path does not.
+    in connection "size":
+        select many entities from table "orm_size_probe" and store the results in {_local::*}:
+            where all:
+                id <= 20
+
+    # The controls the plugin cannot influence: a flat list, and a list built with the plugin's own
+    # two-level shape — a row index, then a column name under it.
+    loop 20 times:
+        set {_built::%loop-number%} to loop-number
+        set {_mirror::%loop-number%::id} to loop-number
+        set {_mirror::%loop-number%::name} to "row"
+
+    # Both halves of Skript's rule need a positive control each, or an empty answer proves nothing: `size of`
+    # and `loop` both have to work on a list that holds values.
+    set {_flatLooped} to 0
+    loop {_built::*}:
+        add 1 to {_flatLooped}
+
+    # The negative control for iteration: the same shape as a stored result, built by the script.
+    set {_mirrorLooped} to 0
+    loop {_mirror::*}:
+        add 1 to {_mirrorLooped}
+
+    # Iterating the stored result, which is the same question asked of the plugin's own output.
+    set {_readLooped} to 0
+    loop {rs::small::*}:
+        add 1 to {_readLooped}
+
+    # The count the plugin's own scripts take, and the one the reads document: walk the row indices. The
+    # form is the one server-benchmark/skript/10-curve.sk counts with, down to `loop 20 times`, because
+    # `loop 1 to 20` counted nothing here while the same rows read back fine by index.
+    set {_walked} to 0
+    loop 20 times:
+        if {rs::small::%loop-number%::id} is set:
+            add 1 to {_walked}
+
+    # And a copy, which is what a script does when it wants a list of its own to work with.
+    set {_copy::*} to {rs::small::*}
+
+    # A result big enough for the fast attach path: 5000 rows of two columns, exactly 10 000 values.
+    in connection "size":
+        select page 1 with size 5000 from table "orm_size_probe" and store the results in {rs::big::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size big read: %last database error%"
+
+    if size of {_built::*} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a flat list the script built reported %size of {_built::*}%, not 20"
+    if {_flatLooped} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: looping a flat list the script built ran %{_flatLooped}% times, not 20"
+    if {_walked} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: walking the stored result's indices counted %{_walked}% rows, not 20"
+    if {rs::small::1::id} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the stored result's first row is %{rs::small::1::id}%, not 1"
+    if {rs::small::20::id} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the stored result's last row is %{rs::small::20::id}%, not 20"
+    if {rs::big::5000::id} is not 5000:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the fast path's last row is %{rs::big::5000::id}%, not 5000"
+    if size of {_mirror::*} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the same shape built by the script reported %size of {_mirror::*}% instead of 0"
+    if {_mirrorLooped} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: looping the same shape built by the script ran %{_mirrorLooped}% times instead of 0"
+    if size of {rs::small::*} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the stored result reported %size of {rs::small::*}% instead of 0"
+    if {_readLooped} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: looping the stored result ran %{_readLooped}% times instead of 0"
+    if size of {_local::*} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a local result reported %size of {_local::*}% instead of 0"
+    if size of {_copy::*} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a copy of the result reported %size of {_copy::*}% instead of 0"
+    if size of {rs::big::*} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the fast path's result reported %size of {rs::big::*}% instead of 0"
+
+    log "SKRIPTORM_SELFTEST detail: result size -> built=%size of {_built::*}% flatLooped=%{_flatLooped}% mirror=%size of {_mirror::*}% mirrorLooped=%{_mirrorLooped}% read=%size of {rs::small::*}% readLooped=%{_readLooped}% walked=%{_walked}% local=%size of {_local::*}% copy=%size of {_copy::*}% fast=%size of {rs::big::*}% firstId=%{rs::small::1::id}% lastId=%{rs::small::20::id}% fastLastId=%{rs::big::5000::id}%"
+
+    set {skriptorm::selftest::done::result-size} to true

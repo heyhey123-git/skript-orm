@@ -19,12 +19,18 @@
 # Two wrong answers from the first attempts at this file are worth keeping, because both of them read as a
 # plugin defect. Counting 12 000 six-column rows with one `select many` was refused: 72 000 values is past the
 # read ceiling, which the row-ceiling probe checks for on purpose. Counting a page with `size of` reported 0
-# for a page that held 5000 rows, every one of them present under its index. So the count-back pages, carries
-# a `where` block like every other successful read in this suite, and is read by index rather than by size.
+# for a page that held 5000 rows, every one of them present under its index — which is Skript's rule for any
+# list of sub-lists rather than anything this plugin stores, as elements/34-result-size.sk establishes with a
+# script-built control of the same shape. So the count-back pages, carries a `where` block like every other
+# successful read in this suite, and is read by index rather than by size.
 #
-# The interrupted write asserts through a primary key: a row that survived the rollback would refuse the
-# second insert for a duplicate key instead of writing one row, and the connection has to survive as well,
-# which the same insert proves.
+# The interrupted write asserts three answers separately and reports all three, because the run that first
+# carried it (d0d86a6) failed on MySQL, PostgreSQL and MongoDB with a bare `rowsAffected=-1` that could not
+# say which answer was wrong: whether the row the timed-out transaction inserted is still there (read back by
+# its key, so a duplicate key cannot hide the answer), whether the connection takes a write on an unused key
+# afterwards, and whether the key the transaction used is free. On the file backend the earlier form passed,
+# and it still does in this form; the three external backends are expected to keep failing until the
+# cancellation path is fixed.
 #
 # What an earlier run of this file also established: the write was first spelled `insert {list::*} into
 # table ...`, which is not the form this plugin accepts. Skript dropped the line without a word — the count
@@ -187,22 +193,67 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL stress split: the table holds more than 12 000 rows"
     log "SKRIPTORM_SELFTEST detail: stress split -> error=%{_split::error}% valuesAsked=72000 rowsReported=%{_split::rows}% rowsPaged=%{_split::paged}%"
 
-    # A transaction that is not allowed to finish. The timeout rolls it back, the row it wrote must be gone,
-    # and the same key written afterwards must be accepted: a key that had survived the rollback would come
-    # back as a duplicate instead, and a connection that had not returned would fail the insert outright.
+    # A transaction that is not allowed to finish: the timeout rolls it back, and what it wrote must be
+    # gone. This case failed on MySQL, PostgreSQL and MongoDB in the run of d0d86a6 that first carried it,
+    # with `rowsAffected=-1`, while the file backend here passed. `-1` is the sentinel the follow-up insert
+    # starts its count at, so that statement's store clause never ran: either the key was still occupied, or
+    # the statement never reached the database. The earlier form could not tell those apart, and they are
+    # different faults — a rollback that did not undo the plugin's own write, against a statement refused
+    # before it ran — so the questions are now asked separately, and no insert is allowed to answer a
+    # question a read can answer:
+    #
+    #   1. is the row the timed-out transaction inserted still there?
+    #   2. can this connection take a write at all after the timeout?
+    #   3. is the key free, which is what the timeout promises?
+    #
+    # The insert inside the transaction stores its own count as well, so a run can tell "the write happened
+    # and survived" from "the write never happened". The code path says the insert runs on the transaction's
+    # pinned connection (EffInsertOneFromVariable -> DatabaseWork.Target.withQueries ->
+    # JdbcTransaction.queries, built on the connection JdbcTransaction.doRollback rolls back), which is why
+    # question 1 is the one that separates a broken promise from a refusal.
+    set {_cancel::key} to 900001
+    set {_cancel::inserted} to -1
     database transaction on connection "stress" with timeout 5 seconds:
-        insert one entity into table "orm_stress_narrow" and wait:
+        insert one entity into table "orm_stress_narrow" and store affected rows in {_cancel::inserted} and wait:
             values:
                 id: 900001
         wait 8 seconds
     set {_cancel::error} to last database error
+
+    # 1. The row, read back by its key. A read is not refused for a duplicate key, so its answer is about
+    #    the rollback rather than about the insert that follows.
+    in connection "stress":
+        select entity from table "orm_stress_narrow" by id {_cancel::key} and store the result in {_cancel::row::*}
+    set {_cancel::readError} to last database error
+    set {_cancel::found} to 0
+    if {_cancel::row::1::id} is set:
+        set {_cancel::found} to {_cancel::row::1::id}
+
+    # 2. A write on a key nothing else uses. If this is refused, the timeout left the connection unable to
+    #    take statements, which is a different fault from a key that was not freed.
+    set {_cancel::fresh} to -1
+    in connection "stress":
+        insert one entity into table "orm_stress_narrow" and store affected rows in {_cancel::fresh} and wait:
+            values:
+                id: 900002
+    set {_cancel::freshError} to last database error
+
+    # 3. And the question the case was written for: the key the timed-out transaction used.
     set {_cancel::rows} to -1
     in connection "stress":
         insert one entity into table "orm_stress_narrow" and store affected rows in {_cancel::rows} and wait:
             values:
                 id: 900001
+    set {_cancel::sameError} to last database error
+
+    if {_cancel::readError} is set:
+        log "SKRIPTORM_SELFTEST=FAIL stress cancel: the result of the timed-out transaction could not be read back, so the rollback is not what the next answer is about (error=%{_cancel::readError}%)"
+    if {_cancel::found} is not 0:
+        log "SKRIPTORM_SELFTEST=FAIL stress cancel: the timeout rolled back but the row it inserted is still there, so the rollback did not undo it (id=%{_cancel::found}% read=%{_cancel::readError}%)"
+    if {_cancel::fresh} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL stress cancel: after the timeout this connection could not take a write on an unused key (rows=%{_cancel::fresh}% error=%{_cancel::freshError}% inserted=%{_cancel::inserted}%)"
     if {_cancel::rows} is not 1:
-        log "SKRIPTORM_SELFTEST=FAIL stress cancel: the key was not free after the rollback (%{_cancel::rows}% rows, %{_cancel::error}%)"
-    log "SKRIPTORM_SELFTEST detail: stress cancel -> error=%{_cancel::error}% rowsAffected=%{_cancel::rows}%"
+        log "SKRIPTORM_SELFTEST=FAIL stress cancel: the key was not free after the rollback (rows=%{_cancel::rows}% sameError=%{_cancel::sameError}% rowStillThere=%{_cancel::found}% readError=%{_cancel::readError}%)"
+    log "SKRIPTORM_SELFTEST detail: stress cancel -> error=%{_cancel::error}% inserted=%{_cancel::inserted}% found=%{_cancel::found}% readError=%{_cancel::readError}% fresh=%{_cancel::fresh}% freshError=%{_cancel::freshError}% rowsAffected=%{_cancel::rows}% sameError=%{_cancel::sameError}%"
 
     set {skriptorm::selftest::done::stress} to true

@@ -563,9 +563,16 @@ a pull request whose filter says a change could move a number, and on demand —
 case filter for whoever is chasing a suspicious night. `./gradlew :benchmarks:jmh` runs the same cases
 locally and takes the same two properties.
 
-Nothing in it fails a run because a number moved. The suite has no measured noise band yet, and a
-threshold guessed before the band is known is a threshold that gets deleted, taking the count gates with
-it. What fails a run is the harness: a case that stops compiling, or one that cannot run.
+Nothing in it fails a run because a number moved, and the alert threshold it carries is a placeholder rather
+than a gate. Two back-to-back local runs with the workflow's own settings — two forks, two warmup
+iterations, three measurement iterations — put the same tree at 12.447 and 10.049 ms/op for the insert case
+and 11.708 and 11.236 ns/op for the row-limit case, with JMH's within-run error reaching 35 percent of the
+score. The run-to-run move was therefore 19 to 24 percent on the I/O bound case and 4 percent on the CPU
+bound one. That is why the threshold cannot be read off a developer machine: a threshold under roughly 50
+percent would fire on the machine, the two cases do not share a band, and a runner is a different machine
+again. The band has to come from the `gh-pages` history once enough nightly runs exist, and the gate is
+turned on after the threshold is set from it. What fails a run today is the harness: a case that stops
+compiling, or one that cannot run.
 
 The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch, which has to
 exist before the first run that pushes to it. A pull request is compared against that history but never

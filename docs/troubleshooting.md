@@ -45,6 +45,8 @@ See [Types](types.md).
 
 `select many` results start with a one-based row index, as in `{_users::1::name}`. Even a single matching row needs that index. There is no row-count expression for these results: `size of {_users::*}` counts first-layer values, but each row is a sub-list. Walk the row indices or keep your own counter. See [Reading rows](reading.md).
 
+This is Skript's rule rather than the plugin's storage, and it applies to any list of sub-lists however it was written. `size of` reads the list through `Variable#size(Event)`, which takes the number of entries and then subtracts every entry whose value is a map with no scalar of its own — a row is exactly that, so a result of rows reports zero, and so does the same shape built by a script. The case that pins this is `elements/34-result-size.sk` in the server test: it asserts 20 for a flat list the script built, 0 for the stored result, 0 for the same shape built by hand, and 20 for a count taken by iterating the result. To count rows, iterate them — the plugin's own benchmark and cookbook do that too.
+
 ## A delete or update touched every row
 
 `delete entities` and `update entities` allow you to omit `where`, in which case they affect every row the implementation allows. Forgetting the condition is not an error. Add a filter or use `by id`. See [Updating and deleting](updating-and-deleting.md).
