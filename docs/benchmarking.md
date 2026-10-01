@@ -4,6 +4,12 @@
 
 This page records how this plugin is measured and the decisions taken about it. It is a plan rather than a report: the numbers in the pages beside it — what storing a result costs, where the ceilings came from — were measured by hand, one question at a time. A number measured that way is written here as measured, and a number that has not been measured says so.
 
+## What these numbers mean for a server
+
+Read only this and you know the shape of it. Ordinary reads and writes do not lag a server, and a request too large to store is refused rather than run, because refusing protects the server and because what players notice is a stutter rather than an error message. A 5000-row write overran a tick by 70 to 90 milliseconds cold and by about 30 warm on a disposable Paper 26.2 server with JDK 25 on an AMD Ryzen 5 5600X; reads of up to 5000 rows did not lengthen a tick, and a read of 10 000 rows stores nothing and says why. A 5000-row `insert many` measured 9.960 ± 0.384 milliseconds on that machine and 6.1 to 10.0 milliseconds across three CI hosts, because a runner label is a pool of machines rather than a machine. The same call sends MySQL 5000 statements and MariaDB one, which is the driver's decision and the reason this project counts statements and only advises with time.
+
+Everything below is how those numbers were taken, what each came from, which machine produced it, and what is deliberately not measured.
+
 ## Three layers, and why they stay apart
 
 The cost of one statement does not sit in one place, and the three places are read in two different clocks:
