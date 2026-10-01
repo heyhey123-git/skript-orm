@@ -15,21 +15,18 @@ on:
   schedule:
     - cron: '17 3 * * *'
 
-  # A pull request that could move a number gets a run, so a regression is visible before it is merged.
-  # The list is what the measured code is: the library, the implementations, and the build files that
-  # decide what is compiled and against which versions. Documentation cannot move a number, and ci.yml
-  # skips those for the same reason.
+  # A pull request that could move a number gets a run, so a regression is visible before it is merged
+  # rather than after a release. The filter is the same ignore list ci.yml uses, for the reason it gives
+  # there: forgetting a new build input in an allow list would silently stop the run for a real change,
+  # while forgetting an inert file here only costs a run that was not needed.
+  #
+  # There is no `push` trigger. A pull request has already run on these commits, and the nightly below
+  # covers the default branch, so a push trigger would only repeat what one of the two just did.
   pull_request:
-    paths:
-      - 'benchmarks/**'
-      - 'core/src/main/**'
-      - 'generic-jdbc-implementation/src/main/**'
-      - 'mongodb-implementation/src/main/**'
-      - 'postgresql-implementation/src/main/**'
-      - 'gradle/libs.versions.toml'
-      - 'build.gradle.kts'
-      - 'settings.gradle.kts'
-      - '.github/workflows/benchmarks.yml'
+    paths-ignore:
+      - '**.md'
+      - '.gitignore'
+      - '.idea/**'
 
   # Manual runs, because a trend is only useful if a suspicious night can be repeated on demand. The
   # filter is the same property a local run uses, so a single case can be checked in a minute.
