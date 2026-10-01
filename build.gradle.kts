@@ -1,6 +1,8 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
+import java.io.FileNotFoundException
+import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -828,8 +830,12 @@ val releaseNotes by tasks.registering {
 // plugin is built against, so the two cannot drift apart unnoticed.
 val skriptHubDocsToolVersion = "1.17"
 
-val skriptHubDocsToolFile = layout.buildDirectory.file(
-    "tools/skripthubdocstool-$skriptHubDocsToolVersion.jar"
+// Kept in the Gradle user home rather than under build/, because the release workflow restores that
+// directory between runs and this jar is the one part of the documentation run that comes off the network:
+// a machine that has it once should never have to ask for it again, and the asking is what fails when
+// GitHub's asset host answers a runner with 504.
+val skriptHubDocsToolFile = gradle.gradleUserHomeDir.resolve(
+    "caches/skript-hub-docs/skripthubdocstool-$skriptHubDocsToolVersion.jar"
 )
 val skriptHubDocsDirectory = layout.buildDirectory.dir("skript-hub")
 
@@ -862,12 +868,38 @@ abstract class DownloadFile : DefaultTask() {
         // Downloaded beside the real name and then moved onto it, so an interrupted transfer is never
         // taken for the complete file by the next run.
         val partial = file.resolveSibling(file.name + ".part")
-        URI(url.get()).toURL().openStream().use { input ->
-            partial.outputStream().use { output -> input.copyTo(output) }
+        var last: IOException? = null
+        for (attempt in 1..ATTEMPTS) {
+            try {
+                URI(url.get()).toURL().openStream().use { input ->
+                    partial.outputStream().use { output -> input.copyTo(output) }
+                }
+                // Replacing is what makes a second download work: the file it moves onto is usually already
+                // there, and a plain rename refuses to overwrite on Windows.
+                Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+                if (attempt > 1) logger.lifecycle("{} arrived on attempt {}.", file.name, attempt)
+                return
+            } catch (missing: FileNotFoundException) {
+                // The url names nothing, and will name nothing on the next attempt either.
+                throw GradleException("Could not download ${url.get()}: ${missing.message}", missing)
+            } catch (error: IOException) {
+                // An asset host under load answers 502, 503 or 504 to a runner, and delivers the same file
+                // to the next request: the release this workflow publishes is worth another try.
+                last = error
+                partial.delete()
+                if (attempt < ATTEMPTS) {
+                    logger.lifecycle("{} did not arrive ({}), trying again.", file.name, error.message)
+                    Thread.sleep(PAUSE_MILLIS * attempt)
+                }
+            }
         }
-        // Replacing is what makes a second download work: the file it moves onto is usually already
-        // there, and a plain rename refuses to overwrite on Windows.
-        Files.move(partial.toPath(), file.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        throw GradleException("Could not download ${url.get()}: ${last?.message}", last)
+    }
+
+    private companion object {
+        /** Attempts at one download, and the pause before each retry, growing with the attempt number. */
+        const val ATTEMPTS = 4
+        const val PAUSE_MILLIS = 2_000L
     }
 }
 
