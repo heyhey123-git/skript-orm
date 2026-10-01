@@ -63,6 +63,12 @@ val integrationTest by tasks.registering(Test::class) {
     useJUnitPlatform()
     shouldRunAfter(tasks.test)
 
+    // These tests only run in a job that has a server, and a test that measures what a driver reports has to
+    // reach that job's log: without this, its output lives only in the report the job uploads.
+    testLogging {
+        showStandardStreams = true
+    }
+
     // A Gradle property wins: `-P` is delivered with every invocation, even one that reuses a daemon
     // started before the environment was set, which is what makes a CI job deterministic. `-D` and
     // the environment variables stay available for local runs.
