@@ -48,12 +48,13 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
         assertColumnType("uid", "BINARY", columns)
         assertColumnSize("uid", 16, columns)
 
-        // The protocol has no BOOLEAN type: it is an alias for TINYINT(1), and a driver may report that
-        // column as TINYINT or as BIT depending on how it treats the alias. Either label is the same
-        // column, so the assertion is that it stayed an integer type and not, say, a string. The
-        // boolean value itself round trips, which TypeRoundTripIntegrationTest checks.
+        // The protocol has no BOOLEAN type: it is an alias for TINYINT(1), and each driver names the
+        // column after the alias it was created with — Connector/J says BIT, MariaDB Connector/J says
+        // BOOLEAN, and a server that does not carry the alias says TINYINT. All three are the same
+        // one-byte column, so the assertion is that it stayed a boolean-shaped integer and not, say, a
+        // string. The boolean value itself round trips, which TypeRoundTripIntegrationTest checks.
         assertTrue(
-            columns.getValue("active").typeName in setOf("TINYINT", "BIT"),
+            columns.getValue("active").typeName in setOf("BOOLEAN", "TINYINT", "BIT"),
             "active was reported as ${columns.getValue("active")}"
         )
     }
