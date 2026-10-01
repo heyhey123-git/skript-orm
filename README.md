@@ -83,42 +83,33 @@ and hands results back as ordinary Skript variables and values.
 
 ## Performance and limits
 
-This is a high-performance library, and its limits are deliberate. When a result is too large to store
-without spending the server's own tick on it, the plugin refuses the read and says so rather than storing
-part of it, because a server that stutters is what players notice. Refusing is protection, not a failure.
+Plainly: ordinary reads and writes do not lag a server, and a request too large to store is refused rather
+than run. Refusing is protection, not a defect of the addon — players notice a stutter, not an error message.
 
-Every number below was measured on the machine and in the period it names, one server at a time, and where
-it is written as a range the spread was real. [Benchmarking and stress testing](docs/benchmarking.md) records
-how they were taken and the policy they follow: **counts and allocations are findings that may gate a build,
-while timing is reported and never gates it**, because wall clock moves by ten to twenty percent between
-identical runs on a shared machine and a count does not. Nothing here is a promise about another machine.
+Every number below was measured on the machine named beside it, one server at a time, and where it is written
+as a range the spread was real. A number without its machine is not a number: two runs of the same test on the
+same CI label can land on different processors.
 
-**Writing, on a real Paper server.** A statement is timed inside the script, on the tick the effect ran on,
-so what is read is the overhang past a normal tick. On a six-column table that overhang grew with the batch:
-about 10 milliseconds for 100 rows, and 100 to 110 milliseconds for 10 000. 5000 rows — the size both limits
-land on — overran by 70 to 90 milliseconds cold; warm, on the JVM's second pass, one run overran by about
-30 milliseconds while another kept the whole write inside a single tick and so reported no overhang at all.
-Cold and warm are different measurements, and a cost under the 50 milliseconds a tick lasts has nothing to
-lengthen.
+| What was measured | Result | Machine |
+| --- | --- | --- |
+| Writing 5000 rows, the size both limits land on | 70 to 90 ms past a tick cold; warm, about 30 ms in one run and no overhang at all in another | disposable Paper 26.2 server, AMD Ryzen 5 5600X, JDK 25 |
+| Writing 100 rows, and 10 000 rows | about 10 ms, and 100 to 110 ms, past a tick | the same server |
+| Reading 100 to 5000 rows | no read lengthened a tick, and every row asked for was stored | the same server |
+| Reading 10 000 rows | refused: the result variable is cleared and `last database error` names the ceiling | the same server |
+| A 5000-row `insert many` through the generic JDBC path | 9.960 ± 0.384 ms, and 6.1 to 10.0 ms across three CI hosts | Ryzen 5 5600X; AMD EPYC 9V74; Intel Xeon Platinum 8573C |
+| What a real server received for those 5000 rows | MySQL 5038 statements, one per row; MariaDB 2, one multi-row insert; PostgreSQL cannot count them | one CI run, Intel Xeon Platinum 8370C for MySQL and MariaDB, AMD EPYC 7763 for PostgreSQL |
 
-**Reading.** Up to 5000 rows are stored, and no read in that range was seen to lengthen a tick. On the
-benchmark server — the generic JDBC connection, which on the machine that ran it is SQLite — reads of 100,
-500, 1000, 2500 and 5000 rows of a six-column table each stored every row they asked for, and in none of them
-did the longest tick inside the statement exceed a tick's own length. A read of 10 000 rows stores nothing:
-the result variable is cleared, and `last database error` names the ceiling and what to do about it. That
-boundary is a measurement rather than a guess — a hundred thousand rows of a six-column table written into a
-variable one index at a time is about a second of the server not ticking through.
+The last row is the driver's doing rather than the plugin's, on the same SQL and the same server. What the
+plugin sends and what the server receives are different questions, which is why this project counts both and
+trusts the count: wall clock moves by ten to twenty percent between identical runs on a shared machine, and a
+count does not. [Benchmarking and stress testing](docs/benchmarking.md) records how each number was taken and
+that policy — **counts and allocations are findings that may gate a build, while timing is reported and never
+gates it**. Nothing here is a promise about your machine.
 
-**The 30 000-value budget is a splitting line, not a cliff.** One write binds at most 30 000 values, which is
-5000 rows of six columns and the same batch a read is held to. A batch past it is not refused: it is sent as
-several statements, and every row is written. The curve is flat there — a batch of 30 000 values was written
-in one call with the count it reported matching what the table gained, and so was a batch of 60 000, 10 000
-rows of six columns, with no step between the two.
-
-**The driver, counted rather than timed.** Through the generic JDBC connection on an in-memory database, a
-call of 5000 rows of six columns was handed to the driver as a **single statement**, the plugin reported
-5000 affected rows with an exact count, the table held 5000 rows once the call returned, and the call
-measured **9.960 ± 0.384 milliseconds**. That is the reference run in `benchmarks/baseline.json`.
+**The limits, in the same plain terms.** A read stores at most 5000 rows; past that nothing is stored and
+`last database error` says so. A write binds at most 30 000 values, which is 5000 rows of six columns, and a
+batch past that is not refused: it is sent as several statements and every row is written. Absurdly large
+requests are refused rather than run, and that is deliberate — a server that stutters is what players notice.
 
 ### What is deliberately not here
 
@@ -127,8 +118,10 @@ measured **9.960 ± 0.384 milliseconds**. That is the reference run in `benchmar
   parked trigger resumes on, and its floor is one tick. Percentiles over tick durations need an observer
   inside the tick loop, which is a plugin in the server rather than a script, so MSPT percentiles are absent
   rather than invented.
-- **No per-backend statement counts on the server side.** The count a database itself receives is where the
-  difference between drivers lives, and it needs a real instance of each backend. It has not been measured.
+- **No PostgreSQL statement counts.** Where a database itself counts the statements it received is where the
+  difference between drivers lives. The MySQL family reports them, and does so in the rows above; PostgreSQL's
+  own views count rows and transactions and cannot attribute either to statements, so that half is
+  unavailable rather than guessed.
 
 **One trap worth meeting here instead of in production.** With Connector/J's default settings a batched
 insert leaves as one statement per row, so the same insert is much slower there than on PostgreSQL or MariaDB
