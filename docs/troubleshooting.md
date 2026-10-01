@@ -97,7 +97,7 @@ Pagination sorts by the registered primary key and rejects tables without one. P
 
 Reading has two halves, and only one of them leaves the server thread: the query runs elsewhere, while the answer is written into the variable on the server thread, one value at a time. That costs about 1.4 microseconds per value, measured, so a 5000-row result of a six-column table is about 47 milliseconds — most of a tick. Values cost, not rows: the same 5000 rows of a two-column table cost about 15 milliseconds.
 
-The 5000-row ceiling holds that cost where it is, and results above 10 000 values are stored more cheaply (about a quarter less of the tick; the numbers are under [what storing a result costs](reading.md#what-storing-a-result-costs)), but no mode makes storing a large result free. To keep a read short, narrow the result — a stricter filter, fewer columns in the table, or one page at a time. See [How many rows one read may store](reading.md#how-many-rows-one-read-may-store).
+The 5000-row ceiling holds that cost where it is, and results above 10 000 values are stored more cheaply (about a quarter less of that server-thread time, not of the tick — a cost that fits inside a tick's 50 ms does not lengthen one; the numbers are under [what storing a result costs](reading.md#what-storing-a-result-costs)), but no mode makes storing a large result free. To keep a read short, narrow the result — a stricter filter, fewer columns in the table, or one page at a time. See [How many rows one read may store](reading.md#how-many-rows-one-read-may-store).
 
 ## "insert many" of a large list pauses the server
 
@@ -149,17 +149,33 @@ Sections with a `where` block, `values` block, or other body need no changes. Ol
 
 The generic `"JDBC"` type has no portable way to write a delete bounded by a row limit. MySQL and MariaDB append `... LIMIT n`, PostgreSQL picks the rows with a `ctid` subquery first, and MongoDB picks their ids first; the portable dialect has none of those, so `JdbcDialect.applyDeleteLimit()` answers with `Limited delete` and the statement is rejected before it reaches the database. Nothing is deleted — not even in part — and the message is in `last database error`.
 
-The `where` block is not what the dialect is complaining about. The limit is the part with no portable spelling, and the refusal is the same whether a filter is written or not: `delete entities from table "logs" with limit 500 and wait`, with no `where` at all, is refused the same way. A `where` block on its own is ordinary SQL, so a filtered delete without `with limit` does run on that type, as it does on SQLite and H2.
+**The limit is not the only thing that triggers it.** On the generic type `delete entities` is refused whether or not the script wrote a limit. Measured on this plugin's own server, over SQLite through a generic connection, by `elements/31-statement-shape.sk`:
 
-No property or driver setting gives the dialect the form it lacks, so this is a real gap rather than a configuration mistake. To bound the work by the statement, use a type whose dialect answers: `"MySQL"`, `"MariaDB"`, `"PostgreSQL"` and `"MongoDB"` all do. Otherwise delete by key: read the keys you mean to remove — `select page` over the table, or a walk of the key range — and run `delete one entity ... by id {_key}` for each one. `by id` takes no limit, and the batch size is yours to choose.
+| statement | what came back |
+| --- | --- |
+| `delete entities from table "..." and wait` | `Limited delete is not supported by this JDBC dialect.`, no affected-row count |
+| the same with a `where all:` block | the same message, no affected-row count |
+| the same with `with limit 1` | the same message |
 
-## Setup inside an `if` does nothing, and a nested loop has no value
+So a filtered delete without a limit is not the workaround it looks like, and it is not only deletes: an `update entities` written the same way comes back `Limited update is not supported by this JDBC dialect.`, which the same file measures. The dialect on its own is not the whole story either: `JdbcDialect.delete()` runs a plain `DELETE FROM t` when it is handed no limit, so what reaches it from these elements is not nothing. Which value is handed over, and where it comes from, is not identified here; what is measured is that the message is the dialect's rather than the `Delete limit must be positive.` one a zero limit produces, and that no rows are reported as affected.
 
-Both of these were observed on Skript 2.16.2, the build this plugin compiles against and the one its server test loads. They are what that pairing did, not rules of Skript, and neither is a mistake in the script or a setting that can be changed.
+No property or driver setting gives the dialect the form it lacks, so this is a real gap rather than a configuration mistake. To act on all rows, use a type whose dialect answers: `"MySQL"`, `"MariaDB"`, `"PostgreSQL"` and `"MongoDB"` all do. On the generic type, delete by key instead: read the keys you mean to remove — `select page` over the table, or a walk of the key range — and run `delete one entity ... by id {_key}` for each one. `by id` takes no limit, and the batch size is yours to choose.
 
-**`create a connection` and `register a database table` written inside an `if` block do nothing.** The block itself runs — an assignment beside them takes effect — while these two lines are skipped in silence: no connection is made, no table is registered, and `last database error` keeps its previous value instead of naming a reason. What the two have in common is that they hand their work to the plugin and hand the trigger over until the database has answered; an assignment never does. Write the setup at the top level of the trigger, before the first `if`, and check the result there.
+## A nested loop's values need the loop's own suffix
 
-**A nested loop has no loop value.** A loop written inside another loop reads `<none>` for its loop expressions, so the inner body cannot see what it is iterating, the outer loop's value, or its size. Either do not nest the loops, or copy what the inner one needs into a local variable before entering it.
+The plain spelling of a loop expression is ambiguous inside a nested loop, and Skript refuses the **line that reads it** while parsing — not the loop. Measured on Skript 2.16.2, the build this plugin compiles against:
+
+```
+[Skript] Line 21: (elements/32-loop-value.sk)
+    There are multiple loops that match loop-number. Use loop-number-1/2/3/etc. to specify which loop's value you want.
+    Line: set {_plain} to "%loop-number% of %loop-number-2%"
+```
+
+The line is dropped, so the body around it looks as if it never ran and a batch filled there comes out empty — which is how this was first seen in a benchmark script, and why the six sizes in `server-benchmark/skript/10-curve.sk` are written out one after another instead of looped over. The loops themselves are fine, and the suffixes work. They count from the **outermost** loop inward: in `loop 2 times:` around `loop 3 times:` the outer loop's last number is `loop-number-1` (2) and the inner loop's is `loop-number-2` (3); in `loop 3 times:` around `loop 2 times:` the values are `loop-value-1` = 3 for the outer loop and `loop-value-2` = 2 for the inner one. Both directions are asserted by `elements/32-loop-value.sk`.
+
+## Setup inside an `if`
+
+An earlier version of this page said that `create a connection` and `register a database table` written inside an `if` block do nothing. That did not reproduce when it was measured: with the connection made inside `if <condition>:` and a statement written through it **outside** the block, the statement ran and reported one affected row, and an `insert` written inside an `if` reported one row too. `elements/31-statement-shape.sk` asserts both counts, so the shape is covered by a run rather than by a note. A statement inside an `if` is not skipped, so the guard each element's `walk` opens with is not the cause of what was seen. What the old observation ran is not recorded, so there is nothing left to reproduce from.
 
 ## The table name works on one server and not another
 

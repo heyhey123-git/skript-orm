@@ -97,7 +97,7 @@ loop 100 times:
 
 读取分两半，只有一半离开服务端线程：查询在别处执行，把结果写进变量则在服务端线程上逐值进行。实测每个值约 1.4 微秒，所以六列的 5000 行结果约 47 毫秒，几乎是整整一个 tick。花时间的是**值**，不是行：同样是 5000 行，两列的表约 15 毫秒。
 
-5000 行的上限就是把这份开销按在这里；超过 10000 个值的结果写入更便宜（少占约四分之一的 tick，数字见 [存一个结果要花多少](reading.zh-CN.md#存一个结果要花多少)），但没有任何一种模式能让存一个大结果变成免费。想让一次读取短，就把结果收窄：条件写严一些、表少几列，或者一页一页地取。见 [一次读取最多能存多少行](reading.zh-CN.md#一次读取最多能存多少行)。
+5000 行的上限就是把这份开销按在这里；超过 10000 个值的结果写入更便宜（少占约四分之一的服务端线程时间，而不是四分之一的 tick——装得进一个 tick 的 50 毫秒的开销不会把 tick 拉长；数字见 [存一个结果要花多少](reading.zh-CN.md#存一个结果要花多少)），但没有任何一种模式能让存一个大结果变成免费。想让一次读取短，就把结果收窄：条件写严一些、表少几列，或者一页一页地取。见 [一次读取最多能存多少行](reading.zh-CN.md#一次读取最多能存多少行)。
 
 ## 用 `insert many` 写入一个大列表会让服务端停顿
 
@@ -149,17 +149,33 @@ select one entity from table "users" and store the result in {_user::*}:
 
 通用 `"JDBC"` 类型无法表达带行数上限的删除。MySQL 和 MariaDB 是在语句末尾加 `... LIMIT n`，PostgreSQL 先用 `ctid` 子查询挑出这些行，MongoDB 先挑出它们的 id，而通用方言这三样都没有，于是 `JdbcDialect.applyDeleteLimit()` 只回一句 `Limited delete`，语句在到达数据库之前就被驳回。此时一行也不会被删掉，原因记录在 `last database error` 中。
 
-问题不在 `where` 块，而在那个没有通用写法的 limit：带不带筛选条件，得到的都是同一句拒绝，连 `delete entities from table "logs" with limit 500 and wait` 这种完全不写 `where` 的写法也一样。只写 `where` 的删除是普通 SQL，所以不带 `with limit` 的筛选删除在这个类型上能用，在 SQLite 和 H2 上同样如此。
+**触发它的不只是 limit。** 在通用类型上，脚本写不写 limit，`delete entities` 都会被拒绝。这是在本插件自带的服务器上、通过通用连接对 SQLite 实测的，用例是 `elements/31-statement-shape.sk`：
 
-没有任何属性或驱动设置能给这个方言补上它缺的那种写法，因此这是真实存在的缺口，不是配置写错。想让数据库自己限定行数，就换一个方言答得上来的类型：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"` 与 `"MongoDB"` 都可以。否则就按主键删：用 `select page` 或自己走过的键区间取出要删的键，再逐个执行 `delete one entity ... by id {_key}`。`by id` 不需要 limit，每批删多少由你决定。
+| 语句 | 返回 |
+| --- | --- |
+| `delete entities from table "..." and wait` | `Limited delete is not supported by this JDBC dialect.`，没有受影响行数 |
+| 同上，带 `where all:` 块 | 同一句，没有受影响行数 |
+| 同上，带 `with limit 1` | 同一句 |
 
-## `if` 里的初始化毫无反应，嵌套循环里也没有循环值
+所以“去掉 limit、只留 `where`”并不是看起来那样的绕法，而且不限于删除：同样写法（不写 limit）的 `update entities` 会返回 `Limited update is not supported by this JDBC dialect.`，同一个文件里量到了这一点。方言本身也不是全部：没人给它 limit 时，`JdbcDialect.delete()` 走的是普通的 `DELETE FROM t`，说明从这些元素递过去的并不是“没有 limit”。具体递过去的是哪个值、从哪里来，这里没有查明；能确定的是那句消息来自方言，而不是 limit 为 0 时会出现的 `Delete limit must be positive.`，并且没有任何行被报告为已受影响。
 
-这两条都是在 Skript 2.16.2 上观察到的现象，该版本是本插件编译所依据的版本，也是服务端测试加载的版本。它们属于这一组合的表现，不是 Skript 的固有规则，也不是脚本写错或某个开关没开。
+没有任何属性或驱动设置能给这个方言补上它缺的那种写法，因此这是真实存在的缺口，不是配置写错。要操作所有行，就换成方言答得上来的类型：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"` 与 `"MongoDB"` 都可以。在通用类型上则按主键删：用 `select page` 或自己走过的键区间取出要删的键，再逐个执行 `delete one entity ... by id {_key}`；`by id` 不需要 limit，每批删多少由你决定。
 
-**写在 `if` 块里的 `create a connection` 和 `register a database table` 不会生效。** 块本身会执行——写在它们旁边的变量赋值照样生效——只有这两行被默默跳过：不会建立连接，不会注册表，`last database error` 也保持原值，不会说明原因。它们的共同点是把工作交给插件，并把 trigger 挂起，直到数据库给出答复；变量赋值不走这条路。请把初始化写在 trigger 的最外层、第一个 `if` 之前，并在那里检查结果。
+## 嵌套循环里的循环值要用后缀
 
-**嵌套循环里没有循环值。** 循环中再写一个循环时，循环表达式读到的是 `<none>`：内层看不到自己正在遍历的值，也看不到外层的值或大小。办法是不要嵌套，或者在进入内层循环之前，把需要的东西存进局部变量。
+在嵌套循环里，循环表达式的朴素写法是有歧义的，而 Skript 拒绝的是**读它的那一行**，不是循环本身——它在解析阶段就把这一行丢掉。以下是在 Skript 2.16.2（本插件编译所依据的版本）上实测到的：
+
+```
+[Skript] Line 21: (elements/32-loop-value.sk)
+    There are multiple loops that match loop-number. Use loop-number-1/2/3/etc. to specify which loop's value you want.
+    Line: set {_plain} to "%loop-number% of %loop-number-2%"
+```
+
+这一行被丢掉，于是它所在的循环体看起来像从未执行，在那里填出来的批次是空的——基准脚本里第一次遇到的就是这个，`server-benchmark/skript/10-curve.sk` 里的六个尺寸因此是一个个写出来的，而不是循环生成的。循环本身没有问题，后缀是可用的：编号从**最外层**往里数。`loop 2 times:` 套 `loop 3 times:` 时，外层最后一次是 `loop-number-1`（2），内层是 `loop-number-2`（3）；`loop 3 times:` 套 `loop 2 times:` 时，值分别是外层的 `loop-value-1` = 3、内层的 `loop-value-2` = 2。两个方向都由 `elements/32-loop-value.sk` 断言。
+
+## `if` 里的初始化
+
+本页早先的版本写着：写在 `if` 块里的 `create a connection` 与 `register a database table` 不会生效。重新测量时这条没有复现：把连接写在 `if <条件>:` 里、在块**外面**用一条语句去用它，语句照常执行并报告受影响 1 行；写在 `if` 里的 `insert` 同样报告 1 行。这两个计数都由 `elements/31-statement-shape.sk` 断言，所以这个写法现在由一次运行覆盖，而不是靠一句备注。`if` 里的语句不会被跳过，因此每个元素 `walk` 开头那个 trigger 判空守卫并不是当初现象的原因。当初那条观察跑的脚本没有留下记录，已经无从复现。
 
 ## 表名在一台服务器能用，另一台不行
 

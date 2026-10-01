@@ -66,6 +66,8 @@ delete entities from table "users" and wait
 
 空的 `where` 块则会在解析脚本时被拒绝，`delete` 和 `update` 都一样。确实要操作所有行时，请省略整个 `where` 块，例如 `delete entities from table "users"`；需要限制操作范围时，可加上 `with limit`。
 
+**但在通用 `"JDBC"` 连接上，这两种写法都不生效。** 无论写不写 `with limit`，`update entities` 与 `delete entities` 都会被拒绝——这是服务端测试实测的（`elements/31-statement-shape.sk`）：不写 `where` 也不写 limit 的 `delete entities from table "..." and wait`、加上 `where all:` 块的同一句、以及加上 `with limit 1` 的同一句，返回的都是 `Limited delete is not supported by this JDBC dialect.`，且都没有声称任何受影响行数；不写 limit 的 `update entities` 返回 `Limited update ...`。所以在这个类型上，“不写 limit”并不是绕法：请改成一次一个主键，用 `delete one entity ... by id` / `update one entity ... by id`，或者换一个方言提供这种写法的类型。见 [“Limited delete is not supported by this JDBC dialect.”](troubleshooting.zh-CN.md#limited-delete-is-not-supported-by-this-jdbc-dialect)。
+
 ## limit
 
 `with limit N` 表示最多操作 N 行。MySQL 使用 `... LIMIT N`；PostgreSQL 先通过 `ctid` 选出限定数量的行；MongoDB 则先选择 id。通用 `"JDBC"` 连接不支持这种限制，会明确报错，不会忽略 limit。
