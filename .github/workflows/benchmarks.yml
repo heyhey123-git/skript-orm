@@ -70,6 +70,22 @@ jobs:
           # Testcontainers jobs follow: what a branch writes is not what a later release builds from.
           gradle-cache-read-only: ${{ github.event_name == 'pull_request' }}
 
+      # A number without the machine it came from is not a number anyone can compare with another, which
+      # is the baseline policy these runs exist to feed. Most of this is only knowable on the runner, so
+      # it is written here rather than by the benchmark task, and it is uploaded beside the report.
+      - name: Record the environment
+        run: |
+          mkdir -p benchmarks/build/benchmarks
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "dirty=$(git status --porcelain | wc -l)"
+            echo "os=$(uname -srm)"
+            echo "cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //')"
+            echo "cores=$(nproc)"
+            echo "memory=$(free -h | awk '/^Mem:/ {print $2}')"
+            echo "java=$(java -version 2>&1 | head -n1)"
+          } | tee benchmarks/build/benchmarks/environment.txt
+
       - name: Run the benchmarks
         run: |
           ./gradlew :benchmarks:jmh --stacktrace \
@@ -99,7 +115,9 @@ jobs:
         uses: actions/upload-artifact@v6
         with:
           name: jmh-report
-          path: benchmarks/build/benchmarks/results.json
+          path: |
+            benchmarks/build/benchmarks/results.json
+            benchmarks/build/benchmarks/environment.txt
           if-no-files-found: ignore
 
       # The history lives on `gh-pages`, which this repository does not have yet: the branch has to
