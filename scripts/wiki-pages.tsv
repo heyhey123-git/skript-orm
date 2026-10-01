@@ -21,6 +21,7 @@ docs/types.zh-CN.md	Types
 docs/troubleshooting.zh-CN.md	Troubleshooting
 docs/cookbook.zh-CN.md	Cookbook
 docs/compatibility.zh-CN.md	Compatibility
+docs/benchmarking.zh-CN.md	Benchmarking
 
 # English: the same pages, in the same order.
 README.md	Home-EN
@@ -38,3 +39,4 @@ docs/types.md	Types-EN
 docs/troubleshooting.md	Troubleshooting-EN
 docs/cookbook.md	Cookbook-EN
 docs/compatibility.md	Compatibility-EN
+docs/benchmarking.md	Benchmarking-EN

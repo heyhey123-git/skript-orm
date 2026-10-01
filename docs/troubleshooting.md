@@ -109,6 +109,14 @@ Keep one write to one page: walk the source with `select page` and insert each p
 
 The ceiling is enforced after the database answers. The statement asks for one row more than it may store, so that 5001 rows can be told from exactly 5000, and it refuses once that row arrives: nothing is stored, but the query was sent and the rows were read. A script that keeps asking for more than the ceiling pays for every attempt. `select page` is the exception, because its page size is known in advance and an oversized page is refused before anything is sent.
 
+## "insert many" got faster, and affected rows stopped storing
+
+You read that the MySQL driver can rewrite a batch, added `rewriteBatchedStatements=true` to the url, and the insert really did get several times faster — but `and store affected rows` now stores nothing.
+
+Connector/J 9.5.0 merges the batch into fewer statements before sending it. The count that comes back then describes the merged statement rather than the rows you sent, and the driver does not split it back up: the `numBatchedArgs > 1` branch of `ClientPreparedStatement` fills every entry of the batch update count with `SUCCESS_NO_INFO` and discards the row count the server reported. The plugin reads `SUCCESS_NO_INFO` as “no number” rather than guessing, so the variable is cleared and stays empty. A count that is quietly wrong would be worse than no count.
+
+Remove the option from the url. It is not a portable setting but a property of one driver, and its name is not one the other drivers know: `"MariaDB"` reaches the server's bulk execute without any option and still counts every row, and the PostgreSQL driver spells its equivalent `reWriteBatchedInserts`. A url is also the wrong place to fix this, because one batch is sent by the same code on every backend; a real fix has to be made in the plugin. See [Affected rows](affected-rows.md) and [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+
 ## Skript says "Empty configuration section!"
 
 Skript warns when a section has no indented content beneath its colon, regardless of which plugin provides it. The message comes from Skript's parser, and its control flag is internal; neither a config file nor a script can disable it.

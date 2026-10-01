@@ -109,6 +109,14 @@ loop 100 times:
 
 上限是在数据库返回之后才生效的。语句会多要一行（5001），以便把“5001 行”和“正好 5000 行”区分开，看到那一行就拒绝：什么都没存，但查询已经发出、数据已经读回。反复请求超过上限的脚本，每次都要付这个代价。`select page` 是例外，因为页大小是事先知道的，超出上限的页在发送之前就会被拒绝。
 
+## 把 `insert many` 改快之后，`affected rows` 就不存了
+
+你在网上看到 MySQL 的驱动可以重写批量语句，于是往 url 上加了一句 `rewriteBatchedStatements=true`。插入确实快了好几倍，但 `and store affected rows` 现在什么都不存。
+
+Connector/J 9.5.0 会把整个批次先合并成更少的语句再发出去。这样一来，回来的计数描述的是合并之后的那条语句，而不是你发出去的那些行，驱动也不打算再把它拆开：`ClientPreparedStatement` 里 `numBatchedArgs > 1` 那条分支，会把批次计数数组的每一项都填成 `SUCCESS_NO_INFO`，同时丢掉服务端报告过的行数。插件把 `SUCCESS_NO_INFO` 读作“没有数字”，而不是猜一个出来，于是变量被清空，并且一直是空的。一个悄悄错误的计数，比没有计数更糟。
+
+把 url 上的这个选项删掉。它不是可移植的设置，只是一个驱动的私有属性，这个名字别的驱动根本不认识：`"MariaDB"` 不需要任何选项就能走到服务端的批量执行，并且逐行给出计数；PostgreSQL 驱动的等价开关拼作 `reWriteBatchedInserts`。url 也不是修这个问题的地方——同一个批次在所有后端都由同一份代码发出，真正的修法只能做在插件里。见 [影响行数](affected-rows.zh-CN.md) 与 [一次写入最多能发多少行](writing.zh-CN.md#一次写入最多能发多少行)。
+
 ## Skript 提示 “Empty configuration section!”
 
 section 的冒号下没有缩进内容时，Skript 就会发出警告，与该 section 属于哪个插件无关。这条信息来自 Skript 解析器，控制它的开关是内部实现，无法通过配置文件或脚本关闭。

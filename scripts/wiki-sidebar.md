@@ -21,6 +21,7 @@
 - [排雷](Troubleshooting)
 - [菜谱](Cookbook)
 - [兼容性](Compatibility)
+- [基准与压力测试](Benchmarking)
 
 ---
 
@@ -47,6 +48,7 @@
 - [Troubleshooting](Troubleshooting-EN)
 - [Cookbook](Cookbook-EN)
 - [Compatibility](Compatibility-EN)
+- [Benchmarking and stress testing](Benchmarking-EN)
 
 ---
 
