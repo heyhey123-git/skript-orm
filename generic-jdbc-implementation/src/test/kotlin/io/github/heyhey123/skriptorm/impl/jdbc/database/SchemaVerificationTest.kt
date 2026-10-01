@@ -190,8 +190,22 @@ class SchemaVerificationTest {
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("character varying"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("VARCHAR(64)"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("text"))
+        assertEquals("VARBINARY", SchemaVerification.normalizeTypeName("binary varying"))
         assertEquals("BLOB", SchemaVerification.normalizeTypeName("BINARY LARGE OBJECT"))
-        assertEquals("BLOB", SchemaVerification.normalizeTypeName("longvarbinary"))
+    }
+
+    /**
+     * `LONGVARCHAR` is not the blob storage it was read as: JDBC defines it as long character data, H2 lists
+     * it among the names of its `VARCHAR`, and MySQL's mapping turns a declared `LONG VARCHAR` into a
+     * `MEDIUMTEXT`. It is a text spelling wherever it appears, and only a server that keeps a declared name
+     * — SQLite — reports it, which is why its dialect answers it and the shared list does not.
+     */
+    @Test
+    fun `a long text name is text and not the blob storage`() {
+        assertEquals("LONGVARCHAR", SchemaVerification.normalizeTypeName("longvarchar"))
+        assertEquals("LONGVARCHAR", SchemaVerification.normalizeTypeName("longvarchar", MysqlJdbcDialect.typeAliases))
+        assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("longvarchar", GenericJdbcDialect.typeAliases))
+        assertEquals("BLOB", SchemaVerification.normalizeTypeName("longvarbinary", GenericJdbcDialect.typeAliases))
     }
 
     /**

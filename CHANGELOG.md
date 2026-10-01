@@ -91,8 +91,14 @@ than one list shared by every server.
   `SERIAL`, `BOOL`) an untyped `"JDBC"` server such as SQLite may carry because a table was made elsewhere.
   One list for every server read a name on a server it was never measured on: PostgreSQL's `bit(1)` is a bit
   string, not the one-byte boolean the MySQL family stores under that name, so a declared `boolean` no longer
-  takes one. A table this implementation created itself is written with the names on the declaration, so this
-  only reaches a table made by something else, and there it is read with the names its own server has.
+  takes one. The shared list also held `LONGVARCHAR` as a `BLOB`, which it is not: JDBC defines it as long
+  character data whose binary counterpart is `LONGVARBINARY`, H2 lists it among the names of its `VARCHAR`,
+  and MySQL turns a declared `LONG VARCHAR` into a `MEDIUMTEXT`. It is a `VARCHAR` now, so a text column can
+  no longer be taken for the storage a serialised value is written to, and `BINARY VARYING` — the standard
+  spelling of the `VARBINARY` this implementation writes, beside the `CHARACTER VARYING` already accepted for
+  a `VARCHAR` — is accepted too. A table this implementation created itself is written with the names on the
+  declaration, so this only reaches a table made by something else, and there it is read with the names its
+  own server has.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 

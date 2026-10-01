@@ -327,15 +327,24 @@ internal object SchemaVerification {
      * writes. What one product decides on its own — the names its driver reports, the names its own SQL has —
      * goes in that product's dialect, which is also the only place a test against that server can pin it:
      * [GenericJdbcDialect] and [MysqlJdbcDialect] in this module, PostgreSQL's in its own.
+     *
+     * `LONGVARCHAR` used to be here, mapped to `BLOB`, and it is not a name that means one storage
+     * everywhere: JDBC defines it as long character data whose binary counterpart is `LONGVARBINARY`, H2
+     * lists it among the names of its `VARCHAR`, and MySQL's own mapping turns a declared `LONG VARCHAR`
+     * into a `MEDIUMTEXT`. It is a text name on every server that has it, so a table declaring one is
+     * compared as text now.
+     *
+     * `BINARY VARYING` is the standard spelling of the `VARBINARY` this implementation writes, exactly as
+     * `CHARACTER VARYING` is of the `VARCHAR` beside it — the two are the names H2 leads with in its own
+     * lists of those types.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",
         "TEXT" to "VARCHAR",
         "CHARACTER VARYING" to "VARCHAR",
+        "BINARY VARYING" to "VARBINARY",
         "CHARACTER LARGE OBJECT" to "BLOB",
-        "BINARY LARGE OBJECT" to "BLOB",
-        "LONGVARCHAR" to "BLOB",
-        "LONGVARBINARY" to "BLOB"
+        "BINARY LARGE OBJECT" to "BLOB"
     )
 
     private fun Set<String>.describe(): String =

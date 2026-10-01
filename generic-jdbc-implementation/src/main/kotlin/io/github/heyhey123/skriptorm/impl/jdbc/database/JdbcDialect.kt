@@ -230,6 +230,13 @@ object GenericJdbcDialect : JdbcDialect {
      * What is deliberately absent is another product's own spelling — the MySQL family's `TINYTEXT`, its
      * `TINYINT`, PostgreSQL's `BYTEA` — because a name is only an alias for the servers it was measured on,
      * and this dialect never talks to those.
+     *
+     * `LONGVARCHAR` and `LONGVARBINARY` are the JDBC names for long character and long binary data, and H2
+     * keeps both as names of its `VARCHAR` and `VARBINARY`: a server that reports either is reporting text
+     * or bytes, which is what the values here say. They were in the shared list once, with `LONGVARCHAR` on
+     * `BLOB`, where nothing has it: MySQL's mapping turns a `LONG VARCHAR` into a `MEDIUMTEXT` and a
+     * `LONG VARBINARY` into a `MEDIUMBLOB`, so no MySQL server reports either name, and PostgreSQL has
+     * neither type.
      */
     override val typeAliases: Map<String, String> = mapOf(
         "INT2" to "SMALLINT",
@@ -241,7 +248,9 @@ object GenericJdbcDialect : JdbcDialect {
         "BIGSERIAL" to "BIGINT",
         "SMALLSERIAL" to "SMALLINT",
         "BOOL" to "BOOLEAN",
-        "BIT" to "BOOLEAN"
+        "BIT" to "BOOLEAN",
+        "LONGVARCHAR" to "VARCHAR",
+        "LONGVARBINARY" to "BLOB"
     )
 }
 

@@ -108,8 +108,9 @@ class JdbcDialectTest {
     /**
      * A type name belongs to the dialect whose server reports it, and the values are the storage names that
      * dialect's declarations land on: `float4` is a `FLOAT` to the generic dialect and a `REAL` to
-     * PostgreSQL's, because those are the names their own types write. What is absent matters as much as what
-     * is here — MySQL's and PostgreSQL's names must not answer for each other's servers.
+     * PostgreSQL's, because those are the names their own types write, and `longvarchar` is a `VARCHAR` there
+     * because it is long text rather than the bytes it was once read as. What is absent matters as much as
+     * what is here — MySQL's and PostgreSQL's names must not answer for each other's servers.
      */
     @Test
     fun `each dialect carries the type names its own server reports`() {
@@ -119,6 +120,8 @@ class JdbcDialectTest {
         assertEquals("FLOAT", GenericJdbcDialect.typeAliases.getValue("FLOAT4"))
         assertEquals("DOUBLE", GenericJdbcDialect.typeAliases.getValue("FLOAT8"))
         assertEquals("BOOLEAN", GenericJdbcDialect.typeAliases.getValue("BOOL"))
+        assertEquals("VARCHAR", GenericJdbcDialect.typeAliases.getValue("LONGVARCHAR"))
+        assertEquals("BLOB", GenericJdbcDialect.typeAliases.getValue("LONGVARBINARY"))
         assertTrue("BYTEA" !in GenericJdbcDialect.typeAliases, "PostgreSQL's own name is not this dialect's")
 
         assertEquals("BOOLEAN", MysqlJdbcDialect.typeAliases.getValue("TINYINT"))
