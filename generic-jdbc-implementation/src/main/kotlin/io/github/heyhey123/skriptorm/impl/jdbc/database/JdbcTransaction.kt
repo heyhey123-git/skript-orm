@@ -18,24 +18,36 @@ class JdbcTransaction(
     database: Database,
     dialect: JdbcDialect,
     private val connection: Connection,
-    timeout: Duration
+    timeout: Duration,
+    /**
+     * Removes a connection from the pool for good, closing it rather than handing it to the next caller.
+     *
+     * The transaction does not know what the pool is, so the database that made it says how to throw one
+     * away. Required rather than defaulted: a default that closed the connection would look like a
+     * discard on a raw connection and would quietly recycle a pooled one, which is the case this exists
+     * to prevent.
+     */
+    private val discardConnection: (Connection) -> Unit,
+    /**
+     * The source the statements inside this transaction run on.
+     *
+     * A parameter rather than something built in place so that the state deciding whether the connection
+     * may be reused — a statement still in flight, or one taken on after the deadline — can be driven in
+     * a test without a network and without a pool.
+     */
+    private val pinned: PinnedConnectionSource =
+        PinnedConnectionSource(connection, deadlineNanos = System.nanoTime() + timeout.toNanos())
 ) : Transaction(database, timeout) {
 
+    override val queries: Queries = JdbcQueries(pinned, dialect)
+
     /**
-     * Statements run through a source that hands out the pinned connection and never closes it, so a
-     * cursor that ends inside this transaction releases its result set and its statement and leaves the
-     * connection alone.
+     * Whether the pinned connection may still carry a statement whose work the rollback did not cover.
      *
-     * The statement timeout the source answers with is what is left until this transaction's deadline,
-     * not the whole timeout: a statement starting at second 29 of a 30 second transaction must not be
-     * given another 30. A statement that hangs cannot be interrupted by a rollback either, because
-     * rolling back waits for the statement running on the same connection, so the statement has to be
-     * the thing that gives up first.
+     * A statement still running when the watchdog fires is the case this is for: the rollback is issued
+     * while it is in flight, and whatever it wrote afterwards must not be committed by the release path.
      */
-    override val queries: Queries = JdbcQueries(
-        PinnedConnectionSource(connection, deadlineNanos = System.nanoTime() + timeout.toNanos()),
-        dialect
-    )
+    override fun hasStatementInFlight(): Boolean = pinned.mustNotBeReused
 
     override suspend fun doCommit() {
         connection.commit()
@@ -46,13 +58,23 @@ class JdbcTransaction(
     }
 
     /**
-     * Returns the connection to the pool in a state the next caller can use.
+     * Hands the connection back, or throws it away when its state cannot be trusted.
      *
-     * Every step is attempted even when an earlier one fails, and the first failure is the one thrown,
-     * the same way a cursor releases its resources. Leaving automatic commits off would hand a connection
-     * to the next script with an open transaction on it, which is worse than the failure being reported.
+     * The normal path returns the connection to the pool in a state the next caller can use. Every step
+     * is attempted even when an earlier one fails, and the first failure is the one thrown, the same way
+     * a cursor releases its resources. Leaving automatic commits off would hand a connection to the next
+     * script with an open transaction on it, which is worse than the failure being reported.
+     *
+     * The discard path is for a transaction whose undo cannot be trusted — the rollback failed, or a
+     * statement was still running while it was issued. Restoring automatic commits on that connection is
+     * what would commit the work the transaction meant to undo, so it is closed instead and the pool
+     * gives the next statement a fresh one.
      */
     override suspend fun doRelease() {
+        if (mustDiscardConnection) {
+            discardConnection(connection)
+            return
+        }
         var failure: Throwable? = null
         try {
             if (!connection.autoCommit) connection.rollback()

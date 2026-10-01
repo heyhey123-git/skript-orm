@@ -34,6 +34,10 @@ dependencies {
     // assumed. It is a driver and nothing more: no container, and it needs no Bukkit class, which is why
     // this one can live in the plain unit tests where the registry cannot be built.
     testImplementation(libs.h2)
+    // The pool logs through SLF4J, which this module takes as compileOnly because the server provides it.
+    // A test that builds a real HikariDataSource — the only place the pool's own behaviour, such as
+    // evicting a connection, can be asserted — needs the API on the runtime classpath.
+    testImplementation(libs.slf4j.api)
 
     // Integration tests run the JDBC implementation against a real MySQL or MariaDB server, so they
     // need both drivers and the connection pool at runtime. JdbcDataTypes also resolves the Bukkit and

@@ -68,6 +68,36 @@ abstract class Transaction protected constructor(
     val isFinished: Boolean
         get() = stateRef.get() in TERMINAL
 
+    /**
+     * Whether the rollback this transaction ran cannot be trusted to have undone everything the pinned
+     * connection saw.
+     *
+     * Set when [doRollback] fails. A driver that refuses a rollback while a statement is in flight says
+     * so by throwing, and the work that statement was doing is then known to be neither committed nor
+     * undone. Read together with [hasStatementInFlight] through [mustDiscardConnection].
+     */
+    private var undoIsUncertain = false
+
+    /**
+     * Whether the pinned connection may still be running a statement from this transaction.
+     *
+     * A statement still running when the deadline passes can land after the rollback, and restoring
+     * automatic commits on that connection on the way out commits exactly that work. An implementation
+     * that can tell says so here; the default answers for implementations that cannot.
+     */
+    protected open fun hasStatementInFlight(): Boolean = false
+
+    /**
+     * Whether the pinned connection must be thrown away rather than returned to the pool.
+     *
+     * True when the undo cannot be trusted — the rollback failed, or a statement was still running while
+     * it was issued — because such a connection may carry work this transaction meant to undo, and a
+     * connection whose automatic commits are restored commits that work on the way back. A connection in
+     * this state is closed for good instead, and the pool hands the next statement a fresh one.
+     */
+    protected val mustDiscardConnection: Boolean
+        get() = undoIsUncertain || hasStatementInFlight()
+
     /** Statements written inside the transaction run through this, on the pinned connection. */
     abstract val queries: Queries
 
@@ -76,8 +106,26 @@ abstract class Transaction protected constructor(
      * does. The transaction stays open so the script can keep running and be rolled back once.
      */
     fun markFailed(error: Throwable) {
-        if (failure == null) failure = error
+        record(error)
         stateRef.compareAndSet(State.ACTIVE, State.ROLLBACK_ONLY)
+    }
+
+    /**
+     * Keeps [error] as this transaction's first failure, or attaches it to that one when something failed
+     * before it.
+     *
+     * A script is told the first failure, because that is the one that explains the outcome, and a later
+     * one is not allowed to replace it. It is not dropped either: a rollback that failed after a statement
+     * did is recorded as suppressed, so the reason the connection had to be thrown away can be read from a
+     * log rather than guessed at.
+     */
+    private fun record(error: Throwable) {
+        val first = failure
+        if (first == null) {
+            failure = error
+        } else if (first !== error) {
+            first.addSuppressed(error)
+        }
     }
 
     /**
@@ -109,7 +157,7 @@ abstract class Transaction protected constructor(
         try {
             doCommit()
         } catch (error: Throwable) {
-            if (failure == null) failure = error
+            record(error)
             finish(State.ABORTED)
             throw error
         }
@@ -122,7 +170,8 @@ abstract class Transaction protected constructor(
         try {
             doRollback()
         } catch (error: Throwable) {
-            if (failure == null) failure = error
+            undoIsUncertain = true
+            record(error)
         } finally {
             finish(State.ROLLED_BACK)
         }
@@ -135,12 +184,16 @@ abstract class Transaction protected constructor(
      * asked for it and a continuation that resumes later has to be able to tell the two apart.
      */
     internal suspend fun abort(reason: Throwable) {
-        if (failure == null) failure = reason
+        record(reason)
         if (!claimForRollback()) return
+        // Asked before the rollback, never after: a statement still running now is one the rollback may or
+        // may not have covered, and either way this connection is not one the pool can hand on as clean.
+        if (hasStatementInFlight()) undoIsUncertain = true
         try {
             doRollback()
         } catch (error: Throwable) {
-            if (failure == null) failure = error
+            undoIsUncertain = true
+            record(error)
         } finally {
             finish(State.ABORTED)
         }
@@ -193,7 +246,7 @@ abstract class Transaction protected constructor(
             try {
                 doRelease()
             } catch (error: Throwable) {
-                if (failure == null) failure = error
+                record(error)
             } finally {
                 database.transactionFinished(this@Transaction)
             }

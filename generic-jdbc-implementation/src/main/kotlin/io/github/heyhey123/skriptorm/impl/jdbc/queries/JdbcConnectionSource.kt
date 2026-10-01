@@ -1,6 +1,7 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.queries
 
 import java.sql.Connection
+import java.util.concurrent.atomic.AtomicInteger
 import javax.sql.DataSource
 import kotlin.math.ceil
 
@@ -64,9 +65,33 @@ class PinnedConnectionSource(
     private val deadlineNanos: Long
 ) : JdbcConnectionSource {
 
-    override fun borrow(): Connection = connection
+    private val inFlight = AtomicInteger()
 
-    override fun release(connection: Connection) = Unit
+    @Volatile
+    private var borrowedAtOrAfterDeadline = false
+
+    override fun borrow(): Connection {
+        // Recorded rather than refused: a statement that starts with nothing left still gets the one
+        // second [statementTimeoutSeconds] promises to give it, and this is what tells the transaction
+        // afterwards that the connection carried a statement issued outside its deadline.
+        if (System.nanoTime() >= deadlineNanos) borrowedAtOrAfterDeadline = true
+        inFlight.incrementAndGet()
+        return connection
+    }
+
+    override fun release(connection: Connection) {
+        inFlight.decrementAndGet()
+    }
+
+    /**
+     * Whether this connection may still be running a statement, or took one on after the deadline.
+     *
+     * Either way the transaction's rollback cannot be shown to have covered everything the connection saw,
+     * so the connection must not go back to the pool in a state the pool can reuse: a statement landing
+     * after the rollback would be committed by restoring automatic commits on the way out.
+     */
+    val mustNotBeReused: Boolean
+        get() = inFlight.get() > 0 || borrowedAtOrAfterDeadline
 
     override fun statementTimeoutSeconds(): Int {
         val remainingSeconds = (deadlineNanos - System.nanoTime()) / NANOS_PER_SECOND

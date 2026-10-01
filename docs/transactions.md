@@ -100,13 +100,15 @@ Statements within a transaction use the **remaining transaction time** as their 
 
 Rollback needs the same connection, so it cannot run immediately while a statement is still executing. It must first wait for that statement to finish. If the connection stops responding entirely, rollback and connection release may occur after the deadline; the deadline itself does not change. The `socketTimeout` in the [url](connections.md#statement-timeout) bounds that wait.
 
+A driver is free to answer a rollback before a statement has actually finished, and then the connection may still be carrying that statement's work when the transaction is released. A connection in that state is **closed rather than returned to the pool**, because a connection whose automatic commits are restored commits exactly that work on the way back. The same happens when the rollback itself fails: the failure is recorded on the transaction — as a suppressed reason on the failure the script is told about, so the timeout is still what it reads — and the connection is discarded instead of reused. Discarding costs one pooled connection; reusing it would cost the rollback its meaning.
+
 Set a longer timeout when the transaction genuinely needs it. If it is slow because it includes too much work, consider splitting it up: move slow reads and lengthy calculations outside when they do not need transaction protection, and keep only the statements that must succeed together inside.
 
 ### What the timeout is checked against
 
 The rollback is issued on the connection the transaction pinned, so it is expected to undo everything that transaction wrote, and the connection is expected to be usable afterwards. The server suite checks exactly that, and it reports three answers separately rather than one: whether the row the timed-out transaction inserted is still there, whether the connection takes a further write, and whether the key that transaction used is free.
 
-As of 2026-10-02 that check passes on the file backend and fails on MySQL, PostgreSQL and MongoDB, and the failure has not been narrowed to one of those three answers yet — the earlier form of the case could only report that the follow-up write did not happen at all. Until it is narrowed, treat a transaction that reaches its deadline as not fully documented on those backends: the rollback is attempted there, and whether a write it made survives has not been established.
+As of 2026-10-02 that check passes on the file backend, and the same case failed on MySQL, PostgreSQL and MongoDB in the form it had before this: it could only report that the follow-up write did not happen at all, which could not say whether the row had survived or the statement had been refused. That is why the case now reports the three answers separately. The path that let a surviving row through — a connection released back into the pool with automatic commits restored while a statement might still be in flight on it, or after a rollback that had failed — is closed by discarding such a connection, which `JdbcTransactionDiscardTest` asserts in process with H2, including a control that reproduces the old release and shows the surviving row. Whether the three networked backends pass now is what their next run reports; the case keeps asserting all three answers on every backend either way.
 
 ## What it does not do
 

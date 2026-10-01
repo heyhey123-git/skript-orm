@@ -144,7 +144,17 @@ open class JdbcDatabase(
             }
             throw error
         }
-        return JdbcTransaction(this, dialect, connection, timeout)
+        return JdbcTransaction(
+            this,
+            dialect,
+            connection,
+            timeout,
+            // A connection whose undo cannot be trusted — the rollback failed, or a statement was still
+            // in flight while it was issued — is closed for good instead of being returned. Returning it
+            // would restore automatic commits on it, and that is what would commit the very work the
+            // transaction meant to undo. The pool hands the next statement a fresh connection instead.
+            discardConnection = { suspect -> source.evictConnection(suspect) }
+        )
     }
 
     /**
