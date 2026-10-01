@@ -115,13 +115,28 @@ object ConnectionScope {
         frames.remove(event)
     }
 
-    /** The message a script sees when it names a connection that has not been created. */
+    /**
+     * The message a script sees when it names a connection that has not been created.
+     *
+     * A name that was closed says so instead of being reported as one that never existed. Both leave
+     * the registry empty, and the two send a reader looking for different things: a mistyped name is
+     * a typo, while a name that was connected and then closed is a connection that went away while
+     * the script was still using it. Which one it is cannot be recovered from the registry alone.
+     */
     fun unknownConnectionMessage(name: String): String {
         val known = Database.connectionNames
-        return if (known.isEmpty()) {
-            "No connection named '$name', and no connection has been created yet."
-        } else {
-            "No connection named '$name'. Available connections: ${known.joinToString(", ")}."
+        val closed = Database.wasClosed(name)
+        return when {
+            closed && known.isEmpty() ->
+                "No connection named '$name'. It was connected earlier and has since been closed, " +
+                    "and nothing is connected now."
+            closed ->
+                "No connection named '$name'. It was connected earlier and has since been closed. " +
+                    "Available connections: ${known.joinToString(", ")}."
+            known.isEmpty() ->
+                "No connection named '$name', and no connection has been created yet."
+            else ->
+                "No connection named '$name'. Available connections: ${known.joinToString(", ")}."
         }
     }
 

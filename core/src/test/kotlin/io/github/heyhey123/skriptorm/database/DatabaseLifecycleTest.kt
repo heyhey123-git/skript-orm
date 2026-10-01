@@ -740,6 +740,22 @@ class DatabaseLifecycleTest {
         assertNull(Database.current)
     }
 
+    /**
+     * A script that names a connection nobody created and a script whose connection was closed under
+     * it see the same empty registry. Remembering the second is what lets the message tell them
+     * apart, so the recording has to survive the path that closes a connection, and it must not
+     * claim a name that never reached the registry at all.
+     */
+    @Test
+    fun `a name that is closed is remembered, and a name that never existed is not`() = runBlocking<Unit> {
+        val database = connectedDatabase(named = "logs")
+
+        database.disconnect()
+
+        assertTrue(Database.wasClosed("logs"), "the name should be remembered as closed")
+        assertFalse(Database.wasClosed("never-connected"), "a name nobody created is not closed")
+    }
+
     // ---------------------------------------------------------------- draining
 
     /**

@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import java.time.Duration
+import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
@@ -91,6 +92,42 @@ abstract class Database {
          * about who may be added, replaced and removed still run under [lifecycleMutex].
          */
         private val connections: MutableMap<String, Database> = ConcurrentHashMap()
+
+        /**
+         * Names that named a connection and no longer do, oldest first, so a script that asks for one
+         * can be told the difference between a name nobody ever created and a name that was closed
+         * under it. Both leave the registry empty, and the two want opposite next steps: one is a
+         * typo, the other is a connection that went away while the script was still using it.
+         *
+         * Bounded on purpose. This is a diagnostic, not a history the plugin owes anyone: a server
+         * that opens thousands of short-lived connections must not grow a record of every one of
+         * them, and the oldest name is the least likely to be asked for.
+         */
+        private val closedNames: MutableSet<String> = Collections.synchronizedSet(
+            object : LinkedHashSet<String>() {
+                override fun add(element: String): Boolean {
+                    val added = super.add(element)
+                    if (added && size > CLOSED_NAME_LIMIT) {
+                        val oldest = iterator()
+                        if (oldest.hasNext()) {
+                            oldest.next()
+                            oldest.remove()
+                        }
+                    }
+                    return added
+                }
+            }
+        )
+
+        private const val CLOSED_NAME_LIMIT = 64
+
+        /** Remembers that [name] was connected and has since been closed. */
+        internal fun noteClosed(name: String) {
+            closedNames.add(name)
+        }
+
+        /** Whether [name] was connected and has since been closed. */
+        internal fun wasClosed(name: String): Boolean = name in closedNames
 
         /**
          * The connection a statement uses when neither a scope nor an event names one.
@@ -388,7 +425,11 @@ abstract class Database {
                 check(!isShuttingDown) { "Database lifecycle began shutting down while connecting." }
                 state = State.CONNECTED
                 connectionName = name
-                if (name != null) connections[name] = this
+                if (name != null) {
+                    connections[name] = this
+                    // A name that is live again is not a name that was closed, whatever it was before.
+                    closedNames.remove(name)
+                }
                 if (name == null || defaultConnection == null) defaultConnection = this
             }
         } catch (error: Throwable) {
@@ -414,7 +455,9 @@ abstract class Database {
      */
     private fun unpublish() {
         val name = connectionName
-        if (name != null) connections.remove(name, this)
+        // Only a name that really was in the registry counts as closed: a connect that failed never
+        // got as far as publishing, and telling a script that name was closed would be a lie.
+        if (name != null && connections.remove(name, this)) noteClosed(name)
         if (defaultConnection === this@Database) defaultConnection = null
         connectionName = null
     }
