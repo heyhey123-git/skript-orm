@@ -169,7 +169,9 @@ on load:
     # A range worth twenty of them would have to be written out, which is why the built list above is the
     # shape this plugin's own scripts use.
     set {_literalRan} to 0
-    loop 1, 2, 3:
+    # The conjunction is what keeps Skript quiet: a bare comma list logs "List is missing 'and' or
+    # 'or', defaulting to 'and'" on every run, one warning per job log for no new information.
+    loop 1, 2, and 3:
         add 1 to {_literalRan}
 
     if size of {_built::*} is not 20:
