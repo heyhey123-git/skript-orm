@@ -81,11 +81,14 @@ Drop the table and register it again, or change the table in the database to mat
 ```
 
 The comparison asks one question: can this table serve every statement the declaration allows? So it
-requires every declared column to be there, with the type and size the declaration asked for; it requires
-`not null` on declared columns that are not the key; and it requires the table to guarantee the declared
-key. A table keyed on a column the declaration does not mark as a key is refused, because a statement that
-addresses a row by the declared key could then match several rows. A declaration with no key asks nothing
-about identity, so a key the table carries is not a difference either.
+requires every declared column to be there, with a storage the declaration's values fit — the type it names,
+and at least the size it names, because a column with more room holds what a narrower declaration writes
+while a narrower one does not; it requires `not null` on declared columns that are not the key; and it
+requires the table to guarantee the declared key. A table keyed on a column the declaration does not mark as
+a key is refused, because a statement that addresses a row by the declared key could then match several
+rows. A declaration with no key asks nothing about identity, so a key the table carries is not a difference
+either. A `uuid` is the exception to the size: its `BINARY(16)` is a width rather than a capacity, and a
+wider column is handed back padded, so the table has to hold exactly that.
 
 What it does not compare is `auto increment`, which the two servers report through different metadata, and
 columns the table carries that the declaration never names. Those are not a difference: a table shared with

@@ -97,6 +97,9 @@ open class StringJdbcDataType : StringDataType(), JdbcDataType<String> {
     override val storageName: String = "VARCHAR"
     override val defaultSize: Int = 255
     override val supportsSize: Boolean = true
+
+    /** A `VARCHAR` that holds more than the declaration asks for serves it: a string reads back as written. */
+    override fun servesSize(storedSize: Int, declaredSize: Int): Boolean = storedSize >= declaredSize
 }
 
 open class UuidJdbcDataType : UuidDataType(), JdbcDataType<UUID> {
@@ -106,6 +109,10 @@ open class UuidJdbcDataType : UuidDataType(), JdbcDataType<UUID> {
     override val converter: ValueConverter<UUID, ByteArray> = UuidJdbcConverter
     override val defaultSize: Int = 16
     override val supportsSize: Boolean = true
+
+    // `BINARY(16)` is a fixed width rather than a capacity, so a wider column is not this storage with room
+    // to spare: the server pads what it returns to the full width, and the converter is handed 32 bytes for a
+    // value that is 16. The inherited exact answer is the right one, and it is deliberately not overridden.
 }
 
 open class ItemStackJdbcDataType : ItemStackDataType(), JdbcDataType<ItemStack> {
@@ -130,6 +137,9 @@ open class LocationJdbcDataType : LocationDataType(), JdbcDataType<Location> {
      */
     override val defaultSize: Int = 2048
     override val supportsSize: Boolean = true
+
+    /** `VARBINARY` is a capacity: a column with more of it serves the declaration, with no padding to read. */
+    override fun servesSize(storedSize: Int, declaredSize: Int): Boolean = storedSize >= declaredSize
 }
 
 open class ConfigurationSerializableJdbcDataType :

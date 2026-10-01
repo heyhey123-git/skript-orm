@@ -237,16 +237,22 @@ object GenericJdbcDialect : JdbcDialect {
      * `BLOB`, where nothing has it: MySQL's mapping turns a `LONG VARCHAR` into a `MEDIUMTEXT` and a
      * `LONG VARBINARY` into a `MEDIUMBLOB`, so no MySQL server reports either name, and PostgreSQL has
      * neither type.
+     *
+     * `INT2` and `SMALLSERIAL` are two-byte integers and land on `TINYINT`, which is the smallest integer
+     * this dialect declares: a value column that holds more than the declaration asks for serves it, which is
+     * the same reason a wider `VARCHAR` does, and this dialect has no `SMALLINT` of its own to land on.
+     * A value no declaration of this dialect normalizes to would be an entry that can never match a column,
+     * which the dialect test pins for every dialect.
      */
     override val typeAliases: Map<String, String> = mapOf(
-        "INT2" to "SMALLINT",
+        "INT2" to "TINYINT",
         "INT4" to "INTEGER",
         "INT8" to "BIGINT",
         "FLOAT4" to "FLOAT",
         "FLOAT8" to "DOUBLE",
         "SERIAL" to "INTEGER",
         "BIGSERIAL" to "BIGINT",
-        "SMALLSERIAL" to "SMALLINT",
+        "SMALLSERIAL" to "TINYINT",
         "BOOL" to "BOOLEAN",
         "BIT" to "BOOLEAN",
         "LONGVARCHAR" to "VARCHAR",

@@ -5,11 +5,13 @@ import io.github.heyhey123.skriptorm.impl.jdbc.type.BooleanJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
+import io.github.heyhey123.skriptorm.impl.jdbc.type.UuidJdbcDataType
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
@@ -85,6 +87,54 @@ class SchemaVerificationTest {
 
         assertEquals(1, mismatches.size)
         assertTrue("size of 64 but the table holds 32" in mismatches.single(), mismatches.single())
+    }
+
+    /**
+     * The size is the capacity it is rather than a number to match, so a column with more room than the
+     * declaration asks for serves it: everything the declaration can write fits. The integration tests prove
+     * the same on a server, where `TEXT` is 65535 to MySQL and MariaDB and `string` asks for 255.
+     */
+    @Test
+    fun `a column wider than the declaration asks for is accepted`() {
+        assertEquals(
+            emptyList(),
+            SchemaVerification.compare(
+                users,
+                actual(users, "name" to column("name", "VARCHAR", nullable = false, size = 500))
+            )
+        )
+    }
+
+    /**
+     * A `BINARY(16)` is a width and not a capacity, so a wider one is not this storage with room to spare:
+     * the server pads what it returns, and the converter would be handed 32 bytes for a 16-byte value. The
+     * exact answer is the type's own, which is why the comparison asks the type rather than comparing numbers.
+     */
+    @Test
+    fun `a wider fixed width column is not accepted for a narrower declaration`() {
+        val keys = keyedTable("keys", Column("uid", UuidJdbcDataType(), isNullable = false))
+
+        val mismatches = SchemaVerification.compare(
+            keys,
+            actual(keys, "uid" to column("uid", "BINARY", nullable = false, size = 32))
+        )
+
+        assertEquals(1, mismatches.size)
+        assertTrue("size of 16 but the table holds 32" in mismatches.single(), mismatches.single())
+    }
+
+    /**
+     * Which of two sizes can serve which is the storage's own answer, so it is pinned where it is written
+     * rather than only through a comparison: a variable-length storage takes more, a fixed-width one does not.
+     * The variable-length types are Bukkit ones, whose `servesSize` is proven on a server in the integration
+     * tests instead, where their types are on the classpath.
+     */
+    @Test
+    fun `a storage answers for its own sizes`() {
+        assertTrue(StringJdbcDataType().servesSize(storedSize = 500, declaredSize = 64))
+        assertFalse(StringJdbcDataType().servesSize(storedSize = 32, declaredSize = 64))
+        assertTrue(UuidJdbcDataType().servesSize(storedSize = 16, declaredSize = 16))
+        assertFalse(UuidJdbcDataType().servesSize(storedSize = 32, declaredSize = 16))
     }
 
     @Test
@@ -386,6 +436,15 @@ class SchemaVerificationTest {
                 Column("id", BigIntJdbcDataType(), isPrimaryKey = true, isAutoIncrement = true, isNullable = false),
                 Column("name", StringJdbcDataType(), isNullable = false, size = 64),
                 Column("age", IntJdbcDataType())
+            )
+        )
+
+        /** A keyed table with one column of the test's own, for a storage the `users` table does not carry. */
+        fun keyedTable(name: String, column: Column<*>): Table = Table(
+            name,
+            listOf(
+                Column("id", BigIntJdbcDataType(), isPrimaryKey = true, isAutoIncrement = true, isNullable = false),
+                column
             )
         )
     }

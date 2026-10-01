@@ -5,6 +5,7 @@ import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabase
 import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
+import io.github.heyhey123.skriptorm.impl.jdbc.type.LocationJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
@@ -193,6 +194,52 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
 
         assertTrue("'age'" in thrown.message.orEmpty(), thrown.message.orEmpty())
         assertTrue("'id', 'name'" in thrown.message.orEmpty(), thrown.message.orEmpty())
+    }
+
+    /**
+     * The other direction of the same comparison: a column with more room than the declaration asks for holds
+     * everything the declaration can write, so it serves it. `TEXT` is 65535 to these servers and a `string`
+     * is declared at 255, and refusing that refused a table every statement in the script runs against.
+     *
+     * A `VARCHAR(255)` written by the declaration itself would match either way, so the column here is made by
+     * hand at a size the declaration never asked for.
+     */
+    @Test
+    fun `a column wider than the declaration asks for is registered`() = runBlocking<Unit> {
+        executeSql("DROP TABLE IF EXISTS `wide_users`")
+        executeSql("CREATE TABLE `wide_users` (`id` INT NOT NULL PRIMARY KEY, `name` TEXT NOT NULL)")
+        val declared = Table(
+            "wide_users",
+            listOf(
+                Column("id", IntJdbcDataType(), isPrimaryKey = true, isNullable = false),
+                Column("name", StringJdbcDataType(), isNullable = false)
+            )
+        )
+
+        database.registerTable(declared)
+
+        queries.insertOne(linkedMapOf<String, Any?>("id" to 1, "name" to "wider")).execute(declared)
+        assertEquals(1L, rawRowCount("wide_users"))
+    }
+
+    /**
+     * The same rule for the other variable-length storage: a `location` is declared as a `VARBINARY`, and a
+     * column with more bytes than that holds every location the declaration can write. Registration is the
+     * whole test — it is the comparison that asks the type, and its answer is what is being checked here.
+     */
+    @Test
+    fun `a wider byte column is registered for a location`() = runBlocking<Unit> {
+        executeSql("DROP TABLE IF EXISTS `wide_places`")
+        executeSql("CREATE TABLE `wide_places` (`id` INT NOT NULL PRIMARY KEY, `spot` VARBINARY(8192) NOT NULL)")
+        val declared = Table(
+            "wide_places",
+            listOf(
+                Column("id", IntJdbcDataType(), isPrimaryKey = true, isNullable = false),
+                Column("spot", LocationJdbcDataType(), isNullable = false)
+            )
+        )
+
+        database.registerTable(declared)
     }
 
     @Test

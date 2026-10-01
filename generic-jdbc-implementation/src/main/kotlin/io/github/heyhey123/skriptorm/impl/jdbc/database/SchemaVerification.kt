@@ -33,6 +33,11 @@ import java.sql.DatabaseMetaData
  * reports an identity column through `IS_AUTOINCREMENT` while PostgreSQL reports the underlying sequence,
  * and MySQL's `COLUMN_SIZE` for a large-object column is a byte count rather than the declared size. A
  * comparison that failed on those would refuse correct tables, which is worse than the silence it replaces.
+ *
+ * A size is compared as the capacity it is, not as a number: a column with more room than the declaration
+ * asks for holds everything the declaration can write, so it serves it, and a column with less does not.
+ * Whether more room is more room is the storage's own answer rather than the comparison's, because a
+ * fixed-width column returns what it padded: see [JdbcDataType.servesSize].
  */
 internal object SchemaVerification {
 
@@ -128,9 +133,14 @@ internal object SchemaVerification {
                     "${stored.typeName}."
             }
             val expectedSize = declaredSizeOf(column)
-            if (expectedSize != null && stored.size != null && stored.size != expectedSize) {
-                mismatches += "Column '$name' is declared with a size of $expectedSize but the table " +
-                    "holds ${stored.size}."
+            val declaredType = column.type as? JdbcDataType<*>
+            if (declaredType != null &&
+                expectedSize != null &&
+                stored.size != null &&
+                !declaredType.servesSize(stored.size, expectedSize)
+            ) {
+                mismatches += "Column '$name' is declared with a size of $expectedSize but the table holds " +
+                    "${stored.size}. A column of that size cannot serve the declaration."
             }
             // A primary key is not null on every server this runs on, whatever the declaration says, and
             // the drivers disagree about which of the two they report for an identity column. Only a

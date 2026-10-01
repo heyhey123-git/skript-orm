@@ -114,9 +114,10 @@ class JdbcDialectTest {
      */
     @Test
     fun `each dialect carries the type names its own server reports`() {
-        assertEquals("SMALLINT", GenericJdbcDialect.typeAliases.getValue("INT2"))
+        assertEquals("TINYINT", GenericJdbcDialect.typeAliases.getValue("INT2"))
         assertEquals("INTEGER", GenericJdbcDialect.typeAliases.getValue("INT4"))
         assertEquals("BIGINT", GenericJdbcDialect.typeAliases.getValue("INT8"))
+        assertEquals("TINYINT", GenericJdbcDialect.typeAliases.getValue("SMALLSERIAL"))
         assertEquals("FLOAT", GenericJdbcDialect.typeAliases.getValue("FLOAT4"))
         assertEquals("DOUBLE", GenericJdbcDialect.typeAliases.getValue("FLOAT8"))
         assertEquals("BOOLEAN", GenericJdbcDialect.typeAliases.getValue("BOOL"))
@@ -135,5 +136,38 @@ class JdbcDialectTest {
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("character varying"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("tinytext", MysqlJdbcDialect.typeAliases))
         assertEquals("TINYTEXT", SchemaVerification.normalizeTypeName("tinytext"))
+    }
+
+    /**
+     * A dialect maps a name into a name of its own, so every value has to be one that a declaration of that
+     * dialect normalizes to. `SMALLINT` is not: the smallest integer the generic dialect declares writes
+     * `TINYINT`, so an entry landing on `SMALLINT` could never match a column of any table — an alias written
+     * from what the name means rather than from what the comparison does with it.
+     *
+     * What this cannot catch is an entry whose value is reachable and wrong, which is how `LONGVARCHAR` once
+     * reached `BLOB`: only a server can say what a name means, which is what the integration tests are for.
+     */
+    @Test
+    fun `every alias of a dialect lands on a name that dialect declares`() {
+        // The storages a declaration of either dialect writes. The Bukkit-backed types cannot be built in
+        // this JVM — the build file keeps those classes off this classpath on purpose — so the names they
+        // write are named here instead of read from the registry the server builds.
+        val declared = listOf(
+            "BOOLEAN", "TINYINT", "INT", "BIGINT", "DOUBLE", "FLOAT", "VARCHAR", "BINARY", "VARBINARY",
+            "BLOB", "DATE"
+        )
+
+        for (dialect in listOf(GenericJdbcDialect, MysqlJdbcDialect)) {
+            val reachable = declared
+                .flatMap { listOf(it, SchemaVerification.normalizeTypeName(it, dialect.typeAliases)) }
+                .toSet()
+
+            for ((name, target) in dialect.typeAliases) {
+                assertTrue(
+                    target in reachable,
+                    "$dialect maps '$name' to '$target', which no declaration of it normalizes to"
+                )
+            }
+        }
     }
 }

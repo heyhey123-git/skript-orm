@@ -19,10 +19,11 @@ A release about where a batch insert goes, what it reports, and how much one sta
 becomes a type of its own, because its connector reaches the server's own bulk execute with no configuration,
 where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
 being many times slower than PostgreSQL. One statement now moves at most 5000 rows, and the two directions
-treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Five fixes
+treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Six fixes
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
 digits, a column that holds nothing reads back as unset, a table that carries a column the declaration does
-not name is registered instead of being refused, and a `boolean` column is recognised under whichever name
+not name is registered instead of being refused, a column with more room than the declaration asks for is
+registered, and a `boolean` column is recognised under whichever name
 its driver reports for it — for which the type names a comparison accepts are now each dialect's own rather
 than one list shared by every server.
 
@@ -75,6 +76,12 @@ than one list shared by every server.
   asks nothing about identity, and is no longer refused for a table that has one. A column the table carries
   that is `not null` with no default is the one case where a write still fails, and the server names the
   column when it does.
+- **A column with more room than the declaration asks for is registered.** The size a comparison asked for was
+  the size it wanted back exactly, so a `TEXT` column — 65535 to MySQL and MariaDB — was refused for a `string`
+  declared at its default of 255, and a wider `VARBINARY` was refused for a `location`. A declaration asks for a
+  storage its values fit, and a wider column is exactly that: every statement the declaration allows runs
+  against it. The one storage where more room is not room is the fixed-width `BINARY(16)` a `uuid` is declared
+  as, because a server hands a wider one back padded to its full width, so that one still has to match.
 - **A `boolean` column is recognised under whichever name its driver reports for it.** MySQL has no boolean
   type of its own — `BOOLEAN` is `TINYINT(1)` — and both MySQL's and MariaDB's driver carry a `tinyInt1isBit`
   property, true by default, that decides whether such a column is reported as `BIT`, as `BOOLEAN` or as
