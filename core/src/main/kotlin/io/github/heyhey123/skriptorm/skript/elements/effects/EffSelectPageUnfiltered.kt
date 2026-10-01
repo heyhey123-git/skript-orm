@@ -9,13 +9,14 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
+import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Page Without A Filter")
-@Description("Selects a one-based page with positive size, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Results use page-local row-index and column-name keys, pagination requires a registered primary key, and selects always wait.")
+@Description("Selects a one-based page with positive size, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Results use page-local row-index and column-name keys, pagination requires a registered primary key, and a page holds at most 5000 rows. Selects always wait.")
 @Example(
     """select page 2 with size 20 from table "users" and store the results in {_page::*}
 send "%{_page::1::name}%"
@@ -89,6 +90,13 @@ class EffSelectPageUnfiltered : Effect() {
 
             pageSize <= 0 -> {
                 DatabaseWork.refuseRead(actualEvent, this, "Failed to parse query arguments: Page size must be positive.", resultVar)
+                return next
+            }
+
+            // A page is the whole of what this statement stores, so a page larger than a statement may
+            // store is known here, before anything is sent. RowLimit owns the ceiling and the wording.
+            pageSize > RowLimit.ROWS -> {
+                DatabaseWork.refuseRead(actualEvent, this, RowLimit.pageRefusal(pageSize), resultVar)
                 return next
             }
         }

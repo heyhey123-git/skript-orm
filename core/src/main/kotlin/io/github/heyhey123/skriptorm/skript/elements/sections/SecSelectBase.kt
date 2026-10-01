@@ -118,6 +118,15 @@ abstract class SecSelectBase : Section() {
     protected open fun resolveExtraArguments(event: Event?): Any? = Unit
 
     /**
+     * A refusal for arguments that are already known to be too large, or null when they are acceptable.
+     *
+     * Called on the server thread once [resolveExtraArguments] has run and before anything is sent, so a
+     * section whose size is known without asking the server refuses it without parking the trigger. A section
+     * whose size is only known from the result refuses from [executeQuery] instead.
+     */
+    protected open fun argumentsRefusal(arguments: Any?): String? = null
+
+    /**
      * Reports a refusal and clears the result variable, because a read that did not run must not leave
      * the previous result behind. [DatabaseWork.refuseRead] owns the rule and the reasoning.
      */
@@ -162,6 +171,12 @@ abstract class SecSelectBase : Section() {
             val message = "Failed to parse query arguments: ${e.message}"
             refuse(actualEvent, message)
             return walk(event, false)
+        }
+
+        val refusedArguments = argumentsRefusal(extraArguments)
+        if (refusedArguments != null) {
+            refuse(actualEvent, refusedArguments)
+            return walk(actualEvent, false)
         }
 
         if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {

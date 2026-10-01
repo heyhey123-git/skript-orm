@@ -10,6 +10,7 @@ import io.github.heyhey123.skriptorm.type.DataType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class QueryContractTest {
@@ -23,6 +24,8 @@ class QueryContractTest {
         assertSame(id, TestDeleteById(id).id)
         assertSame(where, TestSelectOne(where).where)
         assertSame(where, TestSelectMany(where).where)
+        assertNull(TestSelectMany(where).limit)
+        assertEquals(7, TestSelectMany(where, 7).limit)
         val delete = TestDelete(3, where)
         assertEquals(3, delete.limit)
         assertSame(where, delete.where)
@@ -69,7 +72,7 @@ class QueryContractTest {
         override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
     }
 
-    private class TestSelectMany(where: WhereClause?) : SelectMany(where) {
+    private class TestSelectMany(where: WhereClause?, limit: Int? = null) : SelectMany(where, limit) {
 
         override suspend fun execute(table: Table) = CursorResult(EmptyCursor())
     }

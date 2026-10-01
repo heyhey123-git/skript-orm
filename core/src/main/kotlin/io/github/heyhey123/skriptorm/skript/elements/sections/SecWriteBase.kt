@@ -20,6 +20,7 @@ import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.RawValues
 import io.github.heyhey123.skriptorm.skript.utils.RawValuesList
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
+import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.ValuesParser
@@ -281,14 +282,13 @@ abstract class SecWriteBase : Section() {
         // Resolved rows stay sparse so that an omitted column keeps its meaning: not part of this
         // statement. The one exception is a variable holding several rows, which the reader fills to
         // a common column set, because a single statement can only bind one column list.
-        val resolvedSingle: Map<String, Any?>?
-        val resolvedMultiple: List<Map<String, Any?>>?
+        var resolvedSingle: Map<String, Any?>? = null
+        var resolvedMultiple: List<Map<String, Any?>>? = null
         try {
             val variable = valuesVariable
             if (variable != null) {
                 val rows = VariableValuesReader.read(variable, table, event)
                 if (supportsMultipleRows) {
-                    resolvedSingle = null
                     resolvedMultiple = rows
                 } else {
                     // Rejecting more than one row keeps this write a patch over a single row. The row
@@ -297,7 +297,6 @@ abstract class SecWriteBase : Section() {
                         "$variable holds ${rows.size} rows, but this write expects exactly one row of values."
                     }
                     resolvedSingle = rows.first()
-                    resolvedMultiple = null
                 }
             } else {
                 resolvedSingle = singleValues?.bind(table)?.resolve(event)
@@ -306,6 +305,18 @@ abstract class SecWriteBase : Section() {
         } catch (error: Exception) {
             DatabaseWork.report(event, this, "Failed to parse write values: ${error.message}")
             return walk(event, false)
+        }
+
+        // A batch past the ceiling loses its tail and says so, rather than being refused: the rows are
+        // already in the script's hands, and the count written below reports what actually reached the
+        // server. RowLimit owns the ceiling, the cut and the wording of the warning.
+        resolvedMultiple?.let { rows ->
+            val source = if (valuesVariable != null) {
+                "the list variable $valuesVariable"
+            } else {
+                "the values block"
+            }
+            resolvedMultiple = RowLimit.batch(rows, source) { warning(it) }
         }
 
         val extraArguments = try {

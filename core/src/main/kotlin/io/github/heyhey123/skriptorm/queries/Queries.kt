@@ -54,6 +54,19 @@ interface Queries {
     fun selectMany(where: WhereClause?): SelectMany
 
     /**
+     * Selects multiple entities, asking the server for at most [limit] rows.
+     *
+     * The ceiling belongs to the server rather than to this side: a caller that would refuse a result larger
+     * than it can store has to learn that the result is larger *before* the rows are on their way, and a
+     * caller that asks for one row more than it accepts can tell the two cases apart by reading [limit] rows.
+     *
+     * @param where The WHERE clause defining the selection condition.
+     * @param limit The most rows to read.
+     * @return A SelectMany query object carrying the ceiling.
+     */
+    fun selectMany(where: WhereClause?, limit: Int): SelectMany
+
+    /**
      * Selects a page of results based on pagination parameters and an optional condition.
      *
      * @param pageSize The number of items per page

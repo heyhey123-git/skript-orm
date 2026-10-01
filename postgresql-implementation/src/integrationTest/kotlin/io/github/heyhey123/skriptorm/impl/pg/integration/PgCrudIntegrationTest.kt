@@ -157,6 +157,20 @@ class PgCrudIntegrationTest : PgIntegrationTestBase() {
     }
 
     @Test
+    fun `selectMany stops at the requested number of rows`() = runBlocking<Unit> {
+        seed(1, 2, 3, 4)
+
+        // A ceiling below the table size cuts the result; one at or above it leaves every row, which is
+        // what a caller asking for one row past its own ceiling relies on to tell the two apart.
+        assertEquals(3, queries.selectMany(null, 3).execute(usersTable).readUsers().size)
+        assertEquals(4, queries.selectMany(null, 4).execute(usersTable).readUsers().size)
+        assertEquals(4, queries.selectMany(null, 5).execute(usersTable).readUsers().size)
+
+        val matching = WhereClause.All(false, listOf(Condition.GreaterThanOrEquals("age", 30)))
+        assertEquals(2, queries.selectMany(matching, 2).execute(usersTable).readUsers().size)
+    }
+
+    @Test
     fun `selectPage refuses a table without a primary key`() = runBlocking<Unit> {
         val keyless = Table("orm_keyless", listOf(Column("value", intType)))
         recreateTable(keyless)

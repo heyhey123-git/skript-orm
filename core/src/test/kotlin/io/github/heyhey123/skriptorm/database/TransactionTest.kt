@@ -315,6 +315,7 @@ private object TransactionQueries : Queries {
     override fun selectById(id: Any): SelectById = unusedTransactionQuery()
     override fun selectOne(where: WhereClause?): SelectOne = unusedTransactionQuery()
     override fun selectMany(where: WhereClause?): SelectMany = unusedTransactionQuery()
+    override fun selectMany(where: WhereClause?, limit: Int): SelectMany = unusedTransactionQuery()
     override fun selectPage(pageSize: Int, pageIndex: Int, where: WhereClause?): SelectPage = unusedTransactionQuery()
     override fun insertOne(values: Map<String, Any?>): InsertOne = unusedTransactionQuery()
     override fun insertMany(valuesList: List<Map<String, Any?>>): InsertMany = unusedTransactionQuery()

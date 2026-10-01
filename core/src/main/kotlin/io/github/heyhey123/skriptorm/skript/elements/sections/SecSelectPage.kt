@@ -4,13 +4,14 @@ import ch.njol.skript.doc.*
 import ch.njol.skript.lang.Expression
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Page")
-@Description("Selects a one-based page with positive size. Results use page-local row-index and column-name keys, even for one result. Pagination requires a registered primary key. Selects always wait and expose failures as the last database error.")
+@Description("Selects a one-based page with positive size. Results use page-local row-index and column-name keys, even for one result. Pagination requires a registered primary key. A page holds at most 5000 rows, and a larger page is refused before it is sent. Selects always wait and expose failures as the last database error.")
 @Example(
     """select page 2 with size 20 from table "users" and store the results in {_page::*}:
     where all:
@@ -57,6 +58,15 @@ class SecSelectPage : SecSelectBase() {
         require(pageIndex >= 1) { "Page index must be at least one." }
         require(pageSize > 0) { "Page size must be positive." }
         return PageArguments(pageIndex, pageSize)
+    }
+
+    /**
+     * A page is the whole of what this section stores, so a page larger than a statement may store is known
+     * before the query: it is refused with nothing sent and no trigger parked. [RowLimit] owns the ceiling.
+     */
+    override fun argumentsRefusal(arguments: Any?): String? {
+        val pageSize = (arguments as PageArguments).pageSize
+        return if (pageSize > RowLimit.ROWS) RowLimit.pageRefusal(pageSize) else null
     }
 
     override suspend fun executeQuery(

@@ -29,9 +29,16 @@ interface JdbcDialect {
 
     fun renderIdentifier(identifier: String): String
 
-    fun select(table: String, whereClause: String? = null): String = buildString {
+    /**
+     * Takes at most [limit] rows, or every matching row when it is null.
+     *
+     * The ceiling is written into the statement rather than bound, the way [update] and [delete] write
+     * theirs: it is a number the caller decided, never a value that came from a script.
+     */
+    fun select(table: String, whereClause: String? = null, limit: Int? = null): String = buildString {
         append("SELECT * FROM ${quoteIdentifier(table)}")
         whereClause?.let { append(" $it") }
+        limit?.let { append(" LIMIT $it") }
     }
 
     /**
@@ -43,7 +50,7 @@ interface JdbcDialect {
      * better.
      */
     fun selectOne(table: String, whereClause: String? = null): String =
-        "${select(table, whereClause)} LIMIT 1"
+        select(table, whereClause, 1)
 
     /** Pages with `LIMIT ? OFFSET ?`, for the reason [selectOne] gives. */
     fun selectPage(table: String, orderBy: String, whereClause: String? = null): JdbcPageSql =

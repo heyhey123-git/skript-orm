@@ -15,11 +15,13 @@ the previous release used, because the notes are the release body and nothing el
 
 ## [1.4.0] - 2026-10-01
 
-A release about where a batch insert goes and what it reports. MariaDB becomes a type of its own, because its
-connector reaches the server's own bulk execute with no configuration, where Connector/J sends one row at a
-time — the difference a large `insert many` showed as a MariaDB server being many times slower than
-PostgreSQL. Three fixes come with it: a table declared twice is no longer an error, a number written into a
-text column keeps its digits, and a column that holds nothing reads back as unset.
+A release about where a batch insert goes, what it reports, and how much one statement may move. MariaDB
+becomes a type of its own, because its connector reaches the server's own bulk execute with no configuration,
+where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
+being many times slower than PostgreSQL. One statement now moves at most 5000 rows, and the two directions
+treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Three fixes
+come with it: a table declared twice is no longer an error, a number written into a text column keeps its
+digits, and a column that holds nothing reads back as unset.
 
 ### Added
 
@@ -32,6 +34,19 @@ text column keeps its digits, and a column that holds nothing reads back as unse
   reports no per-row count, while the MariaDB connector reaches the server's own bulk execute with no
   configuration and still counts every row. That is the difference a large `insert many` shows, and the
   reason a MariaDB server reached through `"MySQL"` could be many times slower than PostgreSQL.
+
+### Changed
+
+- **A read that returns more than 5000 rows is refused, and stores nothing.** `select many` and `select page`
+  used to store whatever the table held. A hundred thousand rows read into a list variable is seconds of the
+  server stopped, and the only sign of it was a watchdog line in the console. The refusal names the ceiling and
+  leaves the variable cleared, because the alternative — storing a result that was cut in half — answers every
+  later question about rows the script never saw. Narrow the result with a `where` block, or walk it with
+  `select page`. A page larger than 5000 rows is refused before anything is sent, for the same reason.
+- **`insert many` given more than 5000 rows writes the first 5000, drops the rest and warns.** Refusing would
+  throw away rows the script already assembled, so the statement does what it can and says so in the console.
+  The affected-row count is the count that was written, which is the other place the drop shows up. Split the
+  batch over several statements to write all of it.
 
 ### Fixed
 

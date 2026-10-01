@@ -9,13 +9,14 @@ import io.github.heyhey123.skriptorm.table.Table
 
 open class JdbcSelectMany(
     where: WhereClause?,
+    limit: Int?,
     override val connectionSource: JdbcConnectionSource,
     override val dialect: JdbcDialect
-) : SelectMany(where), JdbcQuery {
+) : SelectMany(where, limit), JdbcQuery {
 
     override suspend fun execute(table: Table): CursorResult {
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
-        return executeCursor(dialect.select(table.name, whereSql)) { statement ->
+        return executeCursor(dialect.select(table.name, whereSql, limit)) { statement ->
             bindWhere(table, where, statement)
         }
     }

@@ -10,13 +10,14 @@ import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
+import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.WriteValues
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities From A Variable Without A Colon")
-@Description("Inserts multiple rows, taken from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts multiple rows, taken from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. A batch of more than 5000 rows writes its first 5000, drops the rest and warns, because rows are turned into a statement on the server thread. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """select many entities from table "users" and store the results in {_rows::*}
 insert many {_rows::*} into table "archived_users" and wait
@@ -80,11 +81,15 @@ class EffInsertManyFromVariable : Effect() {
 
         val rows = WriteValues.rows(actualEvent, this, valuesVariable, target) ?: return next
 
+        // A batch past the ceiling loses its tail and says so: the rows are already in the script's hands,
+        // and the count delivered below reports what actually reached the server. RowLimit owns the ceiling.
+        val batch = RowLimit.batch(rows, "the list variable $valuesVariable") { warning(it) }
+
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
             query = {
-                target.withQueries { queries -> queries.insertMany(rows).execute(target.table) }
+                target.withQueries { queries -> queries.insertMany(batch).execute(target.table) }
             },
             deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { failure ->

@@ -42,7 +42,7 @@ class JdbcConcreteQueriesTest {
         val fixture = cursorFixture()
         val where = WhereClause.All(false, listOf(Condition.Equals("age", 18), Condition.Equals("name", null)))
 
-        JdbcSelectMany(where, fixture.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
+        JdbcSelectMany(where, null, fixture.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { fixture.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"age\" = ? AND \"name\" IS NULL") }
         verify { fixture.statement.setObject(1, 18, JDBCType.INTEGER.vendorTypeNumber) }
 
@@ -54,6 +54,20 @@ class JdbcConcreteQueriesTest {
         JdbcSelectById(7, byId.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
         verify { byId.connection.prepareStatement("SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 1") }
         verify { byId.statement.setObject(1, 7, JDBCType.INTEGER.vendorTypeNumber) }
+    }
+
+    /**
+     * A ceiling belongs to the server: the statement carries it, so the rows past it never leave the server
+     * and the caller learns the result is too large without reading it. A caller that accepts n rows asks
+     * for n + 1, which is what tells "more than it accepts" from "exactly what it accepts".
+     */
+    @Test
+    fun `a select with a ceiling asks the server for that many rows`() = runBlocking {
+        val fixture = cursorFixture()
+
+        JdbcSelectMany(null, 5001, fixture.connectionSource, GenericJdbcDialect).execute(table).cursor.close()
+
+        verify { fixture.connection.prepareStatement("SELECT * FROM \"users\" LIMIT 5001") }
     }
 
     @Test

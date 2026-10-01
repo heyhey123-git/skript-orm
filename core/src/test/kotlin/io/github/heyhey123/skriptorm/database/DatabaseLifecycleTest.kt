@@ -903,6 +903,7 @@ private object UnusedQueries : Queries {
     override fun selectById(id: Any): SelectById = unusedQuery()
     override fun selectOne(where: WhereClause?): SelectOne = unusedQuery()
     override fun selectMany(where: WhereClause?): SelectMany = unusedQuery()
+    override fun selectMany(where: WhereClause?, limit: Int): SelectMany = unusedQuery()
     override fun selectPage(pageSize: Int, pageIndex: Int, where: WhereClause?): SelectPage = unusedQuery()
     override fun insertOne(values: Map<String, Any?>): InsertOne = unusedQuery()
     override fun insertMany(valuesList: List<Map<String, Any?>>): InsertMany = unusedQuery()

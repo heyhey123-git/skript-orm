@@ -9,13 +9,14 @@ import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
+import io.github.heyhey123.skriptorm.skript.utils.SelectResult
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Many Entities Without A Filter")
-@Description("Selects every row using row-index and column-name keys such as {_users::1::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Selects always wait and expose failures as the last database error.")
+@Description("Selects every row using row-index and column-name keys such as {_users::1::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. A result of more than 5000 rows is refused and stores nothing, because storing it would stop the server while the variable is written. Selects always wait and expose failures as the last database error.")
 @Example(
     """select many entities from table "users" and store the results in {_users::*}
 send "first: %{_users::1::name}%"
@@ -74,19 +75,7 @@ class EffSelectManyUnfiltered : Effect() {
             event = actualEvent,
             continuation = next,
             query = {
-                target.withQueries { queries ->
-                    val rows = linkedMapOf<String, Any?>()
-                    queries.selectMany(null).execute(target.table).cursor.use { cursor ->
-                        var rowIndex = 1
-                        while (cursor.next()) {
-                            target.table.columns.values.forEach { column ->
-                                rows["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
-                            }
-                            rowIndex++
-                        }
-                    }
-                    rows
-                }
+                target.withQueries { queries -> SelectResult.readMany(queries, target.table, null) }
             },
             deliver = { rows -> VariableModifier.writeMap(resultVar, actualEvent, rows) },
             onFailure = { failure ->

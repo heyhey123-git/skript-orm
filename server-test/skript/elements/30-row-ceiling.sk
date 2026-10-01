@@ -1,0 +1,137 @@
+# The row ceiling: how many rows one statement may move between the database and a Skript value.
+#
+# A read past the ceiling refuses and stores nothing, because a table cut in half answers every later
+# question wrong. A write past it keeps the first rows, drops the rest and warns, because those rows are
+# already in the script's hands and the count it reports says what was written.
+#
+# This runs on the SQLite file connection the suite already carries. A read past the ceiling can only be
+# tried against a table that has more rows than the ceiling, and filling one is cheap here and nowhere
+# else in the suite. It creates its own table rather than sharing `orm_sqlite_probe`, so the two scripts
+# cannot interfere, and the run starts from a deleted `plugins/Skript`, so the table is always fresh.
+#
+# The verdict is the word `ok` or the word `failed`, and a FAIL line above it names what did not hold.
+every 5 seconds:
+    if {skriptorm::selftest::done::row-ceiling} is set:
+        stop trigger
+    if {skriptorm::selftest::started::row-ceiling} is set:
+        stop trigger
+    set {skriptorm::selftest::started::row-ceiling} to true
+
+    # Every other element reports on the first tick, and a connection made before that would be the
+    # default their unqualified statements resolve to. This one starts after they are all done.
+    wait 6 seconds
+
+    create a connection named "ceiling" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        # The two pragmas are what makes this script affordable. It writes 5000 rows in one batch, and the
+        # driver's own batching still commits against the file, so the default durability settings turn the
+        # insert into thousands of syncs and the script into a minute of work. The file is a throwaway under
+        # `plugins/Skript`, deleted before every run, so nothing here is worth syncing.
+        url: "jdbc:sqlite:plugins/Skript/ceiling-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling connect: %last database error%"
+
+    in connection "ceiling":
+        register a database table "orm_ceiling_probe":
+            id: bigint, primary key, not null
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling register table: %last database error%"
+
+    # 5001 rows, one past the ceiling, so one batch says what a write does with a tail and leaves a table
+    # a read may not hold. A global variable holds it because the write below may park the trigger, and a
+    # local variable is not something a script should have to think about across that. One column, because
+    # this fills a table row by row on the server thread and every column is paid for twice: once here and
+    # once when the statement turns the variable back into rows.
+    loop 5001 times:
+        set {ceiling::batch::%loop-number%::id} to loop-number
+
+    # The write half. The tail is dropped with a warning rather than refused, so the statement succeeds
+    # and the count it reports is the count it wrote.
+    in connection "ceiling":
+        insert many {ceiling::batch::*} into table "orm_ceiling_probe" and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling insert many: %last database error%"
+
+    # Counted by the server rather than read off the affected-row clause: what has to hold is how many rows
+    # the table ends up with, and a driver that reports no batch counts would otherwise be the thing under
+    # test. The warning that goes with the drop is checked in the build, against the server log.
+    in connection "ceiling":
+        execute query "SELECT COUNT(*) AS written FROM orm_ceiling_probe" and store the result in {ceiling::count::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling count: %last database error%"
+    if {ceiling::count::1::written} is not 5000:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling wrote '%{ceiling::count::1::written}%' rows out of 5001 instead of 5000"
+
+    # The row that makes the table larger than a statement may store.
+    in connection "ceiling":
+        insert one entity into table "orm_ceiling_probe" and wait:
+            values:
+                id: 5001
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling insert the row past it: %last database error%"
+
+    # A page larger than a page may hold is known before anything is sent, so both spellings refuse on the
+    # spot and store nothing.
+    in connection "ceiling":
+        select page 1 with size 5001 from table "orm_ceiling_probe" and store the results in {ceiling::page::*}
+    if last database error does not contain "a page may hold at most 5000 rows":
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling page over the ceiling was not refused: %last database error%"
+    if {ceiling::page::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling page over the ceiling stored a row"
+
+    in connection "ceiling":
+        select page 1 with size 5001 from table "orm_ceiling_probe" and store the results in {ceiling::page::section::*}:
+            where all:
+                id > 0
+    if last database error does not contain "a page may hold at most 5000 rows":
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling section page over the ceiling was not refused: %last database error%"
+    if {ceiling::page::section::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling section page over the ceiling stored a row"
+
+    # A page of exactly the ceiling is not over it. The filter matches nothing, so this costs nothing and
+    # only the size check is under test; the read that actually fills 5000 indexes is the one below.
+    in connection "ceiling":
+        select page 1 with size 5000 from table "orm_ceiling_probe" and store the results in {ceiling::page::at::*}:
+            where all:
+                id < 1
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling page of the ceiling was refused: %last database error%"
+
+    # The read half, which is only knowable from the result: 5001 rows are there and a statement may store
+    # 5000, so this refuses instead of storing a result that was cut in half.
+    in connection "ceiling":
+        select many entities from table "orm_ceiling_probe" and store the results in {ceiling::many::*}
+    if last database error does not contain "read more than 5000 rows":
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many was not refused: %last database error%"
+    if {ceiling::many::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many stored a row it refused"
+
+    # The same read one row smaller is a result a statement may store, so what refused above is the
+    # ceiling and not the shape of the statement. It is counted by index rather than by row: `select many`
+    # has no ORDER BY, so which row lands at `::1` is the server's choice and the count is what is being
+    # asked about. 5000 indexes present and no 5001st is exactly the filter's 5000 rows.
+    in connection "ceiling":
+        select many entities from table "orm_ceiling_probe" and store the results in {ceiling::many::at::*}:
+            where all:
+                id <= 5000
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling was refused: %last database error%"
+    if {ceiling::many::at::1::id} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling stored nothing"
+    if {ceiling::many::at::5000::id} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling stored fewer than 5000 rows"
+    if {ceiling::many::at::5001::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling stored more than 5000 rows"
+
+    set {ceiling::failed} to false
+    if {ceiling::count::1::written} is not 5000:
+        set {ceiling::failed} to true
+    if {ceiling::many::at::5000::id} is not set:
+        set {ceiling::failed} to true
+
+    if {ceiling::failed} is true:
+        log "SKRIPTORM_SELFTEST detail: row ceiling -> failed"
+    else:
+        log "SKRIPTORM_SELFTEST detail: row ceiling -> ok"
+
+    set {skriptorm::selftest::done::row-ceiling} to true

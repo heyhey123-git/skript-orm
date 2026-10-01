@@ -27,7 +27,9 @@ class MongoQueries(
 
     override fun selectOne(where: WhereClause?): SelectOne = MongoSelectOne(where, database)
 
-    override fun selectMany(where: WhereClause?): SelectMany = MongoSelectMany(where, database)
+    override fun selectMany(where: WhereClause?): SelectMany = MongoSelectMany(where, null, database)
+
+    override fun selectMany(where: WhereClause?, limit: Int): SelectMany = MongoSelectMany(where, limit, database)
 
     override fun selectPage(
         pageSize: Int,

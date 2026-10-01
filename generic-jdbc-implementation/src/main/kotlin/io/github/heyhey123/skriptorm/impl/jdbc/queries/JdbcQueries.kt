@@ -25,7 +25,8 @@ open class JdbcQueries(
 
     override fun selectById(id: Any) = JdbcSelectById(id, connectionSource, dialect)
     override fun selectOne(where: WhereClause?) = JdbcSelectOne(where, connectionSource, dialect)
-    override fun selectMany(where: WhereClause?) = JdbcSelectMany(where, connectionSource, dialect)
+    override fun selectMany(where: WhereClause?) = JdbcSelectMany(where, null, connectionSource, dialect)
+    override fun selectMany(where: WhereClause?, limit: Int) = JdbcSelectMany(where, limit, connectionSource, dialect)
     override fun selectPage(pageSize: Int, pageIndex: Int, where: WhereClause?) =
         JdbcSelectPage(pageSize, pageIndex, where, connectionSource, dialect)
 

@@ -163,6 +163,24 @@ class MongoCrudIntegrationTest : MongoIntegrationTestBase() {
     }
 
     @Test
+    fun `select many stops at the requested number of rows`() = runBlocking<Unit> {
+        recreateTable()
+        (1..5).forEach { queries.insertOne(userValues(name = "row$it", id = it)).execute(usersTable) }
+
+        // A ceiling below the collection size cuts the result; one at or above it leaves every row, which
+        // is what a caller asking for one row past its own ceiling relies on to tell the two apart.
+        assertEquals(3, queries.selectMany(null, 3).execute(usersTable).readUsers().size)
+        assertEquals(5, queries.selectMany(null, 5).execute(usersTable).readUsers().size)
+        assertEquals(5, queries.selectMany(null, 6).execute(usersTable).readUsers().size)
+
+        // A filter and a ceiling compose: the filter decides which rows are candidates and the ceiling
+        // decides how many of them are read.
+        val twoOfFive = WhereClause.Any(false, listOf(condition("name", "row1"), condition("name", "row2")))
+        assertEquals(2, queries.selectMany(twoOfFive, 2).execute(usersTable).readUsers().size)
+        assertEquals(1, queries.selectMany(twoOfFive, 1).execute(usersTable).readUsers().size)
+    }
+
+    @Test
     fun `select page walks the pages in key order`() = runBlocking<Unit> {
         recreateTable()
         (10..14).forEach { queries.insertOne(userValues(name = "row$it", id = it)).execute(usersTable) }

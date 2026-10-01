@@ -15,6 +15,13 @@ class JdbcDialectTest {
     fun `generic dialect renders quoted sql`() {
         assertEquals("SELECT * FROM \"users\"", GenericJdbcDialect.select("users"))
         assertEquals("SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 1", GenericJdbcDialect.selectOne("users", "WHERE \"id\" = ?"))
+        // A ceiling is written into the statement, the way a write limit is, so the rows past it never
+        // leave the server.
+        assertEquals("SELECT * FROM \"users\" LIMIT 25", GenericJdbcDialect.select("users", limit = 25))
+        assertEquals(
+            "SELECT * FROM \"users\" WHERE \"id\" = ? LIMIT 5001",
+            GenericJdbcDialect.select("users", "WHERE \"id\" = ?", 5001)
+        )
         assertEquals("INSERT INTO \"users\" (\"id\", \"name\") VALUES (?, ?)", GenericJdbcDialect.insert("users", listOf("id", "name")))
         assertEquals("UPDATE \"users\" SET \"name\" = ? WHERE \"id\" = ?", GenericJdbcDialect.update("users", listOf("name"), "WHERE \"id\" = ?", null))
         assertEquals("DELETE FROM \"users\" WHERE \"id\" = ?", GenericJdbcDialect.delete("users", "WHERE \"id\" = ?", null))

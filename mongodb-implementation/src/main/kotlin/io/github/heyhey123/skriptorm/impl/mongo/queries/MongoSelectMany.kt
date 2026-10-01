@@ -10,15 +10,17 @@ import io.github.heyhey123.skriptorm.table.Table
 
 class MongoSelectMany(
     where: WhereClause?,
+    limit: Int?,
     override val database: MongoDatabase
-) : SelectMany(where), MongoQuery {
+) : SelectMany(where, limit), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
         val collection = database.getCollection(table.name)
         val filter = where?.let {
             MongoConditionTranslator.translate(it, table)
         }
-        val findFlow = filter?.let { collection.find(it) } ?: collection.find()
+        val matching = filter?.let { collection.find(it) } ?: collection.find()
+        val findFlow = limit?.let { matching.limit(it) } ?: matching
         return CursorResult(MongoDataCursor(findFlow.toList(), table.columns.keys.toList()))
     }
 }
