@@ -1,6 +1,7 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.database
 
 import io.github.heyhey123.skriptorm.impl.jdbc.type.BigIntJdbcDataType
+import io.github.heyhey123.skriptorm.impl.jdbc.type.BooleanJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
@@ -206,6 +207,35 @@ class SchemaVerificationTest {
         assertTrue(
             SchemaVerification.normalizeTypeName("int8") != SchemaVerification.normalizeTypeName("geometry")
         )
+    }
+
+    /**
+     * A spelling that belongs to one product is that dialect's to declare, and the comparison is told it. The
+     * one measured so far is the boolean column: MySQL stores `BOOLEAN` as `TINYINT(1)`, and a connection URL
+     * carrying `tinyInt1isBit=false` makes the driver report it as `TINYINT` — the same name and the same size
+     * a column declared `tinyint` has, so nothing in the metadata tells the two apart. H2, where `TINYINT` and
+     * `BOOLEAN` are two different types, must not inherit the answer, which is what passing the mapping in
+     * rather than keeping it beside the comparison gets. What `MysqlJdbcDialect` declares there is what the
+     * JDBC tests read back from a real server.
+     */
+    @Test
+    fun `a spelling the dialect owns is compared through the dialect`() {
+        val flags = Table(
+            "flags",
+            listOf(
+                Column("id", BigIntJdbcDataType(), isPrimaryKey = true, isAutoIncrement = true, isNullable = false),
+                Column("active", BooleanJdbcDataType(), isNullable = false)
+            )
+        )
+        val reported = actual(
+            flags,
+            "active" to SchemaVerification.ActualColumn("active", "TINYINT", nullable = false, size = null)
+        )
+
+        assertEquals(1, SchemaVerification.compare(flags, reported).size)
+        assertEquals(emptyList(), SchemaVerification.compare(flags, reported, MysqlJdbcDialect.typeAliases))
+        assertEquals("BOOLEAN", SchemaVerification.normalizeTypeName("tinyint", MysqlJdbcDialect.typeAliases))
+        assertEquals("TINYINT", SchemaVerification.normalizeTypeName("tinyint"))
     }
 
     /**

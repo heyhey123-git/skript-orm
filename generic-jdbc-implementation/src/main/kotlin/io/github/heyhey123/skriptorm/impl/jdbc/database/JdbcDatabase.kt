@@ -171,7 +171,7 @@ open class JdbcDatabase(
                 if (statementTimeoutSeconds > 0) statement.queryTimeout = statementTimeoutSeconds
                 statement.executeUpdate(sql)
             }
-            SchemaVerification.requireMatches(connection, table)
+            SchemaVerification.requireMatches(connection, table, dialect.typeAliases)
         }
     }
 }

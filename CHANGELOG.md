@@ -19,10 +19,11 @@ A release about where a batch insert goes, what it reports, and how much one sta
 becomes a type of its own, because its connector reaches the server's own bulk execute with no configuration,
 where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
 being many times slower than PostgreSQL. One statement now moves at most 5000 rows, and the two directions
-treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Four fixes
+treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Five fixes
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
-digits, a column that holds nothing reads back as unset, and a table that carries a column the declaration
-does not name is registered instead of being refused.
+digits, a column that holds nothing reads back as unset, a table that carries a column the declaration does
+not name is registered instead of being refused, and a `boolean` column is recognised under whichever name
+its driver reports for it.
 
 ### Added
 
@@ -73,6 +74,14 @@ does not name is registered instead of being refused.
   asks nothing about identity, and is no longer refused for a table that has one. A column the table carries
   that is `not null` with no default is the one case where a write still fails, and the server names the
   column when it does.
+- **A `boolean` column is recognised under whichever name its driver reports for it.** MySQL has no boolean
+  type of its own — `BOOLEAN` is `TINYINT(1)` — and both MySQL's and MariaDB's driver carry a `tinyInt1isBit`
+  property, true by default, that decides whether such a column is reported as `BIT`, as `BOOLEAN` or as
+  `TINYINT`. A script that asks for the last one in its connection URL, a common way to get `0` and `1` out of
+  these columns, made the schema check read the column as one declared `tinyint` and refuse the registration:
+  the metadata gives `TINYINT(3)` then, the same name and the same size that column has. All three names are
+  the same one-byte column on these servers and none of them can fail a statement, so a declaration of
+  `boolean` is accepted under all three.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 

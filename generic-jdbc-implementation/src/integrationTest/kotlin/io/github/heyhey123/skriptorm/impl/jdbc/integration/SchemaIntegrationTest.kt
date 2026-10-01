@@ -1,11 +1,14 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.integration
 
+import io.github.heyhey123.skriptorm.database.ConnectionSettings
+import io.github.heyhey123.skriptorm.database.Database
+import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabase
+import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
 import kotlinx.coroutines.runBlocking
-import java.sql.Connection
 import java.sql.DriverManager
 import java.sql.SQLException
 import kotlin.test.Test
@@ -62,60 +65,41 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     /**
-     * What the driver says about the two one-byte columns with `tinyInt1isBit` turned off, printed rather
-     * than asserted.
-     *
-     * The server has one storage for both of these declared types: `boolean` is `TINYINT(1)` and `tinyint`
-     * is `TINYINT`. Connector/J and MariaDB Connector/J both carry a `tinyInt1isBit` property, true by
-     * default, that decides which name a `TINYINT(1)` column is reported under, and a script may bring its
-     * own connection URL, so the metadata can say `TINYINT` for a column declared `boolean`. What it says is
-     * what decides whether the comparison may read `TINYINT` as the boolean storage; it may not do so
-     * blindly, because a column declared `tinyint` has to keep being reported when the declaration says
-     * `boolean`, unless nothing in the metadata tells the two apart. The size is printed beside the name for
-     * that reason. A driver that refuses the property says so in the same line instead of failing the run.
+     * The fact the MySQL family's type aliases are built on, measured against both drivers: with
+     * `tinyInt1isBit=false` in the URL, Connector/J reports the column declared `boolean` — `active` — as
+     * `TINYINT(3)`, which is the same name and the same size the column declared `tinyint` gets. Nothing in
+     * the metadata then tells the two apart, and a script that sets that property, which is a common way to
+     * read these columns as `0` and `1`, would have had its registration refused for a table every statement
+     * can run against. This is the registration path, over a connection that carries the property.
      */
     @Test
-    fun `the names the driver reports for the one-byte columns are printed`() = runBlocking<Unit> {
+    fun `a boolean column is accepted over a connection that reports it as a tinyint`() = runBlocking<Unit> {
         recreateTable()
-        reportOneByteColumns("as connected", columnMetadata("users"))
 
         val separator = if (dataSource.jdbcUrl.contains('?')) "&" else "?"
         val url = dataSource.jdbcUrl + separator + "tinyInt1isBit=false"
-        runCatching {
-            DriverManager.getConnection(url, dataSource.username, dataSource.password).use { connection ->
-                columnsOf(connection, "users")
-            }
-        }.fold(
-            onSuccess = { reportOneByteColumns("tinyInt1isBit=false", it) },
-            onFailure = { println("[schema probe] $product tinyInt1isBit=false: ${it.message}") }
+        assertEquals("TINYINT", reportedTypeName(url, "users", "active"))
+
+        val flagged = JdbcDatabase(dataSource.driverClassName, MysqlJdbcDialect)
+        Database.connectNamed(
+            "tinyInt1isBit=false",
+            flagged,
+            ConnectionSettings(url, dataSource.username, dataSource.password)
         )
+
+        flagged.registerTable(usersTable)
     }
 
-    /** The same metadata [columnMetadata] reads, from a connection this test opened for itself. */
-    private fun columnsOf(connection: Connection, table: String): List<ColumnMeta> =
-        connection.metaData.getColumns(connection.catalog, null, table, null).use { rows ->
-            buildList {
+    /** The type name a driver reports for one column, read outside the implementation. */
+    private fun reportedTypeName(url: String, table: String, column: String): String? {
+        DriverManager.getConnection(url, dataSource.username, dataSource.password).use { connection ->
+            connection.metaData.getColumns(connection.catalog, null, table, null).use { rows ->
                 while (rows.next()) {
-                    add(
-                        ColumnMeta(
-                            name = rows.getString("COLUMN_NAME"),
-                            typeName = rows.getString("TYPE_NAME"),
-                            size = rows.getInt("COLUMN_SIZE"),
-                            nullable = rows.getString("IS_NULLABLE") == "YES"
-                        )
-                    )
+                    if (rows.getString("COLUMN_NAME") == column) return rows.getString("TYPE_NAME")
                 }
             }
         }
-
-    /** One line naming what the driver said about the two one-byte columns. */
-    private fun reportOneByteColumns(label: String, columns: List<ColumnMeta>) {
-        val byName = columns.associateBy { it.name }
-        val described = listOf("active", "tiny").joinToString(", ") { name ->
-            val column = byName[name]
-            if (column == null) "$name=absent" else "$name=${column.typeName}(${column.size})"
-        }
-        println("[schema probe] $product $label: $described")
+        return null
     }
 
     /** Fails with the whole column description, so a remote run identifies the column on its own. */

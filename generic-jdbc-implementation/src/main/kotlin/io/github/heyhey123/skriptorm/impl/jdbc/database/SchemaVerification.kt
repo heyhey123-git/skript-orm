@@ -67,11 +67,18 @@ internal object SchemaVerification {
      *
      * @param connection a connection with the schema in effect, which is the one the DDL just ran on
      * @param declared the table the script registered
+     * @param typeAliases the spellings the connection's own dialect reports for a storage, from
+     *   [JdbcDialect.typeAliases]. They have to come from the dialect because the same spelling can be two
+     *   different storages on two servers, so the comparison cannot carry them itself.
      * @throws IllegalArgumentException naming every difference, or doing nothing when there is none
      */
-    fun requireMatches(connection: Connection, declared: Table) {
+    fun requireMatches(
+        connection: Connection,
+        declared: Table,
+        typeAliases: Map<String, String> = emptyMap()
+    ) {
         val actual = read(connection, declared.name)
-        val mismatches = compare(declared, actual)
+        val mismatches = compare(declared, actual, typeAliases)
         require(mismatches.isEmpty()) {
             val header = "Registered table '${declared.name}' does not match the table in the database. " +
                 "Registration is 'CREATE TABLE IF NOT EXISTS', so a table that already exists is never " +
@@ -93,8 +100,15 @@ internal object SchemaVerification {
      * The comparison is exact for names. A server that folds unquoted identifiers to lower case does not
      * hide a difference, because this implementation always quotes them: what a script writes is the name
      * the server holds, or the table is not the one it registered.
+     *
+     * [typeAliases] comes from the connection's dialect and names the spellings that dialect's driver
+     * reports for a storage this implementation writes; see [JdbcDialect.typeAliases].
      */
-    fun compare(declared: Table, actual: ActualTable): List<String> {
+    fun compare(
+        declared: Table,
+        actual: ActualTable,
+        typeAliases: Map<String, String> = emptyMap()
+    ): List<String> {
         val mismatches = mutableListOf<String>()
         val actualByName = actual.columns.associateBy { it.name }
 
@@ -107,7 +121,9 @@ internal object SchemaVerification {
         for ((name, column) in declared.columns) {
             val stored = actualByName[name] ?: continue
             val expectedType = typeNameOf(column)
-            if (expectedType != null && normalizeTypeName(expectedType) != normalizeTypeName(stored.typeName)) {
+            if (expectedType != null &&
+                normalizeTypeName(expectedType, typeAliases) != normalizeTypeName(stored.typeName, typeAliases)
+            ) {
                 mismatches += "Column '$name' is declared as $expectedType but the table holds " +
                     "${stored.typeName}."
             }
@@ -284,26 +300,32 @@ internal object SchemaVerification {
     }
 
     /**
-     * The comparable form of a type name: upper case, without a `(size)`, through [TYPE_ALIASES].
+     * The comparable form of a type name: upper case, without a `(size)`, through the aliases.
      *
-     * The two servers spell the same storage differently — `INT8` against `BIGINT`, `VARCHAR` against
+     * The servers spell the same storage differently — `INT8` against `BIGINT`, `VARCHAR` against
      * `CHARACTER VARYING` — and the aliases are the complete set of ways they spell the types this
      * implementation renders. A name that is not listed is compared as it stands, so a genuinely different
      * type still differs.
+     *
+     * [typeAliases] is the connection's dialect, which knows the spellings that are its own; see
+     * [JdbcDialect.typeAliases]. It is consulted first, because a dialect that maps a name is saying
+     * something about its own server.
      */
-    fun normalizeTypeName(name: String): String {
+    fun normalizeTypeName(name: String, typeAliases: Map<String, String> = emptyMap()): String {
         val bare = name.substringBefore('(').trim().uppercase()
-        return TYPE_ALIASES[bare] ?: bare
+        return typeAliases[bare] ?: TYPE_ALIASES[bare] ?: bare
     }
 
     /**
-     * Every spelling the servers use for the storage this implementation writes, mapped to the name the
-     * dialect writes.
+     * Every spelling the standard and the JDBC drivers use for the storage this implementation writes, mapped
+     * to the name this implementation declares.
      *
-     * PostgreSQL's driver reports its own internal names (`int4`, `int8`, `float8`) through
-     * `DatabaseMetaData`, while MySQL reports the SQL name and H2 reports the standard one. The canonical
-     * form is not a preference, and it is not always the spelling the declaration uses — `INT` is compared
-     * as `INTEGER` — it only has to be a form both sides can be brought to, which is all a comparison needs.
+     * This is the part of the alias knowledge that belongs to no product: SQLite reports what the declaration
+     * wrote, H2 reports the standard SQL name, and a JDBC driver may report either. What one product's driver
+     * decided on its own goes in that product's dialect instead, because the same spelling can be two
+     * different storages on two servers — `TINYINT` is `BOOLEAN` on MySQL and a type of its own on H2.
+     * PostgreSQL's internal names (`int4`, `int8`, `bytea`) belong to the PostgreSQL dialect for the same
+     * reason, and are declared there.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",

@@ -152,6 +152,22 @@ interface JdbcDialect {
     fun unsupported(feature: String): Nothing =
         throw UnsupportedOperationException("$feature is not supported by this JDBC dialect.")
 
+    /**
+     * The other spellings this product's driver reports for a storage the declaration writes, mapped to the
+     * name this implementation declares, in upper case without a size.
+     *
+     * A spelling is a fact about one server and one driver, not about SQL, which is why it lives here rather
+     * than beside the comparison: `TINYINT` and `BOOLEAN` are the same one-byte column on MySQL and two
+     * different types on H2, and PostgreSQL's driver reports `int4` where H2 reports the standard `INTEGER`.
+     * A dialect that maps a name is saying the two are the same storage on its server, so a mapping that
+     * holds for one product cannot loosen the comparison for another.
+     *
+     * The comparison applies these over the shared table it keeps for the standard and JDBC spellings, so a
+     * dialect only carries what is its own.
+     */
+    val typeAliases: Map<String, String>
+        get() = emptyMap()
+
     companion object {
 
         /**
@@ -244,4 +260,15 @@ object MysqlJdbcDialect : JdbcDialect {
     override fun applyUpdateLimit(sql: String, limit: Int): String = "$sql LIMIT $limit"
     override fun applyDeleteLimit(sql: String, limit: Int): String = "$sql LIMIT $limit"
     override fun autoIncrementClause(): String = " AUTO_INCREMENT"
+
+    /**
+     * `BOOLEAN` is not a type of its own here: it is `TINYINT(1)`, and a column declared `boolean` is that
+     * one-byte integer. Connector/J and MariaDB Connector/J both carry a `tinyInt1isBit` property, true by
+     * default, that decides whether such a column is reported as `BIT`, as `BOOLEAN` or as `TINYINT`, and a
+     * script may bring its own connection URL. The schema round trip prints what each driver says with the
+     * property off: `active` and `tiny` both come back `TINYINT(3)`, so the name and the size together carry
+     * nothing that tells a boolean column from a declared `tinyint`, and they are the same storage either
+     * way. That is why the answer is the MySQL family's rather than the shared one.
+     */
+    override val typeAliases: Map<String, String> = mapOf("TINYINT" to "BOOLEAN")
 }
