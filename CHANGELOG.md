@@ -18,8 +18,9 @@ the previous release used, because the notes are the release body and nothing el
 A release about where a batch insert goes, what it reports, and how much one statement may move. MariaDB
 becomes a type of its own, because its connector reaches the server's own bulk execute with no configuration,
 where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
-being many times slower than PostgreSQL. One statement now moves at most 5000 rows, and the two directions
-treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Six fixes
+being many times slower than PostgreSQL. One statement now moves a budget of values rather than an unbounded
+number of rows, and the two directions treat that budget differently: a read past it is refused and stores
+nothing, and a write past it is sent as several statements so that every row is written. Six fixes
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
 digits, a column that holds nothing reads back as unset, a table that carries a column the declaration does
 not name is registered instead of being refused, a column with more room than the declaration asks for is
@@ -47,10 +48,15 @@ than one list shared by every server.
   leaves the variable cleared, because the alternative — storing a result that was cut in half — answers every
   later question about rows the script never saw. Narrow the result with a `where` block, or walk it with
   `select page`. A page larger than 5000 rows is refused before anything is sent, for the same reason.
-- **`insert many` given more than 5000 rows writes the first 5000, drops the rest and warns.** Refusing would
-  throw away rows the script already assembled, so the statement does what it can and says so in the console.
-  The affected-row count is the count that was written, which is the other place the drop shows up. Split the
-  batch over several statements to write all of it.
+- **`insert many` past one statement's budget is sent as several statements, and every row is written.** Refusing
+  would throw away rows the script already assembled, and writing only what fits would leave a batch that
+  neither the script nor its author can reason about: part of the rows in the table, and nothing in the script
+  that says which part — the affected-row count and a console warning are easy to miss and are only there for
+  an author who thought to look. A statement binds at most 30 000 values instead, which is the batch the read
+  ceiling was measured on (5000 rows of a six-column table) and also what a driver binds parameters for, and
+  the count is the total across the statements. A batch within the budget is still one statement. Two
+  consequences are worth knowing: a failure part way through leaves the statements before it applied unless the
+  write is inside a transaction, and a table wider than the budget carries fewer rows per statement.
 
 ### Fixed
 

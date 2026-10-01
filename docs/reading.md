@@ -47,7 +47,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 One read stores at most **5000 rows**. A result larger than that is **refused**: nothing is stored, the result variable is cleared, and `last database error` names the ceiling and says what to do about it.
 
-The ceiling is not about memory. Skript writes a list variable one index at a time, on the server thread, so the size of a result is spent out of the tick budget of the server itself: a hundred thousand rows written that way is more than ten seconds of the server stopped, which the watchdog reports and every player feels. 5000 rows is the largest result that stays inside a hitch nobody notices.
+The ceiling is not about memory. Skript writes a list variable one index at a time, on the server thread, so the size of a result is spent out of the tick budget of the server itself: a hundred thousand rows of a six-column table written that way is more than ten seconds of the server stopped, which the watchdog reports and every player feels. 5000 rows is the largest result that stays inside a hitch nobody notices, and it is the same batch of values one write statement may bind — see [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 A refusal is preferred over a truncated result because the two cannot be told apart afterwards. A script handed the first 5000 rows of a table goes on to answer questions about rows it never saw, and the answer is wrong rather than missing.
 

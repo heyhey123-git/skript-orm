@@ -3,6 +3,7 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 import ch.njol.skript.doc.*
 import io.github.heyhey123.skriptorm.condition.WhereClause
 import io.github.heyhey123.skriptorm.queries.Queries
+import io.github.heyhey123.skriptorm.queries.insertManyInStatements
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
 import io.github.heyhey123.skriptorm.table.Table
@@ -10,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities")
-@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. A batch of more than 5000 rows writes its first 5000, drops the rest and warns, because rows are turned into a statement on the server thread. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. A batch too large for one statement is sent as several statements, so every row is written. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
 @Example(
     """insert many entities into table "users" and wait:
     values:
@@ -62,7 +63,7 @@ class SecInsertMany : SecWriteBase() {
         whereClause: WhereClause?,
         extraArguments: Any?
     ): WriteResult =
-        queries.insertMany(multipleValues ?: listOf(requireNotNull(singleValues))).execute(table)
+        queries.insertManyInStatements(table, multipleValues ?: listOf(requireNotNull(singleValues)))
 
     override fun toString(event: Event?, debug: Boolean) = "insert many into table $tableNameExpr"
 }

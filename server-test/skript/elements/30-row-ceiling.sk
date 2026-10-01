@@ -1,8 +1,8 @@
 # The row ceiling: how many rows one statement may move between the database and a Skript value.
 #
 # A read past the ceiling refuses and stores nothing, because a table cut in half answers every later
-# question wrong. A write past it keeps the first rows, drops the rest and warns, because those rows are
-# already in the script's hands and the count it reports says what was written.
+# question wrong. A write past it is sent as several statements, each within the ceiling, so every row the
+# script asked to write is written and the count it reports is the sum of them.
 #
 # This runs on the SQLite file connection the suite already carries. A read past the ceiling can only be
 # tried against a table that has more rows than the ceiling, and filling one is cheap here and nowhere
@@ -34,19 +34,28 @@ every 5 seconds:
     in connection "ceiling":
         register a database table "orm_ceiling_probe":
             id: bigint, primary key, not null
+            # The statement boundary is a budget of values, not a count of rows, so a table one column wide
+            # would take all 5001 rows in one statement and never cross it. Six columns is the shape the
+            # budget was measured on, and these five are left for the write to fill with NULL.
+            pad1: int, nullable
+            pad2: int, nullable
+            pad3: int, nullable
+            pad4: int, nullable
+            pad5: int, nullable
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL row ceiling register table: %last database error%"
 
-    # 5001 rows, one past the ceiling, so one batch says what a write does with a tail and leaves a table
-    # a read may not hold. A global variable holds it because the write below may park the trigger, and a
-    # local variable is not something a script should have to think about across that. One column, because
-    # this fills a table row by row on the server thread and every column is paid for twice: once here and
-    # once when the statement turns the variable back into rows.
+    # 5001 rows, one past the read ceiling and one past what a six-column statement carries, so one batch
+    # crosses the statement boundary a write is split at and leaves a table a read may not hold. A global
+    # variable holds it because the write below may park the trigger, and a local variable is not something a
+    # script should have to think about across that. One column is filled, because this fills a table row by
+    # row on the server thread and every value is paid for twice: once here and once when the statement turns
+    # the variable back into rows.
     loop 5001 times:
         set {ceiling::batch::%loop-number%::id} to loop-number
 
-    # The write half. The tail is dropped with a warning rather than refused, so the statement succeeds
-    # and the count it reports is the count it wrote.
+    # The write half. The batch crosses the ceiling, so it is sent as two statements, and every row in it is
+    # written: nothing is cut and nothing is dropped.
     in connection "ceiling":
         insert many {ceiling::batch::*} into table "orm_ceiling_probe" and wait
     if last database error is set:
@@ -54,21 +63,16 @@ every 5 seconds:
 
     # Counted by the server rather than read off the affected-row clause: what has to hold is how many rows
     # the table ends up with, and a driver that reports no batch counts would otherwise be the thing under
-    # test. The warning that goes with the drop is checked in the build, against the server log.
+    # test.
     in connection "ceiling":
         execute query "SELECT COUNT(*) AS written FROM orm_ceiling_probe" and store the result in {ceiling::count::*}
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL row ceiling count: %last database error%"
-    if {ceiling::count::1::written} is not 5000:
-        log "SKRIPTORM_SELFTEST=FAIL row ceiling wrote '%{ceiling::count::1::written}%' rows out of 5001 instead of 5000"
+    if {ceiling::count::1::written} is not 5001:
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling wrote '%{ceiling::count::1::written}%' rows out of 5001 instead of 5001"
 
-    # The row that makes the table larger than a statement may store.
-    in connection "ceiling":
-        insert one entity into table "orm_ceiling_probe" and wait:
-            values:
-                id: 5001
-    if last database error is set:
-        log "SKRIPTORM_SELFTEST=FAIL row ceiling insert the row past it: %last database error%"
+    # The row that makes the table larger than a statement may store is already in it: the batch wrote all
+    # 5001 of its rows, including the one past the ceiling.
 
     # A page larger than a page may hold is known before anything is sent, so both spellings refuse on the
     # spot and store nothing.
@@ -124,7 +128,7 @@ every 5 seconds:
         log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling stored more than 5000 rows"
 
     set {ceiling::failed} to false
-    if {ceiling::count::1::written} is not 5000:
+    if {ceiling::count::1::written} is not 5001:
         set {ceiling::failed} to true
     if {ceiling::many::at::5000::id} is not set:
         set {ceiling::failed} to true

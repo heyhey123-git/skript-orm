@@ -77,15 +77,16 @@ An unset or empty variable fails with `{_rows::*} is not set.` rather than succe
 
 ### How many rows one write may send
 
-One write sends at most **5000 rows**. A larger batch is not refused: it writes its first 5000 rows, drops the rest, and warns in the console.
+One write statement binds at most **30 000 values**, which is the batch a `select` is also held to: 5000 rows of a six-column table. A larger batch is not refused and nothing is dropped: it is sent as several statements, and every row is written. A wider table carries fewer rows per statement, a narrower one more, and a table wider than the budget itself still moves, one row per statement.
 
-```
-insert many was given 8000 rows in the list variable {_rows::*}, but one statement moves at most 5000 rows, so only the first 5000 are written and the rest are dropped. ...
-```
+The count in `and store affected rows in {_rows}` is the total across those statements, so a batch of 8000 rows reports 8000.
 
-The statement writes what it can because the rows are already in your hands — they were read from a variable or written out in a `values` block — and refusing would throw away that work without writing anything. The cost the ceiling guards against is the same one [a read has](reading.md#how-many-rows-one-read-may-store): the batch is turned into rows one at a time on the server thread.
+The boundary is a value count rather than a row count because that is what both halves of a write are measured in. A driver binds a fixed number of values to a statement and refuses a statement that asks for more, and turning a batch into rows costs the server thread in proportion to its values, not to its rows. This is the same budget [a read is held to](reading.md#how-many-rows-one-read-may-store), and a read states it in rows because a row is what an author counts and what `select page` has to be able to refuse before anything is sent.
 
-Two things tell you the tail was dropped: the warning, and the count in `and store affected rows in {_rows}`, which is the number of rows actually written. Split the batch over several statements to write all of it, one page of a `select page` walk at a time.
+Reading the batch out of a variable still costs the server thread in proportion to its size, and that part cannot move off the thread: a variable name may contain expressions, which Skript only resolves there. A very large batch is therefore a hitch, and splitting it yourself over several statements, one page of a `select page` walk at a time, is still the way to keep one write short.
+
+One consequence is worth knowing when a batch is split: a failure part way through leaves the statements before it applied unless you are inside a `begin transaction` block, exactly as any other sequence of statements would.
+
 
 ## In-or-out: upsert and if absent
 

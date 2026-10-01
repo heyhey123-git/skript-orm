@@ -20,7 +20,6 @@ import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.RawValues
 import io.github.heyhey123.skriptorm.skript.utils.RawValuesList
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
-import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
 import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.ValuesParser
@@ -305,18 +304,6 @@ abstract class SecWriteBase : Section() {
         } catch (error: Exception) {
             DatabaseWork.report(event, this, "Failed to parse write values: ${error.message}")
             return walk(event, false)
-        }
-
-        // A batch past the ceiling loses its tail and says so, rather than being refused: the rows are
-        // already in the script's hands, and the count written below reports what actually reached the
-        // server. RowLimit owns the ceiling, the cut and the wording of the warning.
-        resolvedMultiple?.let { rows ->
-            val source = if (valuesVariable != null) {
-                "the list variable $valuesVariable"
-            } else {
-                "the values block"
-            }
-            resolvedMultiple = RowLimit.batch(rows, source) { warning(it) }
         }
 
         val extraArguments = try {

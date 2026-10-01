@@ -550,9 +550,9 @@ val serverTestChecks = buildMap {
     // both what the server returned and that each guard refused before anything was sent. They run in
     // both modes for the same reason the round trip does — they need no database server.
     put("raw sql", "ok")
-    // The row ceiling, also on SQLite: a read past it is refused and a write past it drops its tail. It
-    // fills its own table with more rows than the ceiling allows, which is what the read half needs and
-    // what no other server in this suite is cheap enough to do.
+    // The row ceiling, also on SQLite: a read past it is refused, and a write past it is sent as several
+    // statements so that every row is written. It fills its own table with more rows than the ceiling allows,
+    // which is what the read half needs and what no other server in this suite is cheap enough to do.
     put("row ceiling", "ok")
     if (serverTestUsesDatabase) {
         putAll(serverTestDatabaseChecks)
@@ -654,13 +654,10 @@ abstract class VerifySkriptServerTest : DefaultTask() {
             "The self-test never reached its end, so a section it drives did not get through.",
             "SKRIPTORM_SELFTEST=PASS"
         )
-        // A write past the row ceiling keeps the rows that fit, drops the rest and warns. The count the
-        // script reads says what was written, so the warning is the only half of that a script can miss
-        // without noticing, and it is the half no unit test can show reaching a server's log.
-        requireInLog(
-            "A write past the row ceiling dropped its tail without warning about it.",
-            "insert many was given 5001 rows"
-        )
+        // A write past the row ceiling is sent as several statements and every row is written, which the
+        // script asserts by counting the table itself. Nothing is dropped there, so there is no warning left
+        // for this side to look for: the count assertion is the whole of it, and a plugin that cut the batch
+        // short reports a FAIL line the check below turns into a problem.
 
         val failures = lines.filter { "SKRIPTORM_SELFTEST=FAIL" in it }
         if (failures.isNotEmpty()) {

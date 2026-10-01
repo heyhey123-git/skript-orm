@@ -89,7 +89,7 @@ loop 100 times:
     # ... use this page ...
 ```
 
-A multi-row write is treated differently: `insert many` given more than 5000 rows writes the first 5000 and warns about the rest rather than refusing. See [Reading rows](reading.md#how-many-rows-one-read-may-store) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
+A multi-row write is treated differently: `insert many` past one statement's budget is sent as several statements, and every row is written rather than the batch being cut or refused. See [Reading rows](reading.md#how-many-rows-one-read-may-store) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 Pagination sorts by the registered primary key and rejects tables without one. Page numbers start at 1, and row indices restart at 1 within each page: `{_page::1::name}` is the first row on that page, not the first row in the table. See [Reading rows](reading.md).
 

@@ -91,7 +91,7 @@ loop 100 times:
     # ... 使用这一页 ...
 ```
 
-多行写入的处理方式不同：`insert many` 超过 5000 行时会写入前 5000 行，并对剩余部分发出警告，而不是拒绝。见 [读取行](reading.zh-CN.md#一次读取最多能存多少行) 与 [写入行](writing.zh-CN.md#一次写入最多能发多少行)。
+多行写入的处理方式不同：`insert many` 超过一条语句的预算时会被拆成多条语句发送，所有行都会写入，而不是被截断或拒绝。见 [读取行](reading.zh-CN.md#一次读取最多能存多少行) 与 [写入行](writing.zh-CN.md#一次写入最多能发多少行)。
 
 ## Skript 提示 “Empty configuration section!”
 
