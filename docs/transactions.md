@@ -108,7 +108,13 @@ Set a longer timeout when the transaction genuinely needs it. If it is slow beca
 
 The rollback is issued on the connection the transaction pinned, so it is expected to undo everything that transaction wrote, and the connection is expected to be usable afterwards. The server suite checks exactly that, and it reports three answers separately rather than one: whether the row the timed-out transaction inserted is still there, whether the connection takes a further write, and whether the key that transaction used is free.
 
-As of 2026-10-02 that check passes on the file backend, and the same case failed on MySQL, PostgreSQL and MongoDB in the form it had before this: it could only report that the follow-up write did not happen at all, which could not say whether the row had survived or the statement had been refused. That is why the case now reports the three answers separately. The path that let a surviving row through — a connection released back into the pool with automatic commits restored while a statement might still be in flight on it, or after a rollback that had failed — is closed by discarding such a connection, which `JdbcTransactionDiscardTest` asserts in process with H2, including a control that reproduces the old release and shows the surviving row. Whether the three networked backends pass now is what their next run reports; the case keeps asserting all three answers on every backend either way.
+As of 2026-10-02 that check passes on the file backend, and it passes on MySQL, PostgreSQL and MongoDB as well: each of their installed-server jobs reports the case's own line, and the three are identical.
+
+```text
+stress cancel -> error=The database transaction was open for longer than 5 seconds and was rolled back. inserted=1 found=0 readError=<none> fresh=1 freshError=<none> rowsAffected=1 sameError=<none>
+```
+
+`readError=<none>` is what lets `found=0` mean anything here: the read ran and found nothing, so the rollback removed the row on every backend that was tested. `fresh=1` is the connection taking the follow-up write, and `rowsAffected=1` is the key being free again. The red that came before it was the test harness rather than the plugin: in database mode the disconnect element ran its all-connections form inside the window in which the stress case sits parked in a transaction, which emptied the connection registry before the case could ask its questions, and no transaction, abort or discard path ever closes a connection. The path that could have let a surviving row through — a connection released back into the pool with automatic commits restored while a statement might still be in flight on it, or after a rollback that had failed — stays closed by discarding such a connection, which `JdbcTransactionDiscardTest` asserts in process with H2, including a control that reproduces the old release and shows the surviving row.
 
 ## What it does not do
 
