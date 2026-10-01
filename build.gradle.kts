@@ -556,6 +556,32 @@ val serverTestChecks = buildMap {
     // statements so that every row is written. It fills its own table with more rows than the ceiling allows,
     // which is what the read half needs and what no other server in this suite is cheap enough to do.
     put("row ceiling", "ok")
+    // Where a statement may be written and what a delete has to carry. The expectations are the measured
+    // ones: on the generic `"JDBC"` type a delete is refused by the dialect whether or not the script
+    // wrote a limit, while a statement inside an `if` runs and counts its row. The update case is here to
+    // say whether that refusal is about deletes or about every write with an optional limit.
+    put("delete unlimited", "error=Limited delete is not supported by this JDBC dialect. rowsAffected=<none>")
+    put("delete filtered", "error=Limited delete is not supported by this JDBC dialect. rowsAffected=<none>")
+    put("delete limited", "error=Limited delete is not supported by this JDBC dialect. rowsAffected=<none>")
+    put("update unlimited", "error=Limited update is not supported by this JDBC dialect. rowsAffected=<none>")
+    put("statement in if", "error=<none> rowsAffected=1")
+    put("setup in if", "error=<none> rowsAffected=1")
+    // A nested loop's own value, with nothing in the body that waits. The suffixes count from the
+    // outermost loop inward: `-1` is the outer loop and `-2` the inner, which the two cases read in
+    // opposite directions so the rule cannot hold by accident.
+    put("nested loop suffixed", "last=outer=2 inner=3")
+    put("nested loop values", "last=outer=3 inner=2")
+    // The stress cases. The three write cases are one experiment over the 30 000-value budget: 12 000 rows of
+    // one column and 4000 rows of six are inside it, 12 000 rows of six are not and are sent as several
+    // statements. All three must store every row, and the count each case reads back out of the table is
+    // asserted by index — `size of` over the same result reported 0 for a page that held 5000 rows.
+    put("stress batch", "error=<none> valuesAsked=12000 rowsReported=12000 rowsPaged=12000")
+    put("stress columns", "error=<none> valuesAsked=24000 rowsReported=4000 rowsPaged=4000")
+    put("stress split", "error=<none> valuesAsked=72000 rowsReported=12000 rowsPaged=12000")
+    put(
+        "stress cancel",
+        "error=The database transaction was open for longer than 5 seconds and was rolled back. rowsAffected=1"
+    )
     if (serverTestUsesDatabase) {
         putAll(serverTestDatabaseChecks)
         // A run whose implementation has no transactions reports the same lines as any other database
@@ -917,6 +943,43 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         }
         logger.lifecycle("The benchmark server enabled {}, and booted in {}s.", loaded.trim(), bootSeconds ?: "?")
 
+        // The controls the scripts run before their warm pass. A read whose longest tick is a tick's own
+        // length is only evidence if the observer can see a lengthened tick at all, so the scripts time a
+        // counted loop of their own choosing and report both what it took and what the observer made of it.
+        // The 5000-row read in the table below is what those controls are for: six columns of 5000 rows is
+        // 30 000 values, the size the pages describe and one above the threshold at which a result is
+        // attached as a tree rather than written value by value.
+        val calibrations = lines.mapNotNull { parseCalibration(it) }
+        if (calibrations.isNotEmpty()) {
+            logger.lifecycle("")
+            logger.lifecycle("Controls, whose size the script chose instead of measuring:")
+            logger.lifecycle("  control       spun       spin       window   longest tick     overrun")
+            calibrations.forEach { control ->
+                val overrun = control.gap?.let { (it - TICK_MILLIS).coerceAtLeast(0.0) }
+                logger.lifecycle(
+                    "  %-11s %6s %10s %12s %14s %10s".format(
+                        control.label,
+                        control.spun?.toString() ?: "-",
+                        milliseconds(control.spin, control.spinRaw),
+                        milliseconds(control.window, null),
+                        milliseconds(control.gap, control.gapRaw),
+                        overrun?.let { "%.2f ms".format(it) } ?: "unreadable"
+                    )
+                )
+            }
+            logger.lifecycle(
+                "  A spin is a counted loop with no statement and no wait inside it, so it holds the server " +
+                    "thread for as long as `spin` says, and `spun` is how many times it ran: a loop the " +
+                    "parser dropped reports `spun=0` instead of passing for a fast block. `idle6s` is the " +
+                    "floor — six seconds of waiting with nothing else watched — and it has to read one tick " +
+                    "exactly, or the observer is adding something of its own. An overrun the size of the " +
+                    "spin is the observer seeing that block, which is what makes the floor of this " +
+                    "measurement a tick: a spin smaller than one has nothing to lengthen and reports none " +
+                    "whatever it cost. The reads at 5000 rows in the table below are of that size, so their " +
+                    "zero overrun says they do not lengthen a tick, not that they are free."
+            )
+        }
+
         logger.lifecycle("")
         logger.lifecycle("One Skript statement, as the script that issued it saw it:")
         logger.lifecycle(
@@ -968,7 +1031,8 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         logger.lifecycle("What the scripts wrote, unparsed, so the numbers above can be checked against it:")
         lines.filter {
             "SKRIPTORM_BENCH write:" in it || "SKRIPTORM_BENCH read:" in it ||
-                "SKRIPTORM_BENCH warmwrite:" in it || "SKRIPTORM_BENCH warmread:" in it
+                "SKRIPTORM_BENCH warmwrite:" in it || "SKRIPTORM_BENCH warmread:" in it ||
+                "SKRIPTORM_BENCH calibrate:" in it
         }
             .forEach { line -> logger.lifecycle("  {}", line.substringAfter("SKRIPTORM_BENCH ").trim()) }
     }
@@ -1015,6 +1079,21 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         )
     }
 
+    private fun parseCalibration(line: String): Calibration? {
+        if ("SKRIPTORM_BENCH calibrate:" !in line) return null
+        val spin = field(line, "spin")
+        val gap = field(line, "gap")
+        return Calibration(
+            label = field(line, "label") ?: return null,
+            spun = field(line, "spun")?.toIntOrNull(),
+            spin = toMilliseconds(spin),
+            spinRaw = spin,
+            window = toMilliseconds(field(line, "window")),
+            gap = toMilliseconds(gap),
+            gapRaw = gap
+        )
+    }
+
     private fun parse(line: String): Measurement? {
         val kind = when {
             "SKRIPTORM_BENCH write:" in line -> "write"
@@ -1044,6 +1123,10 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
 
     private fun field(line: String, name: String): String? =
         Regex("""\b${Regex.escape(name)}=(\[[^]]*]|\S+)""").find(line)?.groupValues?.get(1)
+
+    /** A timespan as a number with its unit, or the script's own wording when the unit is unknown. */
+    private fun milliseconds(value: Double?, raw: String?): String =
+        value?.let { "%.2f ms".format(it) } ?: describe(raw)
 
     /** A timespan as the script wrote it, for a column whose number could not be read. */
     private fun describe(raw: String?): String = when (raw?.trim()) {
@@ -1085,6 +1168,27 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
      * past the ceiling stores nothing, so this is where that refusal is visible.
      * @property total the rows in the whole table after the statement, which the reader differences.
      */
+    /**
+     * One control the scripts ran: a block of work whose size the script chose, and what the observer saw.
+     *
+     * @property spun how many times the loop ran, which is what keeps a loop the parser dropped from being
+     * read as a block that was fast.
+     * @property spin the loop's own duration as the script's clock read it. Nothing waits inside the loop,
+     * so this is the one duration in the report that is not quantized by a parked trigger resuming.
+     * @property window the whole watched window, which is the spin plus the wait that follows it, so the
+     * observer has a tick boundary to report the spin's tick at.
+     * @property gap the longest tick the observer saw inside that window, and [gapRaw] its own wording.
+     */
+    private data class Calibration(
+        val label: String,
+        val spun: Int?,
+        val spin: Double?,
+        val spinRaw: String?,
+        val window: Double?,
+        val gap: Double?,
+        val gapRaw: String?
+    )
+
     private data class Measurement(
         val kind: String,
         val rows: Int,

@@ -1,0 +1,38 @@
+# What a loop's own value is when the loop is nested.
+#
+# The troubleshooting entry said a nested loop has no loop value, and the observation behind it was a line
+# that read the ambiguous form: Skript answers "There are multiple loops that match loop-number. Use
+# loop-number-1/2/3/etc." and drops that line, so the body around it looks as if it never ran. The loops
+# themselves are fine, and this file measures the form that works.
+#
+# The suffixes count from the **outermost** loop inward, which the two cases below pin down in both
+# directions: `-1` is the outermost loop, `-2` the one inside it, and a plain `loop-number` is the
+# ambiguous spelling whose line Skript drops.
+#
+# Kept in a file of its own because a parse-time refusal takes the whole script with it: if the suffix this
+# file uses is not how a nested value is selected, only this file is lost and the other cases still report.
+#
+# The ambiguous form is deliberately absent. A line Skript dropped would be reported by the check in
+# build.gradle.kts as a dropped statement, and a test that has to fail the run to make its point is not a
+# test. The message is quoted in the entry instead.
+
+on load:
+    set {skriptorm::selftest::started::loop-value} to true
+
+    # Nothing in this body waits, so the trigger is never parked: this separates "nesting" from "parking"
+    # as the cause of the empty body that was seen. Two loops the other way round from the case below, so
+    # the suffixes cannot be right by accident in one direction only.
+    set {_suffixed} to "unset"
+    loop 2 times:
+        loop 3 times:
+            set {_suffixed} to "outer=%loop-number-1% inner=%loop-number-2%"
+    log "SKRIPTORM_SELFTEST detail: nested loop suffixed -> last=%{_suffixed}%"
+
+    # The value form of the same thing, so both spellings are covered rather than the number only.
+    set {_values} to "unset"
+    loop 3 times:
+        loop 2 times:
+            set {_values} to "outer=%loop-value-1% inner=%loop-value-2%"
+    log "SKRIPTORM_SELFTEST detail: nested loop values -> last=%{_values}%"
+
+    set {skriptorm::selftest::done::loop-value} to true
