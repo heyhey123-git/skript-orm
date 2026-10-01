@@ -593,6 +593,10 @@ val serverTestChecks = buildMap {
     // from the plugin's storage: a flat list the script built reports its 20 values and loops 20 times, the
     // plugin's result and the same shape built by the script both report 0 and loop 0 times, and walking the
     // result's indices still counts 20 rows.
+    // A range spelling such as `loop 1 to 20` is deliberately not part of it: Skript has no such loop, drops
+    // the line, and the unparsed check above fails the build on it before this line is compared — which is
+    // how that lead was settled. The case asserts the forms that do exist, with a control that reads the rows
+    // without any loop at all.
     put(
         "result size",
         "built=20 flatLooped=20 mirror=0 mirrorLooped=0 read=0 readLooped=0 walked=20 local=0 copy=0 " +

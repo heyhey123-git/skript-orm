@@ -17,6 +17,22 @@
 # shape every user has, and the answer to "how many rows did I read" is to walk the indices, which is what
 # this plugin's own benchmark and cookbook do.
 #
+# The second trap, and the one that costs a script its whole loop: **Skript has no `X to Y` range.** Not as a
+# loop and not as an expression. Measured on Skript 2.16.2, all four spellings are refused at load time:
+#
+#     loop 1 to 20:            -> Can't understand this loop: '1 to 20'
+#     loop 1 through 20:       -> Can't understand this loop: '1 through 20'
+#     loop from 1 to 20:       -> Can't understand this loop: 'from 1 to 20'
+#     set {_x::*} to 1 to 20   -> Can't understand this expression: '1 to 20'
+#
+# The last line is why no loop can take it: `1 to 20` is not an expression in this Skript, so what is missing
+# is not a loop pattern but the construct itself. Skript drops the line, loads the rest of the script, and
+# tells the script nothing, so a loop written that way counts zero while every line around it works. The
+# `can't understand` lines are what build.gradle.kts fails this test on, which is how the lead was settled; a
+# user has only the console. What does exist, and what this file asserts row by row: a count (`loop 20
+# times`, which sets `loop-number`), a list (`loop {indices::*}`, which sets `loop-value`), and a comma list
+# (`loop 1, 2, 3`) - so a range is walked by building the list, or by counting.
+#
 # The controls are what make that a measurement rather than a reading of the source, and they cover both
 # halves: a flat list the script built reports 20 and loops 20 times, the same two-level shape built by the
 # script reports 0 and loops 0 times, an index walk over the stored result counts 20, and a copy of the
@@ -91,10 +107,53 @@ on load:
     # The count the plugin's own scripts take, and the one the reads document: walk the row indices. The
     # form is the one server-benchmark/skript/10-curve.sk counts with, down to `loop 20 times`, because
     # `loop 1 to 20` counted nothing here while the same rows read back fine by index.
+    #
+    # The lead this file used to leave as a note is settled above and below: `loop 1 to 20` is not a loop
+    # Skript has, Skript drops the line at load time, and the body never ran once. Two loop forms that do
+    # exist walk the same stored rows here, and each reports three numbers rather than one - how many times
+    # its body ran, what its loop variable held, and how many rows the body found - because a single count
+    # cannot tell a line that was dropped from a body that ran and matched nothing.
     set {_walked} to 0
     loop 20 times:
         if {rs::small::%loop-number%::id} is set:
             add 1 to {_walked}
+
+    # A control that owes nothing to any loop: the rows are readable at their indices, so whatever the forms
+    # below answer, the storage is the same under all of them.
+    set {_directly} to 0
+    if {rs::small::1::id} is set:
+        add 1 to {_directly}
+    if {rs::small::20::id} is set:
+        add 1 to {_directly}
+
+    # Form one: a count loop. `loop-number` is the iteration count.
+    set {_timesRan} to 0
+    set {_timesHits} to 0
+    set {_timesFirst} to -1
+    set {_timesLast} to -1
+    loop 20 times:
+        add 1 to {_timesRan}
+        if {_timesFirst} is -1:
+            set {_timesFirst} to loop-number
+        set {_timesLast} to loop-number
+        if {rs::small::%loop-number%::id} is set:
+            add 1 to {_timesHits}
+
+    # Form two: a list the script built, walked as a list. `loop-value` is the iteration value.
+    #
+    # The obvious third form - `loop 1 to 20` with this same body - is deliberately absent, because Skript
+    # refuses it and this test fails the build on any line Skript cannot parse. That refusal is the finding,
+    # and the four spellings it was measured with are quoted in the header.
+    loop 20 times:
+        set {_indices::%loop-number%} to loop-number
+    set {_listRan} to 0
+    set {_listHits} to 0
+    set {_listValue} to -1
+    loop {_indices::*}:
+        add 1 to {_listRan}
+        set {_listValue} to loop-value
+        if {rs::small::%loop-value%::id} is set:
+            add 1 to {_listHits}
 
     # And a copy, which is what a script does when it wants a list of its own to work with.
     set {_copy::*} to {rs::small::*}
@@ -104,6 +163,14 @@ on load:
         select page 1 with size 5000 from table "orm_size_probe" and store the results in {rs::big::*}
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL result size big read: %last database error%"
+
+    # A comma list is a list too, and it is the one way to write a few literal values into a `loop` head
+    # without building a variable first. Measured rather than assumed: it parses, and it runs once per value.
+    # A range worth twenty of them would have to be written out, which is why the built list above is the
+    # shape this plugin's own scripts use.
+    set {_literalRan} to 0
+    loop 1, 2, 3:
+        add 1 to {_literalRan}
 
     if size of {_built::*} is not 20:
         log "SKRIPTORM_SELFTEST=FAIL result size: a flat list the script built reported %size of {_built::*}%, not 20"
@@ -131,7 +198,28 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL result size: a copy of the result reported %size of {_copy::*}% instead of 0"
     if size of {rs::big::*} is not 0:
         log "SKRIPTORM_SELFTEST=FAIL result size: the fast path's result reported %size of {rs::big::*}% instead of 0"
+    # The loop forms, one assertion each, so a form that stops working names itself. The first is the control
+    # that makes the rest a measurement of the loop rather than of the storage: the rows are readable at their
+    # own indices with no loop involved.
+    if {_directly} is not 2:
+        log "SKRIPTORM_SELFTEST=FAIL result size: the rows were readable at %{_directly}% of their 2 own indices, so the loop forms below are not what is being measured"
+    if {_timesRan} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a count loop ran its body %{_timesRan}% times, not 20"
+    if {_timesHits} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a count loop found %{_timesHits}% of the stored rows, not 20"
+    if {_timesFirst} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a count loop's first loop-number was %{_timesFirst}%, not 1"
+    if {_timesLast} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a count loop's last loop-number was %{_timesLast}%, not 20"
+    if {_listRan} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a list loop ran its body %{_listRan}% times, not 20"
+    if {_listHits} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a list loop found %{_listHits}% of the stored rows, not 20"
+    if {_listValue} is not 20:
+        log "SKRIPTORM_SELFTEST=FAIL result size: a list loop's last loop-value was %{_listValue}%, not 20"
+    if {_literalRan} is not 3:
+        log "SKRIPTORM_SELFTEST=FAIL result size: looping three literal values ran %{_literalRan}% times, not 3"
 
-    log "SKRIPTORM_SELFTEST detail: result size -> built=%size of {_built::*}% flatLooped=%{_flatLooped}% mirror=%size of {_mirror::*}% mirrorLooped=%{_mirrorLooped}% read=%size of {rs::small::*}% readLooped=%{_readLooped}% walked=%{_walked}% local=%size of {_local::*}% copy=%size of {_copy::*}% fast=%size of {rs::big::*}% firstId=%{rs::small::1::id}% lastId=%{rs::small::20::id}% fastLastId=%{rs::big::5000::id}%"
+    log "SKRIPTORM_SELFTEST detail: result size -> built=%size of {_built::*}% flatLooped=%{_flatLooped}% mirror=%size of {_mirror::*}% mirrorLooped=%{_mirrorLooped}% read=%size of {rs::small::*}% readLooped=%{_readLooped}% walked=%{_walked}% local=%size of {_local::*}% copy=%size of {_copy::*}% fast=%size of {rs::big::*}% firstId=%{rs::small::1::id}% lastId=%{rs::small::20::id}% fastLastId=%{rs::big::5000::id}% directly=%{_directly}% timesRan=%{_timesRan}% timesHits=%{_timesHits}% timesFirst=%{_timesFirst}% timesLast=%{_timesLast}% listRan=%{_listRan}% listHits=%{_listHits}% listValue=%{_listValue}% literalRan=%{_literalRan}%"
 
     set {skriptorm::selftest::done::result-size} to true
