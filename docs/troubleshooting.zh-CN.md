@@ -145,6 +145,22 @@ select one entity from table "users" and store the result in {_user::*}:
 
 有 `where` 块、`values` 块或其他正文的 section 无需改动。旧脚本中的空 section 仍能运行，但会继续警告；对于上面的一行写法，去掉冒号即可。
 
+## “Limited delete is not supported by this JDBC dialect.”
+
+通用 `"JDBC"` 类型无法表达带行数上限的删除。MySQL 和 MariaDB 是在语句末尾加 `... LIMIT n`，PostgreSQL 先用 `ctid` 子查询挑出这些行，MongoDB 先挑出它们的 id，而通用方言这三样都没有，于是 `JdbcDialect.applyDeleteLimit()` 只回一句 `Limited delete`，语句在到达数据库之前就被驳回。此时一行也不会被删掉，原因记录在 `last database error` 中。
+
+问题不在 `where` 块，而在那个没有通用写法的 limit：带不带筛选条件，得到的都是同一句拒绝，连 `delete entities from table "logs" with limit 500 and wait` 这种完全不写 `where` 的写法也一样。只写 `where` 的删除是普通 SQL，所以不带 `with limit` 的筛选删除在这个类型上能用，在 SQLite 和 H2 上同样如此。
+
+没有任何属性或驱动设置能给这个方言补上它缺的那种写法，因此这是真实存在的缺口，不是配置写错。想让数据库自己限定行数，就换一个方言答得上来的类型：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"` 与 `"MongoDB"` 都可以。否则就按主键删：用 `select page` 或自己走过的键区间取出要删的键，再逐个执行 `delete one entity ... by id {_key}`。`by id` 不需要 limit，每批删多少由你决定。
+
+## `if` 里的初始化毫无反应，嵌套循环里也没有循环值
+
+这两条都是在 Skript 2.16.2 上观察到的现象，该版本是本插件编译所依据的版本，也是服务端测试加载的版本。它们属于这一组合的表现，不是 Skript 的固有规则，也不是脚本写错或某个开关没开。
+
+**写在 `if` 块里的 `create a connection` 和 `register a database table` 不会生效。** 块本身会执行——写在它们旁边的变量赋值照样生效——只有这两行被默默跳过：不会建立连接，不会注册表，`last database error` 也保持原值，不会说明原因。它们的共同点是把工作交给插件，并把 trigger 挂起，直到数据库给出答复；变量赋值不走这条路。请把初始化写在 trigger 的最外层、第一个 `if` 之前，并在那里检查结果。
+
+**嵌套循环里没有循环值。** 循环中再写一个循环时，循环表达式读到的是 `<none>`：内层看不到自己正在遍历的值，也看不到外层的值或大小。办法是不要嵌套，或者在进入内层循环之前，把需要的东西存进局部变量。
+
 ## 表名在一台服务器能用，另一台不行
 
 Linux 上的 MySQL 表名通常区分大小写，具体取决于服务器配置。`register a database table "..."` 和后续每个 `table "..."` 都按原样使用表名，请始终保持相同的拼写和大小写。
