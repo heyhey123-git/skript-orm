@@ -715,3 +715,30 @@ different operation.
 
 Write the subject in the imperative mood and explain the **why** in the body when the change is not
 self-evident. Keep unrelated changes in separate commits.
+
+Start the subject with the type of change, and name the part it belongs to in parentheses when it has
+one:
+
+```text
+feat(core): cap how many rows one statement moves
+fix(jdbc): read a long text name as text rather than as the blob storage
+docs(changelog): cut 1.4.0
+test(jdbc): print what the drivers report for the one-byte columns
+build: raise the version to the one the new type ships in
+ci: share the toolchain and the server-test annotations between jobs
+chore: relax the git ignore rule for bbcode files
+refactor(errors): report failures through Skript's runtime error channel
+style(elements): keep the syntax classes free of KDoc, and trim the rest
+```
+
+The types are the ones this history uses: `feat`, `fix`, `docs`, `test`, `build`, `ci`, `chore`,
+`refactor` and `style`. Pick the narrowest one that is true. A change that only moves code around
+without changing what it does is a `refactor`, not a `feat`.
+
+The scope names a module (`core`, `jdbc`, `tables`) or the part of the project the commit is about
+(`changelog`, `server-test`, `connections`, `transactions`, `contribution`, `wiki`). Use one when the
+change has a home and leave it off when it does not: `build` and `ci` usually cover the whole
+repository, and a version bump is `chore(release)`.
+
+The rule above still governs the rest of the subject and the whole body: the subject stays imperative
+and the body keeps the why. The prefix is not a substitute for either.

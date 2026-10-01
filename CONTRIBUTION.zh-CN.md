@@ -530,3 +530,26 @@ Skript 测试里仍然用到 MockBukkit，但只把它当作一个 Bukkit 服务
 ## 11. 提交信息
 
 标题使用祈使句。当改动原因不够直观时，在正文里说明**为什么**。不相关的改动请拆成不同提交。
+
+标题以改动类型开头，改动属于某个部分时在括号里写明该部分：
+
+```text
+feat(core): cap how many rows one statement moves
+fix(jdbc): read a long text name as text rather than as the blob storage
+docs(changelog): cut 1.4.0
+test(jdbc): print what the drivers report for the one-byte columns
+build: raise the version to the one the new type ships in
+ci: share the toolchain and the server-test annotations between jobs
+chore: relax the git ignore rule for bbcode files
+refactor(errors): report failures through Skript's runtime error channel
+style(elements): keep the syntax classes free of KDoc, and trim the rest
+```
+
+类型取自本仓库历史的实际用法：`feat`、`fix`、`docs`、`test`、`build`、`ci`、`chore`、`refactor`、`style`。
+挑最窄的那个：只挪动代码、不改变行为的改动是 `refactor`，不是 `feat`。
+
+括号里的部分可以是模块（`core`、`jdbc`、`tables`），也可以是这次改动所属的领域（`changelog`、
+`server-test`、`connections`、`transactions`、`contribution`、`wiki`）。改动有归属就写上，没有就省略：
+`build` 和 `ci` 通常覆盖整个仓库，版本号提升写作 `chore(release)`。
+
+上面那条规则对标题的其余部分和整段正文同样成立：标题保持祈使句，正文保留原因。类型前缀不能替代这两点。
