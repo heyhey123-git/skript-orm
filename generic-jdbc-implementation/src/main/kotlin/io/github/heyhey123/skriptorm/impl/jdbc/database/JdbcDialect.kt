@@ -214,6 +214,35 @@ object GenericJdbcDialect : JdbcDialect {
 
     override fun renderIdentifier(identifier: String): String =
         "\"${identifier.replace("\"", "\"\"")}\""
+
+    /**
+     * The spellings a server this implementation knows nothing else about may report, kept because a table
+     * made by another tool is compared under this dialect too.
+     *
+     * SQLite is the server that matters here: it stores the type name a table was created with and reports it
+     * back, so a column of a table made elsewhere can be declared `INT8`, `SERIAL` or `BOOL` and still hold
+     * what this implementation's declaration expects. H2 reports the standard names instead, and a table this
+     * implementation created itself is written with the names on the declaration, so these only ever accept a
+     * table made elsewhere. The values are the names this dialect declares, which is why `float4` is a `FLOAT`
+     * here and a `REAL` in PostgreSQL: a dialect maps into its own storage names, and the two sides of the
+     * comparison have to land on the same one.
+     *
+     * What is deliberately absent is another product's own spelling — the MySQL family's `TINYTEXT`, its
+     * `TINYINT`, PostgreSQL's `BYTEA` — because a name is only an alias for the servers it was measured on,
+     * and this dialect never talks to those.
+     */
+    override val typeAliases: Map<String, String> = mapOf(
+        "INT2" to "SMALLINT",
+        "INT4" to "INTEGER",
+        "INT8" to "BIGINT",
+        "FLOAT4" to "FLOAT",
+        "FLOAT8" to "DOUBLE",
+        "SERIAL" to "INTEGER",
+        "BIGSERIAL" to "BIGINT",
+        "SMALLSERIAL" to "SMALLINT",
+        "BOOL" to "BOOLEAN",
+        "BIT" to "BOOLEAN"
+    )
 }
 
 /**
@@ -262,13 +291,29 @@ object MysqlJdbcDialect : JdbcDialect {
     override fun autoIncrementClause(): String = " AUTO_INCREMENT"
 
     /**
+     * The spellings these two servers report for the storages this implementation writes.
+     *
      * `BOOLEAN` is not a type of its own here: it is `TINYINT(1)`, and a column declared `boolean` is that
      * one-byte integer. Connector/J and MariaDB Connector/J both carry a `tinyInt1isBit` property, true by
      * default, that decides whether such a column is reported as `BIT`, as `BOOLEAN` or as `TINYINT`, and a
      * script may bring its own connection URL. The schema round trip prints what each driver says with the
      * property off: `active` and `tiny` both come back `TINYINT(3)`, so the name and the size together carry
-     * nothing that tells a boolean column from a declared `tinyint`, and they are the same storage either
-     * way. That is why the answer is the MySQL family's rather than the shared one.
+     * nothing that tells a boolean column from a declared `tinyint`, and they are the same storage either way.
+     * The names of the family's own large types are here for the same reason from the other direction: a table
+     * made elsewhere can hold a `TINYTEXT` or a `LONGBLOB`, and the declaration this implementation writes for
+     * it is a `VARCHAR` or a `BLOB`.
+     *
+     * `INT8`, `BOOL` and `SERIAL` are not here even though MySQL accepts them in DDL: its servers normalise
+     * them, so their metadata never reports one.
      */
-    override val typeAliases: Map<String, String> = mapOf("TINYINT" to "BOOLEAN")
+    override val typeAliases: Map<String, String> = mapOf(
+        "TINYINT" to "BOOLEAN",
+        "BIT" to "BOOLEAN",
+        "TINYTEXT" to "VARCHAR",
+        "MEDIUMTEXT" to "VARCHAR",
+        "LONGTEXT" to "VARCHAR",
+        "TINYBLOB" to "BLOB",
+        "MEDIUMBLOB" to "BLOB",
+        "LONGBLOB" to "BLOB"
+    )
 }

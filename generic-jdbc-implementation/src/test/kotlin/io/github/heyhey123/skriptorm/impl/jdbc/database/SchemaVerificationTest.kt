@@ -185,20 +185,32 @@ class SchemaVerificationTest {
     }
 
     @Test
-    fun `the aliases the two servers use stand for the same storage`() {
-        assertEquals("BIGINT", SchemaVerification.normalizeTypeName("int8"))
+    fun `the shared table answers the names that are no product's own`() {
         assertEquals("INTEGER", SchemaVerification.normalizeTypeName("INT"))
-        assertEquals("INTEGER", SchemaVerification.normalizeTypeName("int4"))
-        assertEquals("SMALLINT", SchemaVerification.normalizeTypeName("int2"))
-        assertEquals("REAL", SchemaVerification.normalizeTypeName("float4"))
-        assertEquals("DOUBLE PRECISION", SchemaVerification.normalizeTypeName("float8"))
-        assertEquals("BOOLEAN", SchemaVerification.normalizeTypeName("bool"))
-        // What MySQL's driver reports for the `BOOLEAN` column the dialect wrote, which is `TINYINT(1)`.
-        assertEquals("BOOLEAN", SchemaVerification.normalizeTypeName("bit"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("character varying"))
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("VARCHAR(64)"))
-        assertEquals("BLOB", SchemaVerification.normalizeTypeName("bytea"))
+        assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("text"))
         assertEquals("BLOB", SchemaVerification.normalizeTypeName("BINARY LARGE OBJECT"))
+        assertEquals("BLOB", SchemaVerification.normalizeTypeName("longvarbinary"))
+    }
+
+    /**
+     * A name one product's driver reports is that product's dialect's entry rather than a shared one: `int4`
+     * is a four-byte integer to PostgreSQL's driver and nothing in particular to another server, `bit` is the
+     * one-byte boolean to the MySQL family and a bit string to PostgreSQL, and `tinytext` is a MySQL spelling
+     * no other server has. Read without a dialect they are compared as they stand, which is what leaves each
+     * product's answer to be measured against its own server instead of guessed for all of them.
+     */
+    @Test
+    fun `a name one product's driver reports is not answered without that dialect`() {
+        assertEquals("INT4", SchemaVerification.normalizeTypeName("int4"))
+        assertEquals("INT8", SchemaVerification.normalizeTypeName("int8"))
+        assertEquals("FLOAT4", SchemaVerification.normalizeTypeName("float4"))
+        assertEquals("BOOL", SchemaVerification.normalizeTypeName("bool"))
+        assertEquals("BIT", SchemaVerification.normalizeTypeName("bit"))
+        assertEquals("BYTEA", SchemaVerification.normalizeTypeName("bytea"))
+        assertEquals("TINYTEXT", SchemaVerification.normalizeTypeName("tinytext"))
+        assertEquals("TINYINT", SchemaVerification.normalizeTypeName("tinyint"))
     }
 
     @Test

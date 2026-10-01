@@ -23,7 +23,8 @@ treat that ceiling differently: a read past it is refused, and a write past it k
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
 digits, a column that holds nothing reads back as unset, a table that carries a column the declaration does
 not name is registered instead of being refused, and a `boolean` column is recognised under whichever name
-its driver reports for it.
+its driver reports for it — for which the type names a comparison accepts are now each dialect's own rather
+than one list shared by every server.
 
 ### Added
 
@@ -82,6 +83,16 @@ its driver reports for it.
   the metadata gives `TINYINT(3)` then, the same name and the same size that column has. All three names are
   the same one-byte column on these servers and none of them can fail a statement, so a declaration of
   `boolean` is accepted under all three.
+- **A type name is read through the dialect whose server it was measured on.** The comparison keeps the names
+  the standard and JDBC use — `INT` for an `INTEGER`, `TEXT` and `CHARACTER VARYING` for a `VARCHAR`,
+  `BINARY LARGE OBJECT` — and every other spelling now belongs to the dialect that has it: PostgreSQL's
+  `int2`, `int4`, `int8`, `float4`, `float8`, `bool` and `bytea`, the MySQL family's `TINYINT`, `BIT`,
+  `TINYTEXT`, `MEDIUMTEXT`, `LONGTEXT` and the three `BLOB` sizes, and the legacy spellings (`INT8`,
+  `SERIAL`, `BOOL`) an untyped `"JDBC"` server such as SQLite may carry because a table was made elsewhere.
+  One list for every server read a name on a server it was never measured on: PostgreSQL's `bit(1)` is a bit
+  string, not the one-byte boolean the MySQL family stores under that name, so a declared `boolean` no longer
+  takes one. A table this implementation created itself is written with the names on the declaration, so this
+  only reaches a table made by something else, and there it is read with the names its own server has.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 

@@ -8,6 +8,7 @@ import io.github.heyhey123.skriptorm.table.Table
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 /**
  * Pins the SQL this dialect renders. The integration tests say whether PostgreSQL accepts it; these say
@@ -100,5 +101,26 @@ class PgJdbcDialectTest {
         assertFailsWith<IllegalArgumentException> {
             PgJdbcDialect.renderColumn("name", StringJdbcDataType(), null, false, true, true)
         }
+    }
+
+    /**
+     * The names the driver reports for this module's storages, which `PgSchemaIntegrationTest` reads off a
+     * real server through `information_schema` and the driver's own metadata. The values are where the
+     * declaration side lands: a `float4` is the `REAL` this module writes, not the `FLOAT` the generic
+     * dialect calls it, so the two spellings meet.
+     */
+    @Test
+    fun `the type names the driver reports are this dialect's own`() {
+        assertEquals("SMALLINT", PgJdbcDialect.typeAliases.getValue("INT2"))
+        assertEquals("INTEGER", PgJdbcDialect.typeAliases.getValue("INT4"))
+        assertEquals("BIGINT", PgJdbcDialect.typeAliases.getValue("INT8"))
+        assertEquals("REAL", PgJdbcDialect.typeAliases.getValue("FLOAT4"))
+        assertEquals("DOUBLE PRECISION", PgJdbcDialect.typeAliases.getValue("FLOAT8"))
+        assertEquals("BOOLEAN", PgJdbcDialect.typeAliases.getValue("BOOL"))
+        assertEquals("BLOB", PgJdbcDialect.typeAliases.getValue("BYTEA"))
+
+        // `bit(1)` is a bit string here and the one-byte boolean to the MySQL family. Reading one as the
+        // other is what a declaration of `boolean` does not ask for.
+        assertTrue("BIT" !in PgJdbcDialect.typeAliases, "PostgreSQL's bit is not its boolean")
     }
 }

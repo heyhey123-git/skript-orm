@@ -302,14 +302,14 @@ internal object SchemaVerification {
     /**
      * The comparable form of a type name: upper case, without a `(size)`, through the aliases.
      *
-     * The servers spell the same storage differently — `INT8` against `BIGINT`, `VARCHAR` against
-     * `CHARACTER VARYING` — and the aliases are the complete set of ways they spell the types this
-     * implementation renders. A name that is not listed is compared as it stands, so a genuinely different
-     * type still differs.
+     * The servers spell the same storage differently — `CHARACTER VARYING` against `VARCHAR`, `INT` against
+     * `INTEGER` — and between the shared table and the dialects' own, every spelling of a type this
+     * implementation renders is covered. A name that is neither listed nor mapped by the dialect is compared
+     * as it stands, so a genuinely different type still differs.
      *
-     * [typeAliases] is the connection's dialect, which knows the spellings that are its own; see
-     * [JdbcDialect.typeAliases]. It is consulted first, because a dialect that maps a name is saying
-     * something about its own server.
+     * [typeAliases] is the connection's dialect, which knows the spellings that are its own: the names its
+     * driver reports, and the names its server's SQL has; see [JdbcDialect.typeAliases]. It is consulted
+     * first, because a dialect that maps a name is saying something about its own server.
      */
     fun normalizeTypeName(name: String, typeAliases: Map<String, String> = emptyMap()): String {
         val bare = name.substringBefore('(').trim().uppercase()
@@ -317,44 +317,25 @@ internal object SchemaVerification {
     }
 
     /**
-     * Every spelling the standard and the JDBC drivers use for the storage this implementation writes, mapped
-     * to the name this implementation declares.
+     * The spellings of the storages this implementation writes that belong to no product: the standard SQL
+     * names, the ones JDBC itself defines, and the few every server here spells the same way.
      *
-     * This is the part of the alias knowledge that belongs to no product: SQLite reports what the declaration
-     * wrote, H2 reports the standard SQL name, and a JDBC driver may report either. What one product's driver
-     * decided on its own goes in that product's dialect instead, because the same spelling can be two
-     * different storages on two servers — `TINYINT` is `BOOLEAN` on MySQL and a type of its own on H2.
-     * PostgreSQL's internal names (`int4`, `int8`, `bytea`) belong to the PostgreSQL dialect for the same
-     * reason, and are declared there.
+     * A name stays here only while no server this implementation can be pointed at gives it another meaning.
+     * That is what keeps an entry from loosening a comparison it was never measured against: `INT8` is a big
+     * integer to one driver and nothing in particular to another, so it belongs to the dialects whose servers
+     * report it, while `CHARACTER VARYING` is simply what the standard calls the `VARCHAR` this implementation
+     * writes. What one product decides on its own — the names its driver reports, the names its own SQL has —
+     * goes in that product's dialect, which is also the only place a test against that server can pin it:
+     * [GenericJdbcDialect] and [MysqlJdbcDialect] in this module, PostgreSQL's in its own.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",
-        "INT4" to "INTEGER",
-        "INT8" to "BIGINT",
-        "INT2" to "SMALLINT",
-        "SERIAL" to "INTEGER",
-        "BIGSERIAL" to "BIGINT",
-        "SMALLSERIAL" to "SMALLINT",
-        "FLOAT4" to "REAL",
-        "FLOAT8" to "DOUBLE PRECISION",
-        "BOOL" to "BOOLEAN",
-        // MySQL has no boolean of its own: `BOOLEAN` is `TINYINT(1)`, and Connector/J reports the column
-        // it created as `BIT` — one bit, which is the same one-byte column. Neither name can be declared
-        // here except as `boolean`, so both are that type.
-        "BIT" to "BOOLEAN",
+        "TEXT" to "VARCHAR",
         "CHARACTER VARYING" to "VARCHAR",
         "CHARACTER LARGE OBJECT" to "BLOB",
         "BINARY LARGE OBJECT" to "BLOB",
-        "BYTEA" to "BLOB",
-        "LONGVARBINARY" to "BLOB",
         "LONGVARCHAR" to "BLOB",
-        "TINYBLOB" to "BLOB",
-        "MEDIUMBLOB" to "BLOB",
-        "LONGBLOB" to "BLOB",
-        "TINYTEXT" to "VARCHAR",
-        "MEDIUMTEXT" to "VARCHAR",
-        "LONGTEXT" to "VARCHAR",
-        "TEXT" to "VARCHAR"
+        "LONGVARBINARY" to "BLOB"
     )
 
     private fun Set<String>.describe(): String =

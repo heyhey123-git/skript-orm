@@ -8,6 +8,7 @@ import io.github.heyhey123.skriptorm.type.IntDataType
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 
 class JdbcDialectTest {
 
@@ -102,5 +103,34 @@ class JdbcDialectTest {
         assertFailsWith<IllegalArgumentException> {
             MysqlJdbcDialect.renderColumn("name", StringJdbcDataType(), null, false, true, true)
         }
+    }
+
+    /**
+     * A type name belongs to the dialect whose server reports it, and the values are the storage names that
+     * dialect's declarations land on: `float4` is a `FLOAT` to the generic dialect and a `REAL` to
+     * PostgreSQL's, because those are the names their own types write. What is absent matters as much as what
+     * is here — MySQL's and PostgreSQL's names must not answer for each other's servers.
+     */
+    @Test
+    fun `each dialect carries the type names its own server reports`() {
+        assertEquals("SMALLINT", GenericJdbcDialect.typeAliases.getValue("INT2"))
+        assertEquals("INTEGER", GenericJdbcDialect.typeAliases.getValue("INT4"))
+        assertEquals("BIGINT", GenericJdbcDialect.typeAliases.getValue("INT8"))
+        assertEquals("FLOAT", GenericJdbcDialect.typeAliases.getValue("FLOAT4"))
+        assertEquals("DOUBLE", GenericJdbcDialect.typeAliases.getValue("FLOAT8"))
+        assertEquals("BOOLEAN", GenericJdbcDialect.typeAliases.getValue("BOOL"))
+        assertTrue("BYTEA" !in GenericJdbcDialect.typeAliases, "PostgreSQL's own name is not this dialect's")
+
+        assertEquals("BOOLEAN", MysqlJdbcDialect.typeAliases.getValue("TINYINT"))
+        assertEquals("BOOLEAN", MysqlJdbcDialect.typeAliases.getValue("BIT"))
+        assertEquals("VARCHAR", MysqlJdbcDialect.typeAliases.getValue("LONGTEXT"))
+        assertEquals("BLOB", MysqlJdbcDialect.typeAliases.getValue("LONGBLOB"))
+        assertTrue("INT8" !in MysqlJdbcDialect.typeAliases, "PostgreSQL's driver name is not this dialect's")
+
+        // The standard names are shared instead, and a name only one product has is answered only where it
+        // was measured: `tinytext` is a MySQL spelling and nothing to the generic dialect.
+        assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("character varying"))
+        assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("tinytext", MysqlJdbcDialect.typeAliases))
+        assertEquals("TINYTEXT", SchemaVerification.normalizeTypeName("tinytext"))
     }
 }
