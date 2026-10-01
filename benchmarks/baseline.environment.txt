@@ -1,0 +1,17 @@
+# The machine the reference numbers in baseline.json were measured on.
+#
+# Reference only: these numbers are not a gate, and no number here may be compared with a number
+# from another machine except as a ratio. See docs/benchmarking.md for the policy and for what a
+# result has to record.
+#
+# The benchmark code these numbers describe is the commit below; the file was added just after it, from
+# the same tree. That commit is stable, while the commit that adds this file is not.
+commit=86eed09
+dirty=0
+os=Microsoft Windows NT 10.0.19045.0
+cpu=AMD Ryzen 5 5600X 6-Core Processor             
+cores=12
+java=openjdk version "25.0.4.1" 2026-08-18 LTS
+#
+# Physical memory is not listed: the query that answers it is refused to this user on this machine,
+# and a placeholder would be worse than the omission.
