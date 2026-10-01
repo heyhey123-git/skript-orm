@@ -40,6 +40,10 @@ mysql-connector = "9.5.0"
 mariadb-client = "3.4.4"
 mongodb-driver = "5.6.1"
 postgresql-driver = "42.7.11"
+# Runs in memory inside the unit tests. H2 is the one server the documentation names that no other test
+# reaches: the JDBC integration tests need a container and the server test runs SQLite, so what H2 reports
+# for the storages this plugin writes was an assumption until a test could ask it.
+h2 = "2.3.232"
 testcontainers = "1.21.3"
 shadow = "9.2.2"
 ktlint = "14.2.0"
@@ -69,6 +73,7 @@ mariadb-client = { module = "org.mariadb.jdbc:mariadb-java-client", version.ref 
 # has no Kotlin in its API at all, which is also how the JDBC implementation already wraps its driver.
 mongodb-driver-sync = { module = "org.mongodb:mongodb-driver-sync", version.ref = "mongodb-driver" }
 postgresql-driver = { module = "org.postgresql:postgresql", version.ref = "postgresql-driver" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
 testcontainers-bom = { module = "org.testcontainers:testcontainers-bom", version.ref = "testcontainers" }
 testcontainers-core = { module = "org.testcontainers:testcontainers" }
 testcontainers-mysql = { module = "org.testcontainers:mysql" }

@@ -30,6 +30,10 @@ dependencies {
     testImplementation(kotlin("test"))
     testImplementation(libs.mockk)
     testImplementation(libs.coroutines.core)
+    // An in-memory server, so what H2 reports for a column this plugin writes can be asked rather than
+    // assumed. It is a driver and nothing more: no container, and it needs no Bukkit class, which is why
+    // this one can live in the plain unit tests where the registry cannot be built.
+    testImplementation(libs.h2)
 
     // Integration tests run the JDBC implementation against a real MySQL or MariaDB server, so they
     // need both drivers and the connection pool at runtime. JdbcDataTypes also resolves the Bukkit and

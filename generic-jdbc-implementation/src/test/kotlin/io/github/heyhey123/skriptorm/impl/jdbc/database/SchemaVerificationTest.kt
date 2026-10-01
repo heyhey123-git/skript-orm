@@ -242,6 +242,26 @@ class SchemaVerificationTest {
         assertEquals("VARCHAR", SchemaVerification.normalizeTypeName("text"))
         assertEquals("VARBINARY", SchemaVerification.normalizeTypeName("binary varying"))
         assertEquals("BLOB", SchemaVerification.normalizeTypeName("BINARY LARGE OBJECT"))
+        assertEquals("DOUBLE", SchemaVerification.normalizeTypeName("double precision"))
+    }
+
+    /**
+     * A spelling only one server gives a storage is answered only for that server, and the key is the name
+     * the server gives for itself. H2 stores the `FLOAT` this implementation asks for as a `DOUBLE
+     * PRECISION`, so on H2 the two are one storage and everywhere else they are two: the answer follows the
+     * connection rather than the driver a script named, which is what a dialect serving every driver cannot
+     * say. `H2SchemaTest` asks the server what it calls itself and that the table it built is accepted.
+     */
+    @Test
+    fun `a name one server gives its own storage is answered only for that server`() {
+        assertEquals("DOUBLE", SchemaVerification.normalizeTypeName("float", productName = "H2"))
+        assertEquals("DOUBLE", SchemaVerification.normalizeTypeName("FLOAT(24)", productName = "h2"))
+        assertEquals("FLOAT", SchemaVerification.normalizeTypeName("float", productName = "MySQL"))
+        assertEquals(
+            "FLOAT",
+            SchemaVerification.normalizeTypeName("float", MysqlJdbcDialect.typeAliases, productName = "MySQL")
+        )
+        assertEquals("FLOAT", SchemaVerification.normalizeTypeName("float"))
     }
 
     /**

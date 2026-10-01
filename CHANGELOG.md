@@ -105,7 +105,12 @@ than one list shared by every server.
   spelling of the `VARBINARY` this implementation writes, beside the `CHARACTER VARYING` already accepted for
   a `VARCHAR` — is accepted too. A table this implementation created itself is written with the names on the
   declaration, so this only reaches a table made by something else, and there it is read with the names its
-  own server has.
+  own server has. `DOUBLE PRECISION` joined the shared list as the standard spelling of `DOUBLE`, and H2's
+  `FLOAT` — which H2 stores as a `DOUBLE PRECISION`, having no four-byte float under that name — is answered
+  for H2 alone, under the name H2 gives for itself. A spelling either means one storage on every server or it
+  belongs to the servers it was measured against, and an in-memory H2 test now asks it rather than assuming:
+  it reports `CHARACTER VARYING` for a `VARCHAR`, `BINARY VARYING` for a `VARBINARY` and `BINARY LARGE OBJECT`
+  for a `BLOB`, all of which the shared list already answers.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 

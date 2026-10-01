@@ -18,8 +18,12 @@ import java.sql.DatabaseMetaData
  *
  * The check therefore runs straight after the DDL, while the table is known to exist, and reports the
  * declaration and the reality side by side. It reads [DatabaseMetaData] rather than asking each server for
- * its own `information_schema`, so MySQL, MariaDB, PostgreSQL, SQLite and H2 are all covered by the same
- * path — the same path the integration tests already use to read a column back.
+ * its own `information_schema`, so one path covers MySQL, MariaDB, PostgreSQL, SQLite and H2. What that path
+ * needs from a server is only the names it reports for the storages this implementation writes, and none of
+ * those are guessed: a name that means one storage on every server is in [TYPE_ALIASES], a name one product
+ * decided on its own is in that product's dialect, and a name a dialect cannot speak for — because the
+ * generic dialect serves whatever driver a script names — is in [PRODUCT_ALIASES], under the name the server
+ * gives for itself.
  *
  * What it requires is that the table can serve every statement the declaration allows: every declared column
  * is there, with the storage the declaration asked for, and the declared key names one row. What it does not
@@ -83,7 +87,7 @@ internal object SchemaVerification {
         typeAliases: Map<String, String> = emptyMap()
     ) {
         val actual = read(connection, declared.name)
-        val mismatches = compare(declared, actual, typeAliases)
+        val mismatches = compare(declared, actual, typeAliases, connection.metaData.databaseProductName)
         require(mismatches.isEmpty()) {
             val header = "Registered table '${declared.name}' does not match the table in the database. " +
                 "Registration is 'CREATE TABLE IF NOT EXISTS', so a table that already exists is never " +
@@ -107,12 +111,14 @@ internal object SchemaVerification {
      * the server holds, or the table is not the one it registered.
      *
      * [typeAliases] comes from the connection's dialect and names the spellings that dialect's driver
-     * reports for a storage this implementation writes; see [JdbcDialect.typeAliases].
+     * reports for a storage this implementation writes; see [JdbcDialect.typeAliases]. [productName] is the
+     * server's own name for itself, for the spellings a dialect cannot speak for: see [PRODUCT_ALIASES].
      */
     fun compare(
         declared: Table,
         actual: ActualTable,
-        typeAliases: Map<String, String> = emptyMap()
+        typeAliases: Map<String, String> = emptyMap(),
+        productName: String? = null
     ): List<String> {
         val mismatches = mutableListOf<String>()
         val actualByName = actual.columns.associateBy { it.name }
@@ -127,7 +133,8 @@ internal object SchemaVerification {
             val stored = actualByName[name] ?: continue
             val expectedType = typeNameOf(column)
             if (expectedType != null &&
-                normalizeTypeName(expectedType, typeAliases) != normalizeTypeName(stored.typeName, typeAliases)
+                normalizeTypeName(expectedType, typeAliases, productName) !=
+                normalizeTypeName(stored.typeName, typeAliases, productName)
             ) {
                 mismatches += "Column '$name' is declared as $expectedType but the table holds " +
                     "${stored.typeName}."
@@ -313,17 +320,25 @@ internal object SchemaVerification {
      * The comparable form of a type name: upper case, without a `(size)`, through the aliases.
      *
      * The servers spell the same storage differently — `CHARACTER VARYING` against `VARCHAR`, `INT` against
-     * `INTEGER` — and between the shared table and the dialects' own, every spelling of a type this
-     * implementation renders is covered. A name that is neither listed nor mapped by the dialect is compared
-     * as it stands, so a genuinely different type still differs.
+     * `INTEGER` — and between the shared table, the dialects' own and the product table below, every spelling
+     * of a type this implementation renders is covered. A name that is in none of them is compared as it
+     * stands, so a genuinely different type still differs.
      *
      * [typeAliases] is the connection's dialect, which knows the spellings that are its own: the names its
-     * driver reports, and the names its server's SQL has; see [JdbcDialect.typeAliases]. It is consulted
-     * first, because a dialect that maps a name is saying something about its own server.
+     * driver reports, and the names its server's SQL has; see [JdbcDialect.typeAliases]. [productName] is
+     * what the server calls itself, which is the only key a spelling of one product can be filed under when
+     * the dialect serves every product. It is consulted in that order, most particular first: a dialect that
+     * maps a name is saying something about its own server, and a product that maps one is saying something
+     * only about itself.
      */
-    fun normalizeTypeName(name: String, typeAliases: Map<String, String> = emptyMap()): String {
+    fun normalizeTypeName(
+        name: String,
+        typeAliases: Map<String, String> = emptyMap(),
+        productName: String? = null
+    ): String {
         val bare = name.substringBefore('(').trim().uppercase()
-        return typeAliases[bare] ?: TYPE_ALIASES[bare] ?: bare
+        val byProduct = productName?.uppercase()?.let { PRODUCT_ALIASES[it] }
+        return typeAliases[bare] ?: byProduct?.get(bare) ?: TYPE_ALIASES[bare] ?: bare
     }
 
     /**
@@ -347,14 +362,40 @@ internal object SchemaVerification {
      * `BINARY VARYING` is the standard spelling of the `VARBINARY` this implementation writes, exactly as
      * `CHARACTER VARYING` is of the `VARCHAR` beside it — the two are the names H2 leads with in its own
      * lists of those types.
+     *
+     * `DOUBLE PRECISION` is the standard spelling of the `DOUBLE` this implementation writes. It is here for
+     * the same reason as the two above: H2 reports it for a column declared `double`, and no server that
+     * reports it means anything else by it.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",
+        "DOUBLE PRECISION" to "DOUBLE",
         "TEXT" to "VARCHAR",
         "CHARACTER VARYING" to "VARCHAR",
         "BINARY VARYING" to "VARBINARY",
         "CHARACTER LARGE OBJECT" to "BLOB",
         "BINARY LARGE OBJECT" to "BLOB"
+    )
+
+    /**
+     * The spellings a server reports that mean one of this implementation's storages only on that server,
+     * keyed by the name the server gives for itself in [DatabaseMetaData.getDatabaseProductName].
+     *
+     * A dialect's map cannot hold these. The generic dialect serves whatever driver a script names, so a
+     * spelling filed there would have to mean that storage on every server it serves; here it is answered
+     * only for the server it was measured on.
+     *
+     * `H2` lists `FLOAT` among the names of its `DOUBLE PRECISION` — it has no four-byte float under that
+     * name — so a column a `float` declaration writes is read back as a `DOUBLE`. Both sides of the
+     * comparison have to land on one storage, or a table H2 built from the declaration would be refused from
+     * the second start on: this implementation asks for a `FLOAT`, H2 gives it a `DOUBLE PRECISION`, and only
+     * an entry here says that the two are the same column. A hand-made `REAL` column is the four-byte float
+     * H2 does have, and a declaration of `float` cannot be compared against it as well, because one name maps
+     * to one storage: the case this keeps working is the table the plugin itself asked H2 to build. Measured
+     * against H2 2.3.232 by `H2SchemaTest`, which is also what keeps the entry honest.
+     */
+    private val PRODUCT_ALIASES: Map<String, Map<String, String>> = mapOf(
+        "H2" to mapOf("FLOAT" to "DOUBLE")
     )
 
     private fun Set<String>.describe(): String =
