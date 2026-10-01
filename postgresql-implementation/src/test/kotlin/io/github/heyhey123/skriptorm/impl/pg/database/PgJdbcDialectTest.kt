@@ -107,7 +107,10 @@ class PgJdbcDialectTest {
      * The names the driver reports for this module's storages, which `PgSchemaIntegrationTest` reads off a
      * real server through `information_schema` and the driver's own metadata. The values are where the
      * declaration side lands: a `float4` is the `REAL` this module writes, not the `FLOAT` the generic
-     * dialect calls it, so the two spellings meet.
+     * dialect calls it, so the two spellings meet. A name is answered once and not looked up again, so
+     * `float8` has to arrive where a `double precision` declaration lands — `DOUBLE` — rather than on the
+     * standard spelling the shared table would read further; the server job of the CI run that added this
+     * line is what caught it arriving on the spelling instead.
      */
     @Test
     fun `the type names the driver reports are this dialect's own`() {
@@ -115,7 +118,7 @@ class PgJdbcDialectTest {
         assertEquals("INTEGER", PgJdbcDialect.typeAliases.getValue("INT4"))
         assertEquals("BIGINT", PgJdbcDialect.typeAliases.getValue("INT8"))
         assertEquals("REAL", PgJdbcDialect.typeAliases.getValue("FLOAT4"))
-        assertEquals("DOUBLE PRECISION", PgJdbcDialect.typeAliases.getValue("FLOAT8"))
+        assertEquals("DOUBLE", PgJdbcDialect.typeAliases.getValue("FLOAT8"))
         assertEquals("BOOLEAN", PgJdbcDialect.typeAliases.getValue("BOOL"))
         assertEquals("BLOB", PgJdbcDialect.typeAliases.getValue("BYTEA"))
 

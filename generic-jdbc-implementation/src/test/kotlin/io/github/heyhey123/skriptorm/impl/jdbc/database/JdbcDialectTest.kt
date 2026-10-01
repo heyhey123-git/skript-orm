@@ -167,6 +167,15 @@ class JdbcDialectTest {
                     target in reachable,
                     "$dialect maps '$name' to '$target', which no declaration of it normalizes to"
                 )
+                // A value is compared as it stands from there: one table answers a name and the next is not
+                // asked, so a value that is itself an alias leaves the reported side and the declared side of
+                // a comparison standing on two different names. That is what the PostgreSQL job caught when
+                // the shared table learned the standard spelling of `DOUBLE`.
+                assertEquals(
+                    target,
+                    SchemaVerification.normalizeTypeName(target),
+                    "$dialect maps '$name' to '$target', which another table reads further"
+                )
             }
         }
     }

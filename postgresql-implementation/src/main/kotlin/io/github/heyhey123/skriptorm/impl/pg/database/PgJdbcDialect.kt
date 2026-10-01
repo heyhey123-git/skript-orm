@@ -63,7 +63,10 @@ object PgJdbcDialect : JdbcDialect {
      * standard ones, which is why `PgSchemaIntegrationTest` reads the second and records the first. The
      * values are where the declaration side of the comparison lands: the shared table maps `INT` to
      * `INTEGER`, so `int4` has to arrive there too, and a `float4` has to be the `REAL` this module writes
-     * rather than the `FLOAT` the generic dialect would call it.
+     * rather than the `FLOAT` the generic dialect would call it. `float8` arrives on `DOUBLE` for the same
+     * reason: a name is answered by one table and no second lookup follows, so a value has to be a name the
+     * declaration side already stands on — a `double precision` declaration lands on `DOUBLE` now that the
+     * shared table reads the standard spelling of it.
      *
      * `bit` is deliberately absent. It is what the MySQL family calls the one-byte boolean it stores, and
      * PostgreSQL's `bit(1)` is a bit string: reading one as a `boolean` is not what a declaration of
@@ -75,7 +78,7 @@ object PgJdbcDialect : JdbcDialect {
         "INT4" to "INTEGER",
         "INT8" to "BIGINT",
         "FLOAT4" to "REAL",
-        "FLOAT8" to "DOUBLE PRECISION",
+        "FLOAT8" to "DOUBLE",
         "BOOL" to "BOOLEAN",
         "BYTEA" to "BLOB"
     )
