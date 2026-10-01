@@ -82,11 +82,16 @@ val jmh by tasks.registering(JavaExec::class) {
         CommandLineArgumentProvider {
             val results = jmhResults.get().asFile.absolutePath
             buildList {
-                add("-rf"); add("json")
-                add("-rff"); add(results)
-                add("-f"); add(benchmarksForks.get())
-                add("-wi"); add("2")
-                add("-i"); add("3")
+                add("-rf")
+                add("json")
+                add("-rff")
+                add(results)
+                add("-f")
+                add(benchmarksForks.get())
+                add("-wi")
+                add("2")
+                add("-i")
+                add("3")
                 benchmarksFilter.orNull?.let { add(it) }
             }
         }
