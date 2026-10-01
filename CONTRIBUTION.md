@@ -574,11 +574,15 @@ again. The band has to come from the `gh-pages` history once enough nightly runs
 turned on after the threshold is set from it. What fails a run today is the harness: a case that stops
 compiling, or one that cannot run.
 
-The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch, which has to
-exist before the first run that pushes to it. A pull request is compared against that history but never
-writes to it, because the numbers a branch produces are not the numbers the next branch should be
-measured against. The report is JMH's own JSON, which the action reads with `tool: jmh` — which is the
-reason the benchmark task writes that format rather than a table of its own.
+The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch that holds
+nothing but the history, and it is kept per CPU: `ubuntu-latest` is a label over a pool rather than one
+machine, so two runs of the same commit can land on different hosts and differ by more than most of the
+regressions this suite exists to notice. Each result goes to `dev/bench/<slug>`, the slug derived from the
+CPU model the environment step records. The branch is created by hand, because a run that pushed its own
+storage into place would be writing outside the change it was run for. A pull request is compared against
+that history but never writes to it, because the numbers a branch produces are not the numbers the next
+branch should be measured against. The report is JMH's own JSON, which the action reads with `tool: jmh` —
+which is the reason the benchmark task writes that format rather than a table of its own.
 
 #### When CI runs
 
