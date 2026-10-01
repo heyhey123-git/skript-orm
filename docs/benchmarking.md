@@ -14,7 +14,17 @@ How fast "fast" is, in three scales, each labelled with where it came from:
 - **The server's own heartbeat.** A tick is 50 milliseconds, and the tick measurements show a read of 100 to 5000 rows never lengthened a tick while a 10 000-row read is refused rather than run. Reads are free, and the ceiling exists so that no request can stall the server. This is what "fast" means where it matters: not stalling the server, and refusing the sizes that would.
 - **The backend contrast, already measured.** The same SQL and the same server took 17.04 seconds against MySQL where PostgreSQL and MariaDB took 1.99, and the server-side count says why — MySQL got 5038 statements, MariaDB got 2. That is a fact, not advice.
 
-There is a stronger scale that is deliberately not claimed: what the plugin's own mapping layer costs on top of raw SQL, or against a hand-written Skript loop, for the same work. That comparison has not been measured, and it is not claimed — a reader should know what "fast" has not been proven against, rather than take this silence as evidence.
+There is a fourth comparison this page used to leave blank, and it has now been measured: the plugin's own path against the equivalent raw SQL, on the same server, the same driver, the same rows and the same backend. It does not reduce to one "the mapping costs X" number, because none was produced — and the three things it did produce are these.
+
+The read side is below the floor. The plugin's `select many` and an equivalent raw `execute query` send the same SELECT over the same columns; across two runs on the local Ryzen 5 5600X the difference was at or under the 10 millisecond resolution, with both paths inside one tick and zero tick overrun. Reading through the mapping layer does not lengthen a tick.
+
+The write side cannot be isolated as a mapping number, and it is not presented as one. The plugin's `insert many` is a JDBC batch of single-row prepared statements, one per row, while the raw element has no batch form, so the only raw equivalent is one multi-row INSERT with the values written in. The about 200 millisecond difference between the plugin's about 290 millisecond wall clock and the raw write's about 85 is that batch-versus-multi-row shape, not the mapping layer.
+
+What a server owner actually needs to know, now measured rather than asserted: that about 290 millisecond write of 5000 rows is almost all background. Its server-thread tick overrun was about 10 milliseconds in both runs, while the raw write is one background statement. A large insert parks the work off the tick loop and stalls the server by roughly a tenth of what its wall clock suggests — which is "fast where it matters".
+
+One number a reader who reproduces this will hit and must not read as a tick cost: the raw write's longest-tick column came out high in both runs, because the script built the SQL string with 5000 server-thread concatenations before the timed window and that column absorbed a stale-tick stall. The write is therefore reported by wall clock.
+
+A hand-written Skript loop was deliberately not compared: it stores into a plain variable, which is a memory variable against a database, not the same work. The comparison made here is raw SQL through the plugin's own connection, so the only thing that differs is the path, not the rows or the backend.
 
 Everything below is how those numbers were taken, what each came from, which machine produced it, and what is deliberately not measured.
 
