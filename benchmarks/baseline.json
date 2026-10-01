@@ -1,0 +1,112 @@
+[
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.github.heyhey123.skriptorm.benchmarks.InsertManyBenchmark.insertManyOf5000",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "D:\\apps\\java\\bin\\java.exe",
+        "jvmArgs" : [
+            "-Dbenchmarks.countersFile=D:\\KotlinProjects\\skript-orm\\benchmarks\\build\\benchmarks\\insert-many-counters.txt",
+            "-Dfile.encoding=UTF-8",
+            "-Duser.country=CN",
+            "-Duser.language=zh",
+            "-Duser.variant"
+        ],
+        "jdkVersion" : "25.0.4.1",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.4.1+1-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "10 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "10 s",
+        "measurementBatchSize" : 1,
+        "primaryMetric" : {
+            "score" : 9.959945099793615,
+            "scoreError" : 0.3838220520886414,
+            "scoreConfidence" : [
+                9.576123047704973,
+                10.343767151882256
+            ],
+            "scorePercentiles" : {
+                "0.0" : 9.947408133971292,
+                "50.0" : 9.948193030794165,
+                "90.0" : 9.984234134615384,
+                "95.0" : 9.984234134615384,
+                "99.0" : 9.984234134615384,
+                "99.9" : 9.984234134615384,
+                "99.99" : 9.984234134615384,
+                "99.999" : 9.984234134615384,
+                "99.9999" : 9.984234134615384,
+                "100.0" : 9.984234134615384
+            },
+            "scoreUnit" : "ms/op",
+            "rawData" : [
+                [
+                    9.947408133971292,
+                    9.948193030794165,
+                    9.984234134615384
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    },
+    {
+        "jmhVersion" : "1.37",
+        "benchmark" : "io.github.heyhey123.skriptorm.benchmarks.RowLimitBenchmark.rowsPerStatement",
+        "mode" : "avgt",
+        "threads" : 1,
+        "forks" : 1,
+        "jvm" : "D:\\apps\\java\\bin\\java.exe",
+        "jvmArgs" : [
+            "-Dbenchmarks.countersFile=D:\\KotlinProjects\\skript-orm\\benchmarks\\build\\benchmarks\\insert-many-counters.txt",
+            "-Dfile.encoding=UTF-8",
+            "-Duser.country=CN",
+            "-Duser.language=zh",
+            "-Duser.variant"
+        ],
+        "jdkVersion" : "25.0.4.1",
+        "vmName" : "OpenJDK 64-Bit Server VM",
+        "vmVersion" : "25.0.4.1+1-LTS",
+        "warmupIterations" : 2,
+        "warmupTime" : "10 s",
+        "warmupBatchSize" : 1,
+        "measurementIterations" : 3,
+        "measurementTime" : "10 s",
+        "measurementBatchSize" : 1,
+        "primaryMetric" : {
+            "score" : 13.842465316075296,
+            "scoreError" : 0.47164729219611573,
+            "scoreConfidence" : [
+                13.370818023879181,
+                14.314112608271412
+            ],
+            "scorePercentiles" : {
+                "0.0" : 13.825763115678495,
+                "50.0" : 13.829389021477054,
+                "90.0" : 13.872243811070334,
+                "95.0" : 13.872243811070334,
+                "99.0" : 13.872243811070334,
+                "99.9" : 13.872243811070334,
+                "99.99" : 13.872243811070334,
+                "99.999" : 13.872243811070334,
+                "99.9999" : 13.872243811070334,
+                "100.0" : 13.872243811070334
+            },
+            "scoreUnit" : "ns/op",
+            "rawData" : [
+                [
+                    13.829389021477054,
+                    13.872243811070334,
+                    13.825763115678495
+                ]
+            ]
+        },
+        "secondaryMetrics" : {
+        }
+    }
+]
+
+
