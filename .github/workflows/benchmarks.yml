@@ -26,6 +26,14 @@ name: Benchmarks
 # `gh-pages` carries enough nightly runs to read the spread out of that history — set the threshold from that
 # history first, and turn the gate on after it, in that order. What fails a run today is the harness itself: a
 # benchmark that stops compiling, or a case that cannot run.
+#
+# And "a GitHub runner" is itself a pool rather than one machine: two attempts of this workflow on one commit
+# with one set of settings landed on an AMD EPYC 9V74 and an Intel Xeon Platinum 8573C, and differed by 1.32
+# times on the insert case and 1.21 times on the row-limit case — hardware only, and larger than the moves this
+# suite exists to notice. A history that mixed the two would report the machine rather than the code, so each
+# result is filed under a directory named for the CPU that produced it: see the slug in the environment step
+# and `benchmark-data-dir-path` below. That does not turn the threshold into a finding; the band above is still
+# one machine's, and the gate still stays off until the per-CPU histories are long enough to read a spread from.
 on:
   # Every night, so the trend exists even in a week nobody touches the hot path. The minute is off the
   # hour because GitHub's scheduler is busiest then.
@@ -90,18 +98,36 @@ jobs:
       # A number without the machine it came from is not a number anyone can compare with another, which
       # is the baseline policy these runs exist to feed. Most of this is only knowable on the runner, so
       # it is written here rather than by the benchmark task, and it is uploaded beside the report.
+      # The CPU line is read once and reused, because the same string decides where the numbers are filed:
+      # `ubuntu-latest` is a pool, and a history that mixed an EPYC point with a Xeon one would be reporting
+      # the machine rather than the code.
       - name: Record the environment
+        id: environment
         run: |
           mkdir -p benchmarks/build/benchmarks
+          cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //')
           {
             echo "commit=$(git rev-parse HEAD)"
             echo "dirty=$(git status --porcelain | wc -l)"
             echo "os=$(uname -srm)"
-            echo "cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //')"
+            echo "cpu=$cpu"
             echo "cores=$(nproc)"
             echo "memory=$(free -h | awk '/^Mem:/ {print $2}')"
             echo "java=$(java -version 2>&1 | head -n1)"
           } | tee benchmarks/build/benchmarks/environment.txt
+          # The same model string reduced to something a directory can be named after:
+          # "AMD EPYC 9V74 80-Core Processor" -> "amd-epyc-9v74-80-core-processor" and
+          # "INTEL(R) XEON(R) PLATINUM 8573C" -> "intel-xeon-platinum-8573c". Truncated so a pathological
+          # model string cannot become an unwieldy path, and defaulted so an unreadable /proc/cpuinfo files
+          # the result under `unknown` rather than at the root of the history.
+          slug=$(printf '%s' "$cpu" \
+            | sed -E 's/\((R|TM|C)\)//g' \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+            | cut -c1-64 \
+            | sed -E 's/-+$//')
+          [ -n "$slug" ] || slug=unknown
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
 
       - name: Run the benchmarks
         run: |
@@ -137,8 +163,9 @@ jobs:
             benchmarks/build/benchmarks/environment.txt
           if-no-files-found: ignore
 
-      # The history lives on `gh-pages`, which this repository does not have yet: the branch has to
-      # exist before the first run that pushes to it. Creating it is a push, so it is not done here.
+      # The history lives on `gh-pages`, which exists and is created by hand rather than here: creating a
+      # branch is a push, and a run that pushed its own storage into place would be writing outside the
+      # change it was run for. It is kept per CPU — see `benchmark-data-dir-path` below.
       #
       # `tool: jmh` reads JMH's own JSON and nothing else, which is the reason the benchmark task writes
       # that format instead of a table of its own.
@@ -150,7 +177,11 @@ jobs:
           output-file-path: benchmarks/build/benchmarks/results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gh-pages-branch: gh-pages
-          benchmark-data-dir-path: 'dev/bench'
+          # One directory per CPU model, because the action compares each new number against whatever history
+          # is at this path and `ubuntu-latest` is a pool: a Xeon run must not be read against an EPYC point.
+          # The environment step above derives the slug from the same model string it writes into the record,
+          # so the number and the machine that produced it stay filed together.
+          benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}'
           # A pull request is compared against the history but never writes to it: the numbers a branch
           # produces are not the numbers the next branch should be measured against.
           auto-push: ${{ github.event_name != 'pull_request' }}
