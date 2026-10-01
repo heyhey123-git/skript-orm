@@ -114,12 +114,20 @@ every 5 seconds:
     # ceiling and not the shape of the statement. It is counted by index rather than by row: `select many`
     # has no ORDER BY, so which row lands at `::1` is the server's choice and the count is what is being
     # asked about. 5000 indexes present and no 5001st is exactly the filter's 5000 rows.
+    #
+    # These 5000 rows are 30000 values, which is over the size where a result is stored through Skript's
+    # variable store rather than value by value, so this is also where that path is checked. A value stored
+    # directly under the list has to survive the list being replaced, because Skript keeps it and scripts
+    # are allowed to read it back.
+    set {ceiling::many::at} to "keep me"
     in connection "ceiling":
         select many entities from table "orm_ceiling_probe" and store the results in {ceiling::many::at::*}:
             where all:
                 id <= 5000
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling was refused: %last database error%"
+    if {ceiling::many::at} is not "keep me":
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling dropped the value stored under the list: %{ceiling::many::at}%"
     if {ceiling::many::at::1::id} is not set:
         log "SKRIPTORM_SELFTEST=FAIL row ceiling select many of the ceiling stored nothing"
     if {ceiling::many::at::5000::id} is not set:
@@ -132,6 +140,16 @@ every 5 seconds:
         set {ceiling::failed} to true
     if {ceiling::many::at::5000::id} is not set:
         set {ceiling::failed} to true
+
+    # Deleting a result that large goes through the same store, so the delete has to reach every index of
+    # the tree that was attached and still leave the value stored under the list where it was.
+    delete {ceiling::many::at::*}
+    if {ceiling::many::at::1::id} is set:
+        set {ceiling::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling delete left rows"
+    if {ceiling::many::at} is not "keep me":
+        set {ceiling::failed} to true
+        log "SKRIPTORM_SELFTEST=FAIL row ceiling delete dropped the value stored under the list"
 
     if {ceiling::failed} is true:
         log "SKRIPTORM_SELFTEST detail: row ceiling -> failed"

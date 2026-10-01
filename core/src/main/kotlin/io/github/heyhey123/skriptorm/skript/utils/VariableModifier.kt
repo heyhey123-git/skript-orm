@@ -11,8 +11,19 @@ object VariableModifier {
         variable.change(event, null, ChangeMode.DELETE)
     }
 
-    /** Clears [variable], then writes each map key as a Skript list index. */
+    /**
+     * Clears [variable], then writes each map key as a Skript list index.
+     *
+     * A result large enough to be worth it ([FastVariableStore.MIN_VALUES]) is built on the database thread
+     * and attached in one step. Anything unexpected about that path falls back to the loop below, and every
+     * result below the threshold uses the loop directly, so nothing small depends on Skript's internals.
+     */
     fun writeMap(variable: Variable<*>, event: Event?, value: Map<String, Any?>) {
+        if (value.size >= FastVariableStore.MIN_VALUES) {
+            FastVariableStore.probe()
+            val prepared = FastVariableStore.take(value)
+            if (prepared != null && FastVariableStore.attach(variable, event, prepared)) return
+        }
         clear(variable, event)
         if (value.isEmpty()) return
 

@@ -37,6 +37,7 @@ internal object SelectResult {
             }
         }
         if (rowIndex - 1 > RowLimit.ROWS) throw TooManyRowsException(RowLimit.readRefusal(table.name))
+        FastVariableStore.publish(result)
         return result
     }
 }

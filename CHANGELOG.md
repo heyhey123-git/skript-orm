@@ -65,6 +65,15 @@ than one list shared by every server.
   consequences are worth knowing: a failure part way through leaves the statements before it applied unless the
   write is inside a transaction, and a table wider than the budget carries fewer rows per statement.
 
+- **A result above ten thousand values is stored into the variable in one step instead of value by value.**
+  Storing a large result is spent out of the server's tick budget the same way a read is, and most of that
+  is building a tree that depends on nothing but the values, so for a result that large the tree is built on
+  the database thread and attached in one step while Skript's variable lock is taken once. Measured on a
+  six-column table, 5000 rows cost the server thread about 47ms the old way and about 36ms this way. A
+  result below that size is stored exactly as before, and so is every result if the running Skript does not
+  keep its variables in the shape this path expects: it then switches itself off and says so once in the
+  log.
+
 ### Fixed
 
 - **A table registered twice is no longer an error.** A declaration that matches the table the script
