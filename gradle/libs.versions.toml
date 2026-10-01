@@ -40,6 +40,9 @@ mysql-connector = "9.5.0"
 mariadb-client = "3.4.4"
 mongodb-driver = "5.6.1"
 postgresql-driver = "42.7.11"
+# The benchmark harness. JMH's generator is an annotation processor, so it needs a version of its own
+# next to the runtime it generates code against: the two must match.
+jmh = "1.37"
 # Runs in memory inside the unit tests. H2 is the one server the documentation names that no other test
 # reaches: the JDBC integration tests need a container and the server test runs SQLite, so what H2 reports
 # for the storages this plugin writes was an assumption until a test could ask it.
@@ -80,6 +83,9 @@ testcontainers-mysql = { module = "org.testcontainers:mysql" }
 testcontainers-mariadb = { module = "org.testcontainers:mariadb" }
 testcontainers-postgresql = { module = "org.testcontainers:postgresql" }
 testcontainers-junit = { module = "org.testcontainers:junit-jupiter" }
+
+jmh-core = { module = "org.openjdk.jmh:jmh-core", version.ref = "jmh" }
+jmh-generator = { module = "org.openjdk.jmh:jmh-generator-annprocess", version.ref = "jmh" }
 
 [plugins]
 kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

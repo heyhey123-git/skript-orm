@@ -16,3 +16,7 @@ include("mongodb-implementation")
 include("generic-jdbc-implementation")
 include("core")
 include("postgresql-implementation")
+// Benchmarks are neither bundled nor published: the root build only carries the modules named in
+// `bundledModules`. The module exists so that performance work has somewhere to live that is not a
+// test, and so that the numbers in the documentation have a command that reproduces them.
+include("benchmarks")
