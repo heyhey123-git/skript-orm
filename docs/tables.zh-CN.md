@@ -46,7 +46,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 **已有表会原样保留。** 在脚本中新增列后重新加载，数据库中的表结构不会改变——插件只更新自己的定义。注册本身是成功的，因此不会给出警告；也正是 `CREATE TABLE IF NOT EXISTS` 让「每次启动都注册同一张表」是安全的。
 
-**声明与表不一致时，注册当场失败。** 由于上面那张表永远不会被修改，如果脚本给一张已存在的表加上 `age: int`，本来会拖到第一条用到该列的语句才报服务端的 `Unknown column 'age' in 'INSERT INTO'`——那条消息指向写入，而不是注册。现在 `register a database table` 会直接失败，`last database error` 会把差异说清楚：
+**表支撑不了声明时，注册当场失败。** 由于上面那张表永远不会被修改，如果脚本给一张已存在的表加上 `age: int`，本来会拖到第一条用到该列的语句才报服务端的 `Unknown column 'age' in 'INSERT INTO'`——那条消息指向写入，而不是注册。现在 `register a database table` 会直接失败，`last database error` 会把差异说清楚：
 
 ```
 Registered table 'users' does not match the table in the database. Registration is 'CREATE TABLE IF
@@ -56,7 +56,9 @@ Column(s) 'age' are declared but missing from the table. The table holds: 'id', 
 Drop the table and register it again, or change the table in the database to match this declaration.
 ```
 
-比较的内容包括：有哪些列、每列的类型与长度、非主键列上的 `not null`、以及哪一列是主键。**不比较** `auto increment`，因为两种服务端通过不同的元数据报告它。要改表结构，请自行执行 `ALTER TABLE`；在开发数据库中也可以删除表后由插件重新创建。
+比较只问一件事：这张表能不能支撑声明允许的每一条语句。所以它要求声明的每一列都在、类型与长度都对，要求非主键列上的 `not null` 成立，并要求表能保证声明的键：如果表的主键里有一列声明没有标成主键，就会被拒绝——因为用声明的键定位一行的语句此时可能命中多行。没有声明键的声明没有对身份做任何承诺，所以表本身带主键也不构成差异。
+
+**不比较** `auto increment`（两种服务端通过不同的元数据报告它），也不比较表里多出来、声明从未提过的列：那不是差异——与别的工具共用一张表，或旧声明创建的表多留了几列，都仍然能跑通声明写出的每条语句。唯一的例外是这类列若为 `not null` 且没有默认值：省掉它去插入会被服务端拒绝，而那条消息会点出列名。要改表结构，请自行执行 `ALTER TABLE`；在开发数据库中也可以删除表后由插件重新创建。
 
 **注册信息按连接保存。** 在已持有该表的连接上再次执行 `register a database table "users"`，不会报错也不会改动已有结构：声明被接受，已注册的结构保持不变。这正是"在 `on load` 里声明表"的脚本可以安全重载的原因——它连接到的连接上表已经注册，重复声明是预期结果而非错误。
 

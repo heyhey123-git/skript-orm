@@ -66,7 +66,7 @@ table back from the server and compares it with the declaration.
 definition, not the database schema. Registration produces no warning because it has succeeded, and
 `CREATE TABLE IF NOT EXISTS` is what makes registering the same table on every startup safe.
 
-**A declaration that no longer matches the table is refused at registration.** Because the table above is
+**A declaration the table cannot serve is refused at registration.** Because the table above is
 never altered, a script that adds `age: int` to a table that already exists without it would otherwise
 fail later, at the first statement that names the column, with the server's
 `Unknown column 'age' in 'INSERT INTO'` — which names the write rather than the registration. Instead,
@@ -80,10 +80,20 @@ Column(s) 'age' are declared but missing from the table. The table holds: 'id', 
 Drop the table and register it again, or change the table in the database to match this declaration.
 ```
 
-The comparison covers which columns exist, each column's type and size, `not null` on columns that are
-not the key, and which column is the primary key. It does not compare `auto increment`, which the two
-servers report through different metadata. To change the schema, run `ALTER TABLE` yourself, or drop the
-table in a development database and let the plugin recreate it.
+The comparison asks one question: can this table serve every statement the declaration allows? So it
+requires every declared column to be there, with the type and size the declaration asked for; it requires
+`not null` on declared columns that are not the key; and it requires the table to guarantee the declared
+key. A table keyed on a column the declaration does not mark as a key is refused, because a statement that
+addresses a row by the declared key could then match several rows. A declaration with no key asks nothing
+about identity, so a key the table carries is not a difference either.
+
+What it does not compare is `auto increment`, which the two servers report through different metadata, and
+columns the table carries that the declaration never names. Those are not a difference: a table shared with
+another tool, or one an older declaration of the same script created with columns this one no longer names,
+answers every statement the declaration can make. The one exception is a column of that kind that is
+`not null` with no default — an insert that leaves it out is refused by the server, and its message names
+the column. To change the schema, run `ALTER TABLE` yourself, or drop the table in a development database
+and let the plugin recreate it.
 
 **Registrations belong to a connection.** Registering `"users"` again on a connection that already holds it
 does nothing and succeeds: the declaration is accepted, the registered schema is left as it is, and no error
