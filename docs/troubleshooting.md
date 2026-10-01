@@ -145,6 +145,22 @@ select one entity from table "users" and store the result in {_user::*}:
 
 Sections with a `where` block, `values` block, or other body need no changes. Older scripts with empty sections still run but still warn. For the one-line forms above, removing the colon resolves the warning.
 
+## "Limited delete is not supported by this JDBC dialect."
+
+The generic `"JDBC"` type has no portable way to write a delete bounded by a row limit. MySQL and MariaDB append `... LIMIT n`, PostgreSQL picks the rows with a `ctid` subquery first, and MongoDB picks their ids first; the portable dialect has none of those, so `JdbcDialect.applyDeleteLimit()` answers with `Limited delete` and the statement is rejected before it reaches the database. Nothing is deleted — not even in part — and the message is in `last database error`.
+
+The `where` block is not what the dialect is complaining about. The limit is the part with no portable spelling, and the refusal is the same whether a filter is written or not: `delete entities from table "logs" with limit 500 and wait`, with no `where` at all, is refused the same way. A `where` block on its own is ordinary SQL, so a filtered delete without `with limit` does run on that type, as it does on SQLite and H2.
+
+No property or driver setting gives the dialect the form it lacks, so this is a real gap rather than a configuration mistake. To bound the work by the statement, use a type whose dialect answers: `"MySQL"`, `"MariaDB"`, `"PostgreSQL"` and `"MongoDB"` all do. Otherwise delete by key: read the keys you mean to remove — `select page` over the table, or a walk of the key range — and run `delete one entity ... by id {_key}` for each one. `by id` takes no limit, and the batch size is yours to choose.
+
+## Setup inside an `if` does nothing, and a nested loop has no value
+
+Both of these were observed on Skript 2.16.2, the build this plugin compiles against and the one its server test loads. They are what that pairing did, not rules of Skript, and neither is a mistake in the script or a setting that can be changed.
+
+**`create a connection` and `register a database table` written inside an `if` block do nothing.** The block itself runs — an assignment beside them takes effect — while these two lines are skipped in silence: no connection is made, no table is registered, and `last database error` keeps its previous value instead of naming a reason. What the two have in common is that they hand their work to the plugin and hand the trigger over until the database has answered; an assignment never does. Write the setup at the top level of the trigger, before the first `if`, and check the result there.
+
+**A nested loop has no loop value.** A loop written inside another loop reads `<none>` for its loop expressions, so the inner body cannot see what it is iterating, the outer loop's value, or its size. Either do not nest the loops, or copy what the inner one needs into a local variable before entering it.
+
 ## The table name works on one server and not another
 
 MySQL table names on Linux are usually case-sensitive, depending on the server configuration. Both `register a database table "..."` and every later `table "..."` use the name exactly as written. Keep the spelling and case consistent.

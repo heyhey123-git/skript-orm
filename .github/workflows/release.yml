@@ -66,8 +66,13 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # The same layers ci.yml runs, on the exact commit about to be tagged, including the real Paper
-      # server test: the jar being published is the one that test just drove.
+      # What a release can run without provisioning a database server, on the exact commit about to be
+      # tagged: the unit tests, the Skript-layer integration tests, and the real Paper server test in the
+      # mode that starts no external server — the jar being published is the one that test just drove.
+      #
+      # This is not all of what ci.yml runs. `:generic-jdbc-implementation:integrationTest` is missing, and
+      # so are its PostgreSQL and MongoDB counterparts: each needs a container or a server, which the jobs
+      # in ci.yml provide for them and this step does not.
       - name: Build and verify
         run: ./gradlew clean test :core:integrationTest serverTest --stacktrace
 
