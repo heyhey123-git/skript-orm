@@ -677,6 +677,13 @@ MockBukkit is still used by the Skript tests, but only as a Bukkit server: Skrip
 `Bukkit.getConsoleSender()`, and the config parser reports through it, so without a server the parser
 NPEs instead of returning nodes.
 
+A measurement that exists only inside a test-report artifact is not a measurement. The browser used to
+read a run here is not signed in, and the artifact API answers 401, so a number that never reaches the
+job log cannot be read by the people who have to act on it — which is how the first server-side count
+was lost by the very run that produced it. Gradle hides test stdout unless the task asks for it, so a
+case that measures something turns `showStandardStreams` on for its own task and prints the number and
+the environment it was measured under on one line. An artifact is not a channel.
+
 ---
 
 ## 9. Adding a database implementation
