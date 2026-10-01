@@ -15,7 +15,14 @@
 # element closed the default connection first. The transaction element is waited for for the same
 # reason, and because its own timeout test parks the trigger for five seconds at a time. The SQLite
 # element is waited for because the all-form below closes every connection there is, and that one
-# belongs to a script whose own round trip is still using it.
+# belongs to a script whose own round trip is still using it. The stress element is waited for because it
+# is the only one that parks *after* its work has started: its cancellation case waits eight seconds
+# inside a transaction whose watchdog fires after five, so the all-form is the one thing that can arrive
+# in the middle of it. Without this guard it did, on the jobs that run this file against an installed
+# server, and the three questions that case asks afterwards all came back "No connection named 'stress',
+# and no connection has been created yet." — the connection had been closed under it, which says nothing
+# about the rollback those questions exist to test. The elements that stagger by six seconds at the start
+# of their own work are past that stagger by the time this element's first tick lands.
 #
 # Offline there is no shared connection to protect, so the element runs on its own schedule there.
 every 5 seconds:
@@ -28,6 +35,8 @@ every 5 seconds:
     if {skriptorm::selftest::done::transaction} is not set:
         stop trigger
     if {skriptorm::selftest::done::sqlite} is not set:
+        stop trigger
+    if {skriptorm::selftest::done::stress} is not set:
         stop trigger
 
     disconnect from the current database
