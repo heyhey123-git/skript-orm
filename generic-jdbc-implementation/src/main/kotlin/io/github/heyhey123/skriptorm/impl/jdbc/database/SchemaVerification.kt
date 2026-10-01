@@ -21,6 +21,13 @@ import java.sql.DatabaseMetaData
  * its own `information_schema`, so MySQL, MariaDB, PostgreSQL, SQLite and H2 are all covered by the same
  * path — the same path the integration tests already use to read a column back.
  *
+ * What it requires is that the table can serve every statement the declaration allows: every declared column
+ * is there, with the storage the declaration asked for, and the declared key names one row. What it does not
+ * require is that the table holds nothing else. A table this plugin shares with another tool, or one an
+ * older declaration of the same script created with columns this one no longer names, still answers every
+ * statement the declaration can make, so that direction is not a difference. The key is the one part checked
+ * the other way round, because there a wider declaration is not the safe side: see [compare].
+ *
  * What it does not check is auto-increment, and any size a server reports in units other than the one the
  * declaration used. The drivers disagree about both in ways that are not about the script at all: MySQL
  * reports an identity column through `IS_AUTOINCREMENT` while PostgreSQL reports the underlying sequence,
@@ -76,8 +83,12 @@ internal object SchemaVerification {
     }
 
     /**
-     * Every difference between [declared] and [actual], in the order a reader wants them: a column that is
-     * missing altogether first, then one the declaration does not know, then the per-column differences.
+     * Every difference that would stop the table from serving the declaration, in the order a reader wants
+     * them: a column that is missing altogether first, then the per-column differences, then the key.
+     *
+     * A column the table has and the declaration does not is not one of them. What a declaration asks for is
+     * that the columns it names are there with the storage it asked for; it asks for nothing else, and a
+     * table that carries more than that still runs every statement the script can write.
      *
      * The comparison is exact for names. A server that folds unquoted identifiers to lower case does not
      * hide a difference, because this implementation always quotes them: what a script writes is the name
@@ -91,12 +102,6 @@ internal object SchemaVerification {
         if (missing.isNotEmpty()) {
             mismatches += "Column(s) ${missing.joinToString(", ") { "'$it'" }} are declared but missing " +
                 "from the table. The table holds: ${actual.columns.joinToString(", ") { "'${it.name}'" }}."
-        }
-
-        val unexpected = actual.columns.map { it.name } - declared.columns.keys
-        if (unexpected.isNotEmpty()) {
-            mismatches += "Column(s) ${unexpected.joinToString(", ") { "'$it'" }} are in the table but not " +
-                "declared, so the declaration is behind the table."
         }
 
         for ((name, column) in declared.columns) {
@@ -119,10 +124,24 @@ internal object SchemaVerification {
             }
         }
 
+        // A declaration says that its key names one row, so the table has to be able to guarantee it: a
+        // primary key whose columns are all key columns of the declaration does, because a superset of a
+        // unique set is still unique. A table keyed on a column the declaration leaves out does not, because
+        // a statement addressing a row by the declared key would match every row of that other key, and
+        // `update one` would write all of them. The check is written as containment because that is the
+        // requirement, even though a declaration carries at most one key column — `Table` refuses a second,
+        // so the accepted direction cannot arise yet. A keyless declaration promises nothing about identity
+        // and is not compared, which is the case this relaxation is about.
         val declaredKey = declared.columns.filterValues { it.isPrimaryKey }.keys
-        if (declaredKey != actual.primaryKey) {
-            mismatches += "The primary key is declared as " +
-                "${declaredKey.describe()} but the table holds ${actual.primaryKey.describe()}."
+        if (declaredKey.isNotEmpty()) {
+            if (actual.primaryKey.isEmpty()) {
+                mismatches += "The primary key is declared as ${declaredKey.describe()} but the table " +
+                    "holds none."
+            } else if (!declaredKey.containsAll(actual.primaryKey)) {
+                mismatches += "The table keys on ${(actual.primaryKey - declaredKey).describe()}, which " +
+                    "the declaration does not mark as a primary key, so a statement that addresses a row " +
+                    "by ${declaredKey.describe()} can match more than one."
+            }
         }
 
         return mismatches
@@ -283,8 +302,8 @@ internal object SchemaVerification {
      *
      * PostgreSQL's driver reports its own internal names (`int4`, `int8`, `float8`) through
      * `DatabaseMetaData`, while MySQL reports the SQL name and H2 reports the standard one. The canonical
-     * form is not a preference: it is the spelling the declaration uses, so that the two can be compared
-     * at all.
+     * form is not a preference, and it is not always the spelling the declaration uses — `INT` is compared
+     * as `INTEGER` — it only has to be a form both sides can be brought to, which is all a comparison needs.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",

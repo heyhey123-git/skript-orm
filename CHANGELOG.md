@@ -19,9 +19,10 @@ A release about where a batch insert goes, what it reports, and how much one sta
 becomes a type of its own, because its connector reaches the server's own bulk execute with no configuration,
 where Connector/J sends one row at a time — the difference a large `insert many` showed as a MariaDB server
 being many times slower than PostgreSQL. One statement now moves at most 5000 rows, and the two directions
-treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Three fixes
+treat that ceiling differently: a read past it is refused, and a write past it keeps what fits. Four fixes
 come with it: a table declared twice is no longer an error, a number written into a text column keeps its
-digits, and a column that holds nothing reads back as unset.
+digits, a column that holds nothing reads back as unset, and a table that carries a column the declaration
+does not name is registered instead of being refused.
 
 ### Added
 
@@ -62,6 +63,16 @@ digits, and a column that holds nothing reads back as unset.
 - **A number column that holds nothing reads back as unset instead of failing.** A `NULL` in a column read as
   a number, a date or a boolean is now reported as no value, where it used to reach the converter and fail
   the statement.
+- **A table is compared for what the declaration needs, not for what the declaration does not mention.** The
+  check that runs after `CREATE TABLE IF NOT EXISTS` used to report a difference in both directions: a
+  declared column the table is missing, and a column the table has and the declaration never names. Only the
+  first one can fail a statement, so a table shared with another tool, or one an older declaration of the same
+  script created with columns this one no longer names, now registers. The key is still compared, and in the
+  direction that matters: a table keyed on a column the declaration does not mark as a key is refused, because
+  a statement addressing a row by the declared key could then match several rows. A declaration with no key
+  asks nothing about identity, and is no longer refused for a table that has one. A column the table carries
+  that is `not null` with no default is the one case where a write still fails, and the server names the
+  column when it does.
 
 **Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.0
 

@@ -45,8 +45,14 @@ class SchemaVerificationTest {
         assertTrue("'id', 'name'" in mismatches.single(), mismatches.single())
     }
 
+    /**
+     * The two directions are not symmetrical. A declaration asks for the columns it names to be there with the
+     * storage it named, and asks for nothing else, so a table carrying a column the declaration never
+     * mentions still runs every statement the script can write: a table shared with another tool, or one an
+     * older declaration of the same script created. The key is the other way round, and is checked as such.
+     */
     @Test
-    fun `a column the table has and the declaration does not is reported`() {
+    fun `a column the table has and the declaration does not is accepted`() {
         val mismatches = SchemaVerification.compare(
             users,
             SchemaVerification.ActualTable(
@@ -55,8 +61,7 @@ class SchemaVerificationTest {
             )
         )
 
-        assertEquals(1, mismatches.size)
-        assertTrue("'legacy'" in mismatches.single(), mismatches.single())
+        assertEquals(emptyList(), mismatches)
     }
 
     @Test
@@ -124,6 +129,40 @@ class SchemaVerificationTest {
 
         assertEquals(1, mismatches.size)
         assertTrue("primary key is declared as 'id' but the table holds none" in mismatches.single())
+    }
+
+    /**
+     * The direction that is not safe: a table keyed on a column the declaration leaves out means the declared
+     * key can name several rows, so `update one` would write every one of them.
+     */
+    @Test
+    fun `a table keyed on a column the declaration does not key on is reported`() {
+        val mismatches = SchemaVerification.compare(
+            users,
+            SchemaVerification.ActualTable(columns = actual(users).columns, primaryKey = setOf("id", "name"))
+        )
+
+        assertEquals(1, mismatches.size)
+        assertTrue("keys on 'name'" in mismatches.single(), mismatches.single())
+        assertTrue("can match more than one" in mismatches.single(), mismatches.single())
+    }
+
+    /**
+     * A keyless declaration promises nothing about identity, so a key the table carries is not a difference:
+     * the declaration cannot address a row by key, and every statement it allows still runs.
+     */
+    @Test
+    fun `a keyless declaration is not compared against the table's key`() {
+        val keyless = Table(
+            "users",
+            listOf(
+                Column("id", BigIntJdbcDataType(), isNullable = false),
+                Column("name", StringJdbcDataType(), isNullable = false, size = 64),
+                Column("age", IntJdbcDataType())
+            )
+        )
+
+        assertEquals(emptyList(), SchemaVerification.compare(keyless, actual(keyless)))
     }
 
     /**
