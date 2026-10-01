@@ -684,6 +684,13 @@ was lost by the very run that produced it. Gradle hides test stdout unless the t
 case that measures something turns `showStandardStreams` on for its own task and prints the number and
 the environment it was measured under on one line. An artifact is not a channel.
 
+A long job log has the same edge from the other side. Downloading a step log raw truncates it near a
+hundred kilobytes, so a measurement past that cut is missing from the file even though it is in the
+run — the two MySQL lines of the first run that produced server-side numbers fell past it while the
+MariaDB and PostgreSQL lines did not, which is exactly the kind of absence that reads as "the case did
+not run". Read a long log through the viewer, which loads and searches the whole step, and treat a
+truncated download as a partial answer rather than an empty one.
+
 ---
 
 ## 9. Adding a database implementation
