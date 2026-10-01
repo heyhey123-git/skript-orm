@@ -1,0 +1,130 @@
+name: Benchmarks
+
+# Performance work runs on its own schedule rather than in ci.yml, for two reasons: a benchmark takes
+# minutes where a test takes seconds, and a benchmark answers "how fast" while a test answers "does it
+# work". Mixing them would make the second answer wait for the first.
+#
+# Nothing here fails a run because a number moved. The suite has no measured noise band yet, and a
+# threshold guessed before the band is known is a threshold that gets deleted — taking the count gates
+# with it. What fails a run today is the harness itself: a benchmark that stops compiling, or a case
+# that cannot run. The first deterministic metric (statements and rows handed to the driver) turns the
+# `fail-on-alert` line below into a gate, and that happens when it has a number to compare against.
+on:
+  # Every night, so the trend exists even in a week nobody touches the hot path. The minute is off the
+  # hour because GitHub's scheduler is busiest then.
+  schedule:
+    - cron: '17 3 * * *'
+
+  # A pull request that could move a number gets a run, so a regression is visible before it is merged.
+  # The list is what the measured code is: the library, the implementations, and the build files that
+  # decide what is compiled and against which versions. Documentation cannot move a number, and ci.yml
+  # skips those for the same reason.
+  pull_request:
+    paths:
+      - 'benchmarks/**'
+      - 'core/src/main/**'
+      - 'generic-jdbc-implementation/src/main/**'
+      - 'mongodb-implementation/src/main/**'
+      - 'postgresql-implementation/src/main/**'
+      - 'gradle/libs.versions.toml'
+      - 'build.gradle.kts'
+      - 'settings.gradle.kts'
+      - '.github/workflows/benchmarks.yml'
+
+  # Manual runs, because a trend is only useful if a suspicious night can be repeated on demand. The
+  # filter is the same property a local run uses, so a single case can be checked in a minute.
+  workflow_dispatch:
+    inputs:
+      forks:
+        description: 'JMH forks per benchmark; more forks mean a wider estimate and a longer run.'
+        required: false
+        default: '2'
+      filter:
+        description: 'JMH benchmark name regex. Empty runs every case.'
+        required: false
+        default: ''
+
+permissions:
+  # The action keeps its history on the gh-pages branch: it pushes the new numbers there and reads the
+  # old ones back. `contents: write` is also what lets a pull request be commented on by the same token.
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  jmh:
+    name: JMH benchmarks
+    runs-on: ubuntu-latest
+    # Longer than any other job in this repository: a case costs its warmup and measurement iterations
+    # in wall-clock time, and a suite of them costs minutes by arithmetic. The timeout is here so a
+    # case that hangs is a failed run rather than a job that burns an hour.
+    timeout-minutes: 90
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/prepare-build
+        with:
+          # A pull request reads the shared cache but does not write it, which is the same rule the
+          # Testcontainers jobs follow: what a branch writes is not what a later release builds from.
+          gradle-cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Run the benchmarks
+        run: |
+          ./gradlew :benchmarks:jmh --stacktrace \
+            -Pbenchmarks.forks=${{ github.event.inputs.forks || '2' }} \
+            ${{ github.event.inputs.filter && format('-Pbenchmarks.filter={0}', github.event.inputs.filter) || '' }}
+
+      # A run's log scrolls away; the run's summary does not. The table is the same numbers the action
+      # reads, written where a person deciding whether to look further will see them.
+      - name: Summarise the report
+        if: always()
+        run: |
+          report=benchmarks/build/benchmarks/results.json
+          if [ ! -f "$report" ]; then
+            echo "No report was written; the run above says why." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo '### JMH'
+            echo
+            echo '| benchmark | score | unit |'
+            echo '| --- | --- | --- |'
+            jq -r '.[] | "| \(.benchmark) | \((.primaryMetric.score * 1000 | round) / 1000) | \(.primaryMetric.scoreUnit) |"' "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: jmh-report
+          path: benchmarks/build/benchmarks/results.json
+          if-no-files-found: ignore
+
+      # The history lives on `gh-pages`, which this repository does not have yet: the branch has to
+      # exist before the first run that pushes to it. Creating it is a push, so it is not done here.
+      #
+      # `tool: jmh` reads JMH's own JSON and nothing else, which is the reason the benchmark task writes
+      # that format instead of a table of its own.
+      - name: Record the numbers
+        if: hashFiles('benchmarks/build/benchmarks/results.json') != ''
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'jmh'
+          output-file-path: benchmarks/build/benchmarks/results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench'
+          # A pull request is compared against the history but never writes to it: the numbers a branch
+          # produces are not the numbers the next branch should be measured against.
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          # Commenting needs a token that may write to the pull request, which a pull request from a
+          # fork does not get. Comparing still happens there; only the comment is skipped.
+          comment-on-alert: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
+          alert-threshold: '150%'
+          # Report only, for now, and deliberately: see the note at the top of this file.
+          fail-on-alert: false
