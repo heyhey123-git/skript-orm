@@ -47,6 +47,26 @@ else if {_user::age} is not set:
 
 这是 Skript 的规则，不是插件的存储方式，而且凡是“子列表组成的列表”都如此，与它是插件写的还是脚本写的无关。`size of` 通过 `Variable#size(Event)` 取值：它先数条目的个数，再减去每一个“值是 map、自身却没有标量”的条目——一行正好就是这样，所以“行组成的列表”报 0，脚本按同样形状自己搭出来的列表也报 0。把这条规则钉住的用例是服务端测试里的 `elements/34-result-size.sk`：它断言脚本自建的平铺列表为 20、插件存下的结果为 0、手写的同形状列表为 0，而遍历结果计数得到 20。要数行数就遍历——本插件的基准脚本与 cookbook 也是这么做的。
 
+## `loop 1 to 20` 一次都不会执行
+
+Skript 没有 `X to Y` 这种范围写法，而且写错不会大声报错：Skript 只在加载时输出一次 `Can't understand this loop: '1 to 20'`，把那一行丢掉，然后继续加载脚本其余部分——所以循环体一次都不会执行，循环里的代码也无从报出问题。周围一切照常，这正是它难被发现的原因。在 Skript 2.16.2 上实测，各种范围写法都会被拒绝：`loop 1 to 20`、`loop 1 through 20`、`loop from 1 to 20`，以及表达式写法 `set {_x::*} to 1 to 20`（它报 `Can't understand this expression: '1 to 20'`，这也是任何循环都接不住它的原因）。
+
+要遍历一个范围，就用计数，或者先把列表搭出来再遍历那个列表：
+
+```sk
+loop 20 times:
+    if {_users::%loop-number%::id} is not set:
+        stop loop
+    # 这里 loop-number 就是行号，从 1 到 20
+```
+
+```sk
+loop {_indices::*}:
+    # 这里 loop-value 是本次迭代的行号
+```
+
+写成逗号列表（例如 `loop 1, 2, 3`）属于列表，可以正常工作。把以上各点钉住的用例是服务端测试里的 `elements/34-result-size.sk`：它断言计数循环与列表循环各运行 20 次、各找到 20 行，并用一个完全不靠循环的对照证明这些行按行号可读；同时服务端测试遇到任何 `can't understand` 行都会让构建失败，所以范围写法不会再悄悄溜回来。
+
 ## 一次删除或更新动了整张表
 
 `delete entities` 和 `update entities` 允许省略 `where`，此时会作用于实现允许的所有行，漏写条件也不会报错。请补上条件，或改用 `by id`。见 [更新与删除](updating-and-deleting.zh-CN.md)。

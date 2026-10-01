@@ -47,6 +47,26 @@ See [Types](types.md).
 
 This is Skript's rule rather than the plugin's storage, and it applies to any list of sub-lists however it was written. `size of` reads the list through `Variable#size(Event)`, which takes the number of entries and then subtracts every entry whose value is a map with no scalar of its own — a row is exactly that, so a result of rows reports zero, and so does the same shape built by a script. The case that pins this is `elements/34-result-size.sk` in the server test: it asserts 20 for a flat list the script built, 0 for the stored result, 0 for the same shape built by hand, and 20 for a count taken by iterating the result. To count rows, iterate them — the plugin's own benchmark and cookbook do that too.
 
+## A `loop 1 to 20` counts nothing
+
+Skript has no `X to Y` range, and writing one does not fail loudly: Skript reports `Can't understand this loop: '1 to 20'` once at load time, drops that line, and loads the rest of the script — so the loop body never runs once, and nothing inside it can report the problem. Everything around it works, which is what makes this hard to see. Measured on Skript 2.16.2, every spelling of a range is refused: `loop 1 to 20`, `loop 1 through 20`, `loop from 1 to 20`, and the expression form `set {_x::*} to 1 to 20` (which answers `Can't understand this expression: '1 to 20'`, and that is why no loop can take it).
+
+Walk a range by counting, or by building the list and looping that:
+
+```sk
+loop 20 times:
+    if {_users::%loop-number%::id} is not set:
+        stop loop
+    # loop-number is the row index here, 1 to 20
+```
+
+```sk
+loop {_indices::*}:
+    # loop-value is the row index for this iteration
+```
+
+A comma list such as `loop 1, 2, 3` is a list, and it does work. The case that pins all of this is `elements/34-result-size.sk` in the server test, which asserts a count loop and a list loop each run 20 times and find 20 rows while a control reads the rows with no loop at all — and the server test fails the build on any `can't understand` line, so a range spelling cannot creep back in unnoticed.
+
 ## A delete or update touched every row
 
 `delete entities` and `update entities` allow you to omit `where`, in which case they affect every row the implementation allows. Forgetting the condition is not an error. Add a filter or use `by id`. See [Updating and deleting](updating-and-deleting.md).
