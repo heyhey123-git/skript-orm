@@ -558,6 +558,21 @@ that environment, so no other workflow can read it, and the environment's deploy
 default branch, which is the only branch the job is meant to run from. A run without the secret stops at
 the first step and says what to add.
 
+`benchmarks.yml` measures rather than tests. It runs the JMH cases in the `benchmarks` module nightly, on
+a pull request whose filter says a change could move a number, and on demand — with a fork count and a
+case filter for whoever is chasing a suspicious night. `./gradlew :benchmarks:jmh` runs the same cases
+locally and takes the same two properties.
+
+Nothing in it fails a run because a number moved. The suite has no measured noise band yet, and a
+threshold guessed before the band is known is a threshold that gets deleted, taking the count gates with
+it. What fails a run is the harness: a case that stops compiling, or one that cannot run.
+
+The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch, which has to
+exist before the first run that pushes to it. A pull request is compared against that history but never
+writes to it, because the numbers a branch produces are not the numbers the next branch should be
+measured against. The report is JMH's own JSON, which the action reads with `tool: jmh` — which is the
+reason the benchmark task writes that format rather than a table of its own.
+
 #### When CI runs
 
 `push` and `pull_request` ignore changes that cannot affect the build: Markdown, `.gitignore`, and
