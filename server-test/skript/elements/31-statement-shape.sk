@@ -1,0 +1,114 @@
+# Where a statement may be written, and what a delete has to carry.
+#
+# Two claims in the documentation came from one observation each in a benchmark script rather than from a
+# case here, and both are measurable: that a delete without `with limit` is refused by the generic
+# dialect, and that a statement written inside an `if` block is skipped in silence. The file breaks the
+# one-element-per-file rule on purpose — the cases are one question, they share a connection, and each
+# still reports under its own name so a failure names the case it happened in.
+#
+# Every case is counted rather than read from an error string: a statement that was skipped and a
+# statement that succeeded both leave `last database error` unset, and only the affected-row count tells
+# them apart. That is what made the answer to the `if` question `rowsAffected=1` rather than a silence.
+#
+# What the first run of this file established, on Skript 2.16.2:
+#   delete without a limit, with or without a where block  -> refused by the dialect
+#   delete with a limit                                    -> refused by the dialect
+#   insert inside an `if`                                  -> runs (1 row)
+#   connection created inside an `if`, used after it       -> exists (1 row written through it)
+# So on the generic `"JDBC"` type, `delete entities` does not work at all, and a statement inside an `if`
+# is not skipped. The update case below is here to say whether the delete bug is about deletes or about
+# every write that has an optional limit.
+
+on load:
+    set {skriptorm::selftest::started::statement-shape} to true
+
+    # Every other element reports on the first tick, and a connection made before that would be the
+    # default their unqualified statements resolve to.
+    wait 6 seconds
+
+    create a connection named "shape" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        # The same two pragmas as the ceiling probe, for the same reason: this file is a throwaway under
+        # `plugins/Skript`, and without them the driver syncs it once per row.
+        url: "jdbc:sqlite:plugins/Skript/shape-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL statement shape connect: %last database error%"
+
+    in connection "shape":
+        register a database table "orm_shape_probe":
+            id: bigint, primary key, not null
+            name: string(64), nullable
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL statement shape register table: %last database error%"
+
+    # Seed a row with the count reported, so the table is known to hold something before the delete below
+    # is pointed at it.
+    set {_seed::rows} to -1
+    in connection "shape":
+        insert one entity into table "orm_shape_probe" and store affected rows in {_seed::rows} and wait:
+            values:
+                id: 1
+                name: "a"
+    if {_seed::rows} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL statement shape seed: the insert reported %{_seed::rows}% rows"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL statement shape seed: %last database error%"
+
+    # A plain delete, carrying neither a where block nor a limit. Nothing is asserted about rows left
+    # behind: what matters is which message comes back and whether a count was claimed.
+    set {_unlimited::rows} to -1
+    in connection "shape":
+        delete entities from table "orm_shape_probe" and store affected rows in {_unlimited::rows} and wait
+    log "SKRIPTORM_SELFTEST detail: delete unlimited -> error=%last database error% rowsAffected=%{_unlimited::rows}%"
+
+    # The same statement with a where block and still no limit: the form the entry said does run.
+    set {_filtered::rows} to -1
+    in connection "shape":
+        delete entities from table "orm_shape_probe" and store affected rows in {_filtered::rows} and wait:
+            where all:
+                name = "a"
+    log "SKRIPTORM_SELFTEST detail: delete filtered -> error=%last database error% rowsAffected=%{_filtered::rows}%"
+
+    # And with a limit, which is the form the dialect is documented to refuse.
+    set {_limited::rows} to -1
+    in connection "shape":
+        delete entities from table "orm_shape_probe" with limit 1 and store affected rows in {_limited::rows} and wait
+    log "SKRIPTORM_SELFTEST detail: delete limited -> error=%last database error% rowsAffected=%{_limited::rows}%"
+
+    # An update written the same way: no limit, no where block. This is what says whether the refusal is
+    # about deletes or about every write that carries an optional limit.
+    set {_update::rows} to -1
+    in connection "shape":
+        update entities in table "orm_shape_probe" and store affected rows in {_update::rows} and wait:
+            values:
+                name: "updated"
+    log "SKRIPTORM_SELFTEST detail: update unlimited -> error=%last database error% rowsAffected=%{_update::rows}%"
+
+    # A statement that is not setup, inside an `if` block, with the connection section outside it: the
+    # shape that would make every database statement silent inside an `if` rather than only the two that
+    # were noticed. The affected-row count is what says whether it ran.
+    set {_inif::rows} to -1
+    if {skriptorm::selftest::started::statement-shape} is true:
+        in connection "shape":
+            insert one entity into table "orm_shape_probe" and store affected rows in {_inif::rows} and wait:
+                values:
+                    id: 91
+                    name: "in-if"
+    log "SKRIPTORM_SELFTEST detail: statement in if -> error=%last database error% rowsAffected=%{_inif::rows}%"
+
+    # Setup inside an `if`, which is the shape the troubleshooting entry describes. A connection that was
+    # never made cannot be used from outside the block, so the check is a statement written through it.
+    if {skriptorm::selftest::started::statement-shape} is true:
+        create a connection named "shape-if" to database "JDBC" with properties:
+            driver: "org.sqlite.JDBC"
+            url: "jdbc:sqlite:plugins/Skript/shape-if.db?synchronous=OFF&journal_mode=MEMORY"
+    set {_setup::rows} to -1
+    in connection "shape-if":
+        register a database table "orm_shape_if":
+            id: bigint, primary key, not null
+        insert one entity into table "orm_shape_if" and store affected rows in {_setup::rows} and wait:
+            values:
+                id: 1
+    log "SKRIPTORM_SELFTEST detail: setup in if -> error=%last database error% rowsAffected=%{_setup::rows}%"
+
+    set {skriptorm::selftest::done::statement-shape} to true

@@ -30,24 +30,30 @@
 # times without changing what the statement costs the database.
 #
 # The six sizes are written out one after another rather than looped over, and every loop below is written
-# at the top level of this trigger with a literal count. That is not style: three runs of an earlier version
-# of this script reported `<none>` for every size, every round and every batch, and the fixes are what those
-# runs measured. A value loop over a list variable gave no loop value; a size loop nested inside a round
-# loop gave none either, so the fill inside it wrote nothing; and the suite's own fill loop, which works, is
-# written at the top level of its trigger. The DIAG line after the first fill keeps that visible, because a
-# fill that produces nothing should say so in one line rather than in ninety measurements.
+# at the top level of this trigger with a literal count. That is not style: an earlier version of this script
+# looped, and what the loop body wrote was dropped. The cause was measured later, in the suite's own server
+# test (`elements/32-loop-value.sk`): inside a nested loop the plain `loop-number` and `loop-value` are
+# ambiguous, and Skript refuses the *line that reads them* while parsing — "There are multiple loops that
+# match loop-number. Use loop-number-1/2/3/etc." — so the body around that line never runs and a batch filled
+# there comes out empty. The suffixes count from the outermost loop inward, so `-1` is the outer loop. The
+# DIAG line after the first fill keeps this visible, because a fill that produces nothing should say so in
+# one line rather than in ninety measurements.
 #
-# Nothing here deletes. Neither delete form reaches this dialect: a delete with a where block goes through
-# the limited path, and the unfiltered effect pages through "every row the implementation allows", which is
-# the same limit — the suite checks for that refusal by name in 28-sqlite.sk, and both were refused by it
-# when this script was first run. Each write therefore owns a range of keys instead, the read that follows
-# asks for that range, and the count the database reports is cumulative: the reader turns consecutive counts
-# into differences, which is what says whether the write actually wrote.
+# Nothing here deletes, and not for the reason first recorded here. A delete is refused by this dialect
+# whether or not a limit is written: the suite's `elements/31-statement-shape.sk` measures a bare
+# `delete entities from table "..." and wait`, the same statement with a where block, and the same with
+# `with limit 1` — all three come back `Limited delete is not supported by this JDBC dialect.` and claim no
+# affected rows, and `update entities` written without a limit is refused the same way. Each write therefore
+# owns a range of keys instead, the read that follows asks for that range, and the count the database reports
+# is cumulative: the reader turns consecutive counts into differences, which is what says whether the write
+# actually wrote.
 #
-# The setup is written at the top level too, for a measured reason: with `create a connection` inside a
-# conditional the connection was never created and no error was reported either, while the two plain
-# variables set in the same conditional did arrive. A statement that parks the trigger does not belong in a
-# conditional section here. The guards below stop the trigger and do nothing else.
+# The setup is written at the top level too. The reason first recorded here — that a `create a connection`
+# inside a conditional was never created and reported nothing either — did not reproduce when the suite
+# measured it again (`elements/31-statement-shape.sk`: a connection made inside an `if` and used after it
+# wrote its row, and an `insert` inside an `if` ran). The setup stays at the top level for the plain reason
+# that it happens once, before anything can depend on it, and the guards below stop the trigger and do
+# nothing else.
 #
 # SQLite is the database because it is the one this machine reaches without a container. The two pragmas
 # are the suite's: without them the driver syncs the file per row and this would measure the disk.
@@ -305,6 +311,89 @@ every 5 seconds:
             add 1 to {bench::stored}
     log "SKRIPTORM_BENCH read: rows=10000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
     delete {bench::rows::*}
+
+    # Controls, before the warm pass. Every read above left the longest tick at exactly a tick's own length,
+    # while the reading page says a 5000-row read of six columns — 30 000 values, the size at which the
+    # result tree is attached rather than written value by value — spends about 36 milliseconds of the
+    # server thread. Both cannot be true, and more reads cannot settle it: what settles it is a block of
+    # work whose size this script chooses instead of measures. A spin is a counted loop with no statement
+    # and no wait inside it, so it runs to completion on the server thread and its own duration is what
+    # `spin=` says. If the observer reports an overhang of that size, it can see work of that size, and the
+    # reads above are genuinely not lengthening a tick; if it reports nothing, the instrument is what is
+    # short. `spun=` is how many times the loop ran, because a loop the parser quietly dropped would
+    # otherwise read as a block that was fast rather than as one that never happened.
+    #
+    # The idle control is the floor: six seconds of waiting with nothing else watched must report a longest
+    # tick of exactly one tick, or the observer is adding something of its own to every reading.
+    #
+    # The sizes were wrong the first time and the run said so. That version used 5000, 20000, 60000 and
+    # 150000 iterations, which measured 10, 10, 20 and 50 ms: an iteration costs about a third of a
+    # microsecond, so the largest block was one tick long exactly, and a block that fits inside a tick
+    # leaves the tick un-lengthened no matter how well the observer works. Nothing was learned from it
+    # about whether the observer can see an overhang at all. These sizes are past a tick on purpose —
+    # about 40, 60, 100 and 300 ms — so that the smallest one is the size the reading page describes and
+    # the largest one cannot fit in any tick.
+    #
+    # What those sizes measured, for whoever reads this next: 120000 and 300000 iterations both took 90 ms
+    # and came back as 90 ms ticks, 180000 took 50 ms and came back as 60, 900000 took 290 ms and came back
+    # as 300 — 250 ms of overhang — and the idle window came back as 70. So the observer does see an overhang
+    # once there is one, and its floor is a tick: half a tick of block reads as 0 to 10 ms of overhang, and
+    # less than that reads as nothing at all, however long it actually ran.
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::tick::before} to {bench::tick}
+    set {bench::before} to now
+    wait 6 seconds
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=idle6s ticks=%{bench::tick} - {bench::tick::before}% window=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] spun=0"
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::spin::before} to now
+    set {_spun} to 0
+    loop 120000 times:
+        set {_spun} to {_spun} + 1
+    set {bench::spin::elapsed} to difference between {bench::spin::before} and now
+    wait 1 second
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=spin120000 ticks=%{bench::tick} - {bench::tick::before}% spin=[%{bench::spin::elapsed}%] window=[%difference between {bench::spin::before} and now%] gap=[%{bench::tick::gap::max}%] spun=%{_spun}%"
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::spin::before} to now
+    set {_spun} to 0
+    loop 180000 times:
+        set {_spun} to {_spun} + 1
+    set {bench::spin::elapsed} to difference between {bench::spin::before} and now
+    wait 1 second
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=spin180000 ticks=%{bench::tick} - {bench::tick::before}% spin=[%{bench::spin::elapsed}%] window=[%difference between {bench::spin::before} and now%] gap=[%{bench::tick::gap::max}%] spun=%{_spun}%"
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::spin::before} to now
+    set {_spun} to 0
+    loop 300000 times:
+        set {_spun} to {_spun} + 1
+    set {bench::spin::elapsed} to difference between {bench::spin::before} and now
+    wait 1 second
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=spin300000 ticks=%{bench::tick} - {bench::tick::before}% spin=[%{bench::spin::elapsed}%] window=[%difference between {bench::spin::before} and now%] gap=[%{bench::tick::gap::max}%] spun=%{_spun}%"
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::spin::before} to now
+    set {_spun} to 0
+    loop 900000 times:
+        set {_spun} to {_spun} + 1
+    set {bench::spin::elapsed} to difference between {bench::spin::before} and now
+    wait 1 second
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=spin900000 ticks=%{bench::tick} - {bench::tick::before}% spin=[%{bench::spin::elapsed}%] window=[%difference between {bench::spin::before} and now%] gap=[%{bench::tick::gap::max}%] spun=%{_spun}%"
 
     # The 5000-row write again, at the end and with everything warm. Every number above is the first time
     # that statement ran in this server, and the first 5000-row write measured 80 ms of tick overrun where
