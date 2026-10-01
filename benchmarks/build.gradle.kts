@@ -19,6 +19,31 @@
 dependencies {
     implementation(project(":core"))
 
+    // The JDBC implementation, so a case can drive the path a script takes: register the factory, let
+    // the plugin build its pool, and insert through the plugin's own query objects. A benchmark that
+    // only touched `core` would measure a shape the plugin never runs in.
+    implementation(project(":generic-jdbc-implementation"))
+
+    // An in-process database, so the insert path can be measured here at all: the integration tests
+    // reach MySQL, MariaDB and PostgreSQL through containers, and this machine has no container
+    // runtime. H2 is already the server `H2SchemaTest` keeps the dialect's type names honest against,
+    // and the plugin builds its own tables, which is the case H2's standard spellings are answered for.
+    // Benchmark-only: this module is never shaded and never published.
+    implementation(libs.h2)
+
+    // Skript and Paper are `compileOnly` for every module, and some classes on this path are typed by
+    // them (the data type registry names Skript's date and time), so they have to be present at run time.
+    runtimeOnly(libs.paper.api)
+    runtimeOnly(libs.skript)
+
+    // The root build gives every module Kotlin's standard library and coroutines as `compileOnly`,
+    // because in a released jar they are shaded in and relocated; the `implementation` pair belongs to
+    // the root project that builds that jar. This module is never shaded, so the benchmark JVM has to
+    // bring its own: without these the first Kotlin class touched dies with
+    // `NoClassDefFoundError: kotlin/jvm/internal/Intrinsics` inside the JMH fork.
+    runtimeOnly(kotlin("stdlib"))
+    runtimeOnly(libs.coroutines.core)
+
     implementation(libs.jmh.core)
     annotationProcessor(libs.jmh.generator)
 }
@@ -36,6 +61,11 @@ val benchmarksFilter: Provider<String> = providers.gradleProperty("benchmarks.fi
 val benchmarksForks: Provider<String> = providers.gradleProperty("benchmarks.forks").orElse("2")
 val jmhResults = layout.buildDirectory.file("benchmarks/results.json")
 
+// A case that counts what the plugin asked a driver for has to say so somewhere a build can read:
+// JMH forks a JVM, so those counters die with the fork. The path is passed in rather than guessed,
+// because the forked JVM's working directory is not something a case should have to assume.
+val jmhCounters = layout.buildDirectory.file("benchmarks/insert-many-counters.txt")
+
 val jmh by tasks.registering(JavaExec::class) {
     group = "verification"
     description = "Runs the JMH benchmarks and writes build/benchmarks/results.json."
@@ -43,6 +73,8 @@ val jmh by tasks.registering(JavaExec::class) {
     mainClass.set("org.openjdk.jmh.Main")
     classpath = sourceSets.main.get().runtimeClasspath
     outputs.file(jmhResults)
+    outputs.file(jmhCounters)
+    systemProperty("benchmarks.countersFile", jmhCounters.get().asFile.absolutePath)
 
     // JSON, because `benchmark-action/github-action-benchmark` reads JMH's own report format: the
     // history it keeps and the chart it draws need no conversion step of ours.
