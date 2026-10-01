@@ -71,6 +71,14 @@ val integrationTest by tasks.registering(Test::class) {
     useJUnitPlatform()
     shouldRunAfter(tasks.test)
 
+    // The server-side counting case prints the numbers it measured and the environment it measured
+    // them under, and Gradle hides test stdout unless the task asks for it. The run's test reports
+    // cannot be downloaded from every environment either, so without this the measurement would
+    // exist only inside an artifact nobody can open. Only this task turns it on.
+    testLogging {
+        showStandardStreams = true
+    }
+
     // A Gradle property wins: `-P` is delivered with every invocation, even one that reuses a daemon
     // started before the environment was set, which is what makes a CI job deterministic. `-D` and
     // the environment variables stay available for local runs.
