@@ -122,10 +122,17 @@ object ConnectionScope {
      * the registry empty, and the two send a reader looking for different things: a mistyped name is
      * a typo, while a name that was connected and then closed is a connection that went away while
      * the script was still using it. Which one it is cannot be recovered from the registry alone.
+     *
+     * Asking for a closed name also reaches the server console, through the hook the plugin installs
+     * for its own messages: an operator watching a script misbehave should not have to read that
+     * script's own chat to learn that the connection it kept naming was taken away.
      */
     fun unknownConnectionMessage(name: String): String {
         val known = Database.connectionNames
         val closed = Database.wasClosed(name)
+        if (closed) {
+            Database.warn("A script asked for the connection '$name', which was connected earlier and has since been closed.")
+        }
         return when {
             closed && known.isEmpty() ->
                 "No connection named '$name'. It was connected earlier and has since been closed, " +
