@@ -40,7 +40,28 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 - Row indices restart on each page, so `{_page::1::name}` is the first row **of that page**, not of the table.
 - Results are returned in **ascending primary-key order**. Pagination therefore requires a registered primary key, giving all backends a consistent ordering rule.
 - A page beyond the last page returns an empty result, not an error.
+- A page may hold at most **5000 rows**, and a page size above that is refused before the query runs. See [How many rows one read may store](#how-many-rows-one-read-may-store).
 - Pages use an **offset into the sorted rows, not a snapshot**. Inserts or deletions between reads can shift later rows, causing duplicates or omissions. For a table being modified during traversal, consider a primary-key cursor (`id > {_last}`), but also ensure stable primary-key ordering. The condition alone is not enough, and `select many` does not provide `ORDER BY`.
+
+## How many rows one read may store
+
+One read stores at most **5000 rows**. A result larger than that is **refused**: nothing is stored, the result variable is cleared, and `last database error` names the ceiling and says what to do about it.
+
+The ceiling is not about memory. Skript writes a list variable one index at a time, on the server thread, so the size of a result is spent out of the tick budget of the server itself: a hundred thousand rows written that way is more than ten seconds of the server stopped, which the watchdog reports and every player feels. 5000 rows is the largest result that stays inside a hitch nobody notices.
+
+A refusal is preferred over a truncated result because the two cannot be told apart afterwards. A script handed the first 5000 rows of a table goes on to answer questions about rows it never saw, and the answer is wrong rather than missing.
+
+Narrow the result, or walk it a page at a time:
+
+```sk
+loop 100 times:
+    select page loop-number with size 1000 from table "users" and store the results in {_rows::*}:
+        where all:
+            active = true
+    if {_rows::1::id} is not set:
+        stop loop
+    # ... use this page ...
+```
 
 ## Select by id
 

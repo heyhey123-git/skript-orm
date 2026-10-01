@@ -75,6 +75,24 @@ else if {_user::age} is not set:
 
 分页按已注册的主键排序，没有主键的表会被拒绝。页码从 1 开始，每页内部的行号也从 1 开始，所以 `{_page::1::name}` 是当前页的第一行，不是整张表的第一行。见 [读取行](reading.zh-CN.md)。
 
+## “select many read more than 5000 rows ... and stored nothing.”
+
+一条语句最多移动 5000 行，读取超过这个数量时不会存储任何内容：结果变量被清空，原因记录在 `last database error` 中。`select page` 每页超过 5000 行时会在查询发送前被拒绝。这个上限针对的是服务端线程而不是内存——结果是在该线程上逐下标写入列表变量的。
+
+请把读取收窄，或者一页一页地遍历：
+
+```sk
+loop 100 times:
+    select page loop-number with size 1000 from table "users" and store the results in {_rows::*}:
+        where all:
+            active = true
+    if {_rows::1::id} is not set:
+        stop loop
+    # ... 使用这一页 ...
+```
+
+多行写入的处理方式不同：`insert many` 超过 5000 行时会写入前 5000 行，并对剩余部分发出警告，而不是拒绝。见 [读取行](reading.zh-CN.md#一次读取最多能存多少行) 与 [写入行](writing.zh-CN.md#一次写入最多能发多少行)。
+
 ## Skript 提示 “Empty configuration section!”
 
 section 的冒号下没有缩进内容时，Skript 就会发出警告，与该 section 属于哪个插件无关。这条信息来自 Skript 解析器，控制它的开关是内部实现，无法通过配置文件或脚本关闭。

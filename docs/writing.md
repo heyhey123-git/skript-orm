@@ -75,6 +75,18 @@ The column sets follow these rules:
 
 An unset or empty variable fails with `{_rows::*} is not set.` rather than successfully inserting zero rows. Since `select many` leaves its result unset when nothing matches, check the variable before passing it to `insert many`. See [Reading rows](reading.md).
 
+### How many rows one write may send
+
+One write sends at most **5000 rows**. A larger batch is not refused: it writes its first 5000 rows, drops the rest, and warns in the console.
+
+```
+insert many was given 8000 rows in the list variable {_rows::*}, but one statement moves at most 5000 rows, so only the first 5000 are written and the rest are dropped. ...
+```
+
+The statement writes what it can because the rows are already in your hands — they were read from a variable or written out in a `values` block — and refusing would throw away that work without writing anything. The cost the ceiling guards against is the same one [a read has](reading.md#how-many-rows-one-read-may-store): the batch is turned into rows one at a time on the server thread.
+
+Two things tell you the tail was dropped: the warning, and the count in `and store affected rows in {_rows}`, which is the number of rows actually written. Split the batch over several statements to write all of it, one page of a `select page` walk at a time.
+
 ## In-or-out: upsert and if absent
 
 ```sk

@@ -75,6 +75,18 @@ insert many {_rows::*} into table "archived_users" and wait
 
 变量未设置或为空时，语句会报 `{_rows::*} is not set.`，而不是成功写入 0 行。`select many` 没有匹配结果时也会留下空变量，因此将结果传给 `insert many` 前，请先检查变量是否有值。见 [读取行](reading.zh-CN.md)。
 
+### 一次写入最多能发多少行
+
+一次写入最多发送 **5000 行**。超过这个数量的批次不会被拒绝：它会写入前 5000 行、丢掉其余部分，并在控制台发出警告。
+
+```
+insert many was given 8000 rows in the list variable {_rows::*}, but one statement moves at most 5000 rows, so only the first 5000 are written and the rest are dropped. ...
+```
+
+之所以写成“能写多少写多少”，是因为这些行已经在脚本手上——它们来自变量或 `values` 块——直接拒绝会让这些已经做好的工作白费，还一行都写不进去。上限防的开销与 [读取时](reading.zh-CN.md#一次读取最多能存多少行) 相同：整批数据是在服务端线程上逐行整理出来的。
+
+有两处能看出尾部被丢掉了：控制台的警告，以及 `and store affected rows in {_rows}` 里的计数——它记录的是**实际写入**的行数。要全部写入，请把批次拆成多条语句，例如每次写入 `select page` 遍历出来的一页。
+
 ## 有则更新、无则插入
 
 ```sk

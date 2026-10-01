@@ -73,6 +73,24 @@ On SQL implementations, a `date` column stores SQL `DATE`, which discards the ti
 
 A page is an offset into primary-key order, not a snapshot. Inserts or deletes during pagination can shift later rows, causing duplicates or omissions. A keyset filter (`id > {_last}`) requires a stable primary-key sort order. `select many` does not offer `ORDER BY`, so adding that filter alone is not a complete replacement for `select page`.
 
+## "select many read more than 5000 rows ... and stored nothing."
+
+One statement moves at most 5000 rows, and a read past that stores nothing: the result variable is cleared and the refusal is in `last database error`. A `select page` larger than 5000 rows is refused before the query is sent. The ceiling is about the server thread rather than memory — a result is written into a list variable one index at a time, on that thread.
+
+Narrow the read, or walk it a page at a time:
+
+```sk
+loop 100 times:
+    select page loop-number with size 1000 from table "users" and store the results in {_rows::*}:
+        where all:
+            active = true
+    if {_rows::1::id} is not set:
+        stop loop
+    # ... use this page ...
+```
+
+A multi-row write is treated differently: `insert many` given more than 5000 rows writes the first 5000 and warns about the rest rather than refusing. See [Reading rows](reading.md#how-many-rows-one-read-may-store) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
+
 Pagination sorts by the registered primary key and rejects tables without one. Page numbers start at 1, and row indices restart at 1 within each page: `{_page::1::name}` is the first row on that page, not the first row in the table. See [Reading rows](reading.md).
 
 ## Skript says "Empty configuration section!"
