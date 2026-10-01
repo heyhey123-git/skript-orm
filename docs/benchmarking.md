@@ -66,7 +66,7 @@ This repository already has gates: compilation, unit tests, ktlint, and compilin
 A regression is a comparison, so something has to hold the previous number, measured on comparable hardware.
 
 - **The history lives in gh-pages**, managed by the CI action. Gates and trends compare results from one runner model against each other, which is the only comparison that means anything.
-- **The repository carries one `benchmarks/baseline.json`**, marked *reference only, not used for gating*. Its purpose is to give a local run a scale to read against, and to give these pages a single citable source for a number.
+- **The repository carries one `benchmarks/baseline.json`**, marked *reference only, not used for gating*, with the machine that produced it written beside it in `benchmarks/baseline.environment.txt`. Its purpose is to give a local run a scale to read against, and to give these pages a single citable source for a number. The pair is written at the moment it is measured and from a clean tree, because a baseline whose commit is unknown describes nobody's code.
 - **Absolute numbers are never compared across machines, only ratios.** A laptop and a shared runner differ by more than most regressions do.
 
 Every result records the environment it was measured in, because otherwise a “regression” can be a changed dependency: JDK vendor and version, operating system and CPU, container image digests, driver versions, Paper and Skript versions, the commit, and whether the tree was dirty. The MySQL finding above is the worked example — without the driver's name and version, the same numbers describe three databases rather than two drivers.
