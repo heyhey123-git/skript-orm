@@ -34,7 +34,9 @@ import java.util.concurrent.atomic.LongAdder;
  * plugin asks the driver for. Whether the driver then sends one statement or five thousand to the
  * server is decided below this line — by Connector/J's {@code rewriteBatchedStatements}, for example —
  * and is not visible here. Reading the counts therefore answers "what did the plugin ask for", and
- * only a server-side or protocol-level count can answer "what did the server execute".
+ * only a server-side or protocol-level count can answer "what did the server execute" — which is what
+ * {@code ServerSideCountIntegrationTest} does for the MySQL family, reading that server's own counters
+ * in the jobs that already start one. See {@code docs/benchmarking.md}.
  *
  * <p>Usage: {@code jdbc:counting:jdbc:h2:mem:x;DB_CLOSE_DELAY=-1}, with {@code driver} left as the
  * plugin's own property. A driver that is not discoverable through {@link DriverManager} can be named
