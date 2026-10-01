@@ -1,0 +1,29 @@
+# The clock the benchmark scripts use.
+#
+# Skript has no expression for the server's tick number, and the number a benchmark needs is the one a
+# script can actually see: how many ticks a write spans, and how long the ticks it spanned were. This
+# counts both.
+#
+# The counter is a global variable because a local one does not survive between trigger executions, and a
+# statement that waits parks the trigger that issued it: the script measuring a write and the script
+# seeing ticks go by are not the same script at that moment.
+#
+# The gap is the interval between two of this trigger's own runs, which is one tick apart by contract.
+# That makes this an observer inside the tick loop, and it is why a tick duration may be reported here at
+# all: it is measured, not assumed. It is also a Skript trigger, so its own cost is inside every gap it
+# reports, and the load a benchmark puts on the server is inside them too. What it is not is a percentile
+# of tick durations for the server's lifetime; it is the sequence of ticks this run lived through.
+
+every tick:
+    if {bench::tick} is not set:
+        set {bench::tick} to 0
+    add 1 to {bench::tick}
+
+    if {bench::tick::watch} is true:
+        set {bench::tick::gap} to difference between {bench::tick::last} and now
+        if {bench::tick::gap::max} is not set:
+            set {bench::tick::gap::max} to {bench::tick::gap}
+        else if {bench::tick::gap} is greater than {bench::tick::gap::max}:
+            set {bench::tick::gap::max} to {bench::tick::gap}
+
+    set {bench::tick::last} to now

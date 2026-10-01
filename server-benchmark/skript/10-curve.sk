@@ -1,0 +1,351 @@
+# The tick cost of one write, and of one read, as a script sees them.
+#
+# `benchmarks/` measures the plugin's own calls on a bare JVM. This measures what a script pays on a real
+# server thread, which is the layer the plan calls for and the one a server owner lives in.
+#
+# Two numbers come out of every measurement, and both are the script's own:
+#
+#   * the wall clock around one statement, read from Skript's own `now`, and the ticks the server spent on
+#     it, from the counter beside this file. A statement that waits parks the trigger that issued it, so a
+#     write cannot resume before the next tick: the tick count is how a script sees that, and the wall
+#     clock is quantized by it. Skript writes a timespan as `0.05 seconds`, so the wall clock resolves to
+#     10 ms and cannot resolve below it.
+#   * the longest tick the statement lived through, from the same counter's gap observer. This is what
+#     answers "how much server thread did one write cost": work under a tick's length leaves the gap at a
+#     normal tick, while work that overruns one lengthens it. At 10 ms resolution that is what it can see.
+#
+# What no number here is: an MSPT percentile for the server. The gap observer is a Skript trigger, so it
+# sees this run's ticks and carries its own cost; a percentile of tick durations over a server's life needs
+# an observer with better manners than a script has, and that would be a second plugin in the server.
+#
+# Sizes are 100, 500, 1000, 2500, 5000 and 10000 rows in a six-column table, because six columns is the
+# shape the 30000-value statement budget was measured on: 5000 rows is exactly one statement and 10000 rows
+# is two. The curve is where that boundary is supposed to show, and where the 5000-row read ceiling is
+# supposed to refuse. One round is run per firing of this task, so the server is booted fresh for each and
+# the spread between runs is visible instead of being averaged away inside one.
+#
+# Only the key of each row is filled. The suite's own row-ceiling script fills one column for the same
+# reason: a row is paid for twice on this side, once when the script builds it and once when the statement
+# turns the variable back into values, and five more columns of NULL would pay the second half five more
+# times without changing what the statement costs the database.
+#
+# The six sizes are written out one after another rather than looped over, and every loop below is written
+# at the top level of this trigger with a literal count. That is not style: three runs of an earlier version
+# of this script reported `<none>` for every size, every round and every batch, and the fixes are what those
+# runs measured. A value loop over a list variable gave no loop value; a size loop nested inside a round
+# loop gave none either, so the fill inside it wrote nothing; and the suite's own fill loop, which works, is
+# written at the top level of its trigger. The DIAG line after the first fill keeps that visible, because a
+# fill that produces nothing should say so in one line rather than in ninety measurements.
+#
+# Nothing here deletes. Neither delete form reaches this dialect: a delete with a where block goes through
+# the limited path, and the unfiltered effect pages through "every row the implementation allows", which is
+# the same limit — the suite checks for that refusal by name in 28-sqlite.sk, and both were refused by it
+# when this script was first run. Each write therefore owns a range of keys instead, the read that follows
+# asks for that range, and the count the database reports is cumulative: the reader turns consecutive counts
+# into differences, which is what says whether the write actually wrote.
+#
+# The setup is written at the top level too, for a measured reason: with `create a connection` inside a
+# conditional the connection was never created and no error was reported either, while the two plain
+# variables set in the same conditional did arrive. A statement that parks the trigger does not belong in a
+# conditional section here. The guards below stop the trigger and do nothing else.
+#
+# SQLite is the database because it is the one this machine reaches without a container. The two pragmas
+# are the suite's: without them the driver syncs the file per row and this would measure the disk.
+
+every 5 seconds:
+    # The guards come first and contain nothing but the stop, which is how every script in `server-test`
+    # keeps itself to one run.
+    if {bench::done::curve} is set:
+        stop trigger
+    if {bench::started::curve} is set:
+        stop trigger
+    set {bench::started::curve} to true
+
+    # The plugin and Skript are loaded before any of this runs, so this is only long enough for the tick
+    # counter to have something in it.
+    wait 5 seconds
+
+    create a connection named "bench" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        # The same pragmas the suite's row-ceiling script uses, for the same reason.
+        url: "jdbc:sqlite:plugins/Skript/bench-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve connect: %last database error%"
+
+    in connection "bench":
+        register a database table "orm_bench_probe":
+            id: bigint, primary key, not null
+            pad1: int, nullable
+            pad2: int, nullable
+            pad3: int, nullable
+            pad4: int, nullable
+            pad5: int, nullable
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve register table: %last database error%"
+
+    # The key ranges are handed out rather than reset, because nothing here deletes.
+    set {bench::base} to 0
+
+    # 100 rows, which is one statement well inside every budget.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 100 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+    log "SKRIPTORM_BENCH=DIAG first batch first row is [%{bench::batch::1::id}%] of range above %{bench::base}%"
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 100: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    # The timespans are bracketed because Skript writes them as "0.05 seconds": a reader that split the line
+    # on spaces would read the unit as the next field rather than as part of the value.
+    log "SKRIPTORM_BENCH write: rows=100 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 100 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=100 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # 500 rows.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 500 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 500: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH write: rows=500 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 500 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=500 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # 1000 rows.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 1000 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 1000: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH write: rows=1000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 1000 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=1000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # 2500 rows.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 2500 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 2500: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH write: rows=2500 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 2500 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=2500 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # 5000 rows: the write budget in one statement, and the read ceiling exactly reached.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 5000 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 5000: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH write: rows=5000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 5000 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=5000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # 10000 rows: twice the write budget, so two statements, and twice the read ceiling, so a refusal that
+    # is the ceiling being re-derived rather than restated.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 10000 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve write 10000: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH write: rows=10000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 10000 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH read: rows=10000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    # The 5000-row write again, at the end and with everything warm. Every number above is the first time
+    # that statement ran in this server, and the first 5000-row write measured 80 ms of tick overrun where
+    # the library's own benchmark reports about 10 ms for the same call on a bare JVM. Repeating one size
+    # with the JVM warm says whether that gap is this server's first pass or its steady state, and the size
+    # is the one the write budget and the read ceiling both land on, so the warm read is the other half of
+    # the same comparison. It has its own name in the log rather than joining the size above, so nothing
+    # about it is averaged into the curve.
+    add 100000 to {bench::base}
+    delete {bench::batch::*}
+    loop 5000 times:
+        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
+
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
+    set {bench::tick::watch} to false
+    if last database error is set:
+        log "SKRIPTORM_BENCH=FAIL curve warm write 5000: %last database error%"
+    in connection "bench":
+        execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
+    log "SKRIPTORM_BENCH warmwrite: rows=5000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] affected=%{_affected}% total=%{bench::count::1::total}%"
+
+    delete {bench::rows::*}
+    set {bench::tick::before} to {bench::tick}
+    delete {bench::tick::gap::max}
+    set {bench::tick::watch} to true
+    set {bench::before} to now
+    in connection "bench":
+        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
+            where all:
+                id > {bench::base}
+    set {bench::tick::watch} to false
+    set {bench::stored} to 0
+    loop 5000 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {bench::stored}
+    log "SKRIPTORM_BENCH warmread: rows=5000 ticks=%{bench::tick} - {bench::tick::before}% ms=[%difference between {bench::before} and now%] gap=[%{bench::tick::gap::max}%] stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
+    delete {bench::rows::*}
+
+    set {bench::done::curve} to true
