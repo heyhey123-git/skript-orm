@@ -64,10 +64,19 @@ class PgServerSideCountIntegrationTest : PgIntegrationTestBase() {
                 "counterWaitedMs=$waited " + fingerprint()
         )
 
+        // A skip whose reason exists only inside a test report is a skip nobody can explain later, and
+        // that is what happened to this case: the run could neither confirm nor deny what PostgreSQL
+        // printed for the statement half, because the text went into an artifact. Every reason is now
+        // reported on the same channel as the numbers before the assumption aborts.
         if (unattributable != null) {
+            report("skipped", "the statistics cannot be attributed: $unattributable")
             Assumptions.assumeTrue(false, "PostgreSQL server-side count aborted: $unattributable")
         }
         if (waited < 0) {
+            report(
+                "skipped",
+                "the statistics view did not report the insert within ${COUNTER_TIMEOUT_MS}ms, so nothing can be attributed"
+            )
             Assumptions.assumeTrue(
                 false,
                 "the statistics view did not report the insert within ${COUNTER_TIMEOUT_MS}ms, so nothing can be attributed"
@@ -150,7 +159,14 @@ class PgServerSideCountIntegrationTest : PgIntegrationTestBase() {
             "commit=${System.getenv("GITHUB_SHA") ?: "unknown"}"
     }
 
-    /** Prints one report line, labelled so a run's numbers can be found in a test report. */
+    /**
+     * Prints one report line, labelled so a run's numbers can be found in a job log.
+     *
+     * Gradle captures test stdout and shows it only when the task asks for it, and the run's test
+     * reports cannot be downloaded from every environment, so this line reaches a reader only
+     * because the integration test task turns standard streams on. A number nobody can read is not a
+     * measurement, and this layer exists to be read.
+     */
     private fun report(label: String, message: String) {
         println("[server-side] $label: $message")
     }
