@@ -93,6 +93,22 @@ A multi-row write is treated differently: `insert many` past one statement's bud
 
 Pagination sorts by the registered primary key and rejects tables without one. Page numbers start at 1, and row indices restart at 1 within each page: `{_page::1::name}` is the first row on that page, not the first row in the table. See [Reading rows](reading.md).
 
+## A quick query, and the server still hitched
+
+Reading has two halves, and only one of them leaves the server thread: the query runs elsewhere, while the answer is written into the variable on the server thread, one value at a time. That costs about 1.4 microseconds per value, measured, so a 5000-row result of a six-column table is about 47 milliseconds — most of a tick. Values cost, not rows: the same 5000 rows of a two-column table cost about 15 milliseconds.
+
+The 5000-row ceiling holds that cost where it is, and results above 10 000 values are stored more cheaply (about a quarter less of the tick; the numbers are under [what storing a result costs](reading.md#what-storing-a-result-costs)), but no mode makes storing a large result free. To keep a read short, narrow the result — a stricter filter, fewer columns in the table, or one page at a time. See [How many rows one read may store](reading.md#how-many-rows-one-read-may-store).
+
+## "insert many" of a large list pauses the server
+
+Reading the batch out of the variable happens on the server thread, at about 0.33 microseconds per value, measured, and it cannot move: a variable name may contain an expression, which Skript resolves only there. A batch of 30 000 values is about 10 milliseconds of pause before the first statement is sent, and a batch past the budget becomes several statements, each pausing about that much. `insert many` writes every row rather than refusing, so the total pause follows the size of the whole batch rather than the budget.
+
+Keep one write to one page: walk the source with `select page` and insert each page, which also gives a failure a natural boundary. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+
+## A refused read is not a free read
+
+The ceiling is enforced after the database answers. The statement asks for one row more than it may store, so that 5001 rows can be told from exactly 5000, and it refuses once that row arrives: nothing is stored, but the query was sent and the rows were read. A script that keeps asking for more than the ceiling pays for every attempt. `select page` is the exception, because its page size is known in advance and an oversized page is refused before anything is sent.
+
 ## Skript says "Empty configuration section!"
 
 Skript warns when a section has no indented content beneath its colon, regardless of which plugin provides it. The message comes from Skript's parser, and its control flag is internal; neither a config file nor a script can disable it.
