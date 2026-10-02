@@ -197,3 +197,117 @@ jobs:
           # the gate stays off until there is CI history to measure it from. See the note at the top of this
           # file for the numbers and for what turning it on would take.
           fail-on-alert: false
+
+  # The tick benchmark: what one Skript statement costs a real server thread, as the script that issued
+  # it saw it. It runs beside JMH rather than beside the tests for the same reason JMH does — it takes
+  # minutes where a test takes seconds — and it is recorded per CPU into the same gh-pages history.
+  #
+  # The tick numbers are recorded but never gated, on purpose, and no alert-threshold is set at all.
+  # Two reasons, both already written in this repository: shared-host wall-clock drifts ten to twenty
+  # percent between identical runs, and the tick observer resolves to 10 ms and cannot see work under
+  # half a tick, so a run can honestly report zero overhang where the work was real but sub-tick. A
+  # threshold on a number that noisy would only misfire, so the record below is the whole of the job.
+  tick:
+    name: Tick benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - uses: ./.github/actions/prepare-build
+        with:
+          gradle-cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      # The same environment step as the JMH job: the CPU model decides where the numbers are filed,
+      # because a tick number without its machine is no more comparable than a JMH number without its
+      # machine. Most of this is only knowable on the runner, so it is written here rather than by the
+      # task, and it is uploaded beside the report.
+      - name: Record the environment
+        id: environment
+        run: |
+          mkdir -p build/benchmarks
+          cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //')
+          {
+            echo "commit=$(git rev-parse HEAD)"
+            echo "dirty=$(git status --porcelain | wc -l)"
+            echo "os=$(uname -srm)"
+            echo "cpu=$cpu"
+            echo "cores=$(nproc)"
+            echo "memory=$(free -h | awk '/^Mem:/ {print $2}')"
+            echo "java=$(java -version 2>&1 | head -n1)"
+          } | tee build/benchmarks/environment.txt
+          slug=$(printf '%s' "$cpu" \
+            | sed -E 's/\((R|TM|C)\)//g' \
+            | tr '[:upper:]' '[:lower:]' \
+            | sed -E 's/[^a-z0-9]+/-/g; s/^-+//; s/-+$//' \
+            | cut -c1-64 \
+            | sed -E 's/-+$//')
+          [ -n "$slug" ] || slug=unknown
+          echo "slug=$slug" >> "$GITHUB_OUTPUT"
+
+      - name: Run the tick benchmark
+        run: |
+          ./gradlew serverBenchmark --stacktrace
+
+      # The task prints the full tables; these lines are the numbers and their machine on one line each,
+      # the shape the server-side measurement lines established and the one a later reader greps for.
+      - name: Print the numbers with their machine
+        if: always()
+        run: |
+          cpu=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ //')
+          os=$(uname -srm)
+          cores=$(nproc)
+          java=$(java -version 2>&1 | head -n1)
+          commit=$(git rev-parse HEAD)
+          echo "[tick] measurement: os=$os cpu=$cpu cores=$cores java=$java commit=$commit"
+          if [ -f build/benchmarks/tick-results.json ]; then
+            jq -r --arg os "$os" --arg cpu "$cpu" --arg cores "$cores" --arg java "$java" --arg commit "$commit" \
+              '.[] | "[tick] \(.name)=\(.value)\(.unit) os=\($os) cpu=\($cpu) cores=\($cores) java=\($java) commit=\($commit)"' \
+              build/benchmarks/tick-results.json
+          fi
+
+      # A run's log scrolls away; the run's summary does not. The table is the same numbers the action
+      # reads, written where a person deciding whether to look further will see them.
+      - name: Summarise the report
+        if: always()
+        run: |
+          report=build/benchmarks/tick-results.json
+          if [ ! -f "$report" ]; then
+            echo "No tick report was written; the run above says why." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          {
+            echo '### Tick'
+            echo
+            echo '| measurement | value | unit |'
+            echo '| --- | --- | --- |'
+            jq -r '.[] | "| \(.name) | \(.value) | \(.unit) |"' "$report"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: tick-report
+          path: |
+            build/benchmarks/tick-results.json
+            build/benchmarks/environment.txt
+          if-no-files-found: ignore
+
+      # Recorded beside the JMH history in a `tick` subfolder of the same per-CPU directory, so the two
+      # `data.js` files never collide and each CPU keeps its own curve. `customSmallerIsBetter` because a
+      # shorter tick cost is better. Report only — see the note on the `tick` job above for why there is
+      # no alert-threshold and no gate.
+      - name: Record the numbers
+        if: hashFiles('build/benchmarks/tick-results.json') != ''
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/benchmarks/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}/tick'
+          auto-push: ${{ github.event_name != 'pull_request' }}
+          comment-on-alert: false
+          fail-on-alert: false

@@ -832,6 +832,10 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 
 val serverBenchmarkDirectory = layout.buildDirectory.dir("server-benchmark")
 val serverBenchmarkSource = layout.projectDirectory.dir("server-benchmark")
+// Where the medians are written as JSON, so the CI job can record them per CPU into the gh-pages history
+// beside the JMH numbers. The root task writes to the root build directory; the JMH module's report lives
+// in `benchmarks/build/benchmarks/` because it belongs to that module.
+val serverBenchmarkResults = layout.buildDirectory.file("benchmarks/tick-results.json")
 
 val prepareServerBenchmark by tasks.registering {
     description = "Writes the run directory the Skript benchmark starts from."
@@ -884,6 +888,10 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
     /** The log of the server that just ran. */
     @get:Internal
     abstract val serverLog: RegularFileProperty
+
+    /** Where the medians are written as JSON for the CI job to record into the gh-pages history. */
+    @get:Internal
+    abstract val resultsFile: RegularFileProperty
 
     @TaskAction
     fun report() {
@@ -1014,6 +1022,34 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
             .groupBy { it.kind to it.rows }
             .toSortedMap(compareBy({ it.first }, { it.second }))
             .forEach { (size, group) -> logger.lifecycle(formatMedian(size.first, size.second, group)) }
+
+        // The same medians as JSON, so the CI job can record them per CPU into the gh-pages history beside
+        // the JMH numbers. The tick numbers are report-only and never gated — the reason lives in the
+        // workflow where the recording happens — so this file is a record, not a verdict. One named point
+        // per (kind, rows) rather than a single headline, because the harness emits a curve and a curve is
+        // what gets recorded; a run that reports zero overhang keeps its zero.
+        val results = resultsFile.get().asFile
+        results.parentFile.mkdirs()
+        fun medianValue(group: List<Measurement>, select: (Measurement) -> Double?): Double? {
+            val values = group.mapNotNull(select).sorted()
+            return if (values.isEmpty()) null else values[values.size / 2]
+        }
+        val tickEntries = mutableListOf<String>()
+        measurements
+            .groupBy { it.kind to it.rows }
+            .toSortedMap(compareBy({ it.first }, { it.second }))
+            .forEach { (size, group) ->
+                val (kind, rows) = size
+                medianValue(group) { it.wall }?.let { wall ->
+                    tickEntries += """{"name":"$kind ${rows}rows wall","unit":"ms","value":$wall}"""
+                }
+                medianValue(group) { it.gap }?.let { gap ->
+                    val overrun = (gap - TICK_MILLIS).coerceAtLeast(0.0)
+                    tickEntries += """{"name":"$kind ${rows}rows overrun","unit":"ms","value":$overrun}"""
+                }
+            }
+        results.writeText("[${tickEntries.joinToString(",")}]\n")
+        logger.lifecycle("Recorded {} tick points to {}.", tickEntries.size, results.absolutePath)
 
         logger.lifecycle("")
         logger.lifecycle(
@@ -1238,6 +1274,7 @@ val serverBenchmark by tasks.registering(ReportSkriptServerBenchmark::class) {
 
     dependsOn(runServerBenchmark)
     serverLog.set(serverBenchmarkDirectory.map { it.file("logs/latest.log") })
+    resultsFile.set(serverBenchmarkResults)
 }
 
 // ---------------------------------------------------------------------------------------------
