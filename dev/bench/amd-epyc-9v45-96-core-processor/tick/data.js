@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790913452106,
+  "lastUpdate": 1790934436848,
   "repoUrl": "https://github.com/heyhey123-git/skript-orm",
   "entries": {
     "Benchmark": [
@@ -131,6 +131,158 @@ window.BENCHMARK_DATA = {
           {
             "name": "write 5000rows wall",
             "value": 220,
+            "unit": "ms"
+          },
+          {
+            "name": "write 5000rows overrun",
+            "value": 90,
+            "unit": "ms"
+          },
+          {
+            "name": "write 10000rows wall",
+            "value": 320,
+            "unit": "ms"
+          },
+          {
+            "name": "write 10000rows overrun",
+            "value": 100,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "heyhey123-git",
+            "username": "heyhey123-git",
+            "email": "156066831+heyhey123-git@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "heyhey123-git",
+            "username": "heyhey123-git",
+            "email": "156066831+heyhey123-git@users.noreply.github.com"
+          },
+          "id": "949945cbf10251b4eea1aa432cfb7040bb299338",
+          "message": "docs(benchmarking): say what the warm rows are\n\nThe tick table's read and write rows are each that statement's first run in the server it was measured on, and the two warm rows repeat the 5000-row write and the 5000-row read at the very end, once the whole curve has already run. 5000 is the size the write budget and the read ceiling both land on.\n\nDoing that size twice is what separates a first pass from a steady state: on this runner the first 5000-row write overran a tick by 90 milliseconds where the warm one overran it not at all. The warm rows report under names of their own and are never averaged into the curve, which the script says in its own comment.\n\nThe pages now define the vocabulary of the table where the numbers are, rather than leaving a reader to infer it from column headings.",
+          "timestamp": "2026-10-02T04:07:52Z",
+          "url": "https://github.com/heyhey123-git/skript-orm/commit/949945cbf10251b4eea1aa432cfb7040bb299338"
+        },
+        "date": 1790934435435,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "read 100rows wall",
+            "value": 60,
+            "unit": "ms"
+          },
+          {
+            "name": "read 100rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "read 500rows wall",
+            "value": 60,
+            "unit": "ms"
+          },
+          {
+            "name": "read 1000rows wall",
+            "value": 80,
+            "unit": "ms"
+          },
+          {
+            "name": "read 1000rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "read 2500rows wall",
+            "value": 70,
+            "unit": "ms"
+          },
+          {
+            "name": "read 5000rows wall",
+            "value": 90,
+            "unit": "ms"
+          },
+          {
+            "name": "read 5000rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "read 10000rows wall",
+            "value": 60,
+            "unit": "ms"
+          },
+          {
+            "name": "read 10000rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "warmread 5000rows wall",
+            "value": 80,
+            "unit": "ms"
+          },
+          {
+            "name": "warmread 5000rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "warmwrite 5000rows wall",
+            "value": 190,
+            "unit": "ms"
+          },
+          {
+            "name": "warmwrite 5000rows overrun",
+            "value": 0,
+            "unit": "ms"
+          },
+          {
+            "name": "write 100rows wall",
+            "value": 100,
+            "unit": "ms"
+          },
+          {
+            "name": "write 100rows overrun",
+            "value": 10,
+            "unit": "ms"
+          },
+          {
+            "name": "write 500rows wall",
+            "value": 40,
+            "unit": "ms"
+          },
+          {
+            "name": "write 500rows overrun",
+            "value": 10,
+            "unit": "ms"
+          },
+          {
+            "name": "write 1000rows wall",
+            "value": 130,
+            "unit": "ms"
+          },
+          {
+            "name": "write 1000rows overrun",
+            "value": 20,
+            "unit": "ms"
+          },
+          {
+            "name": "write 2500rows wall",
+            "value": 100,
+            "unit": "ms"
+          },
+          {
+            "name": "write 2500rows overrun",
+            "value": 70,
+            "unit": "ms"
+          },
+          {
+            "name": "write 5000rows wall",
+            "value": 180,
             "unit": "ms"
           },
           {
