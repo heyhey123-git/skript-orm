@@ -112,6 +112,12 @@ abstract class MongoIntegrationTestBase {
     /** How many documents [name] holds, counted by MongoDB itself. */
     protected fun rawCount(name: String = usersTable.name): Long = collectionOf(name).countDocuments()
 
+    /** A raw command answered by the server, read without the implementation in the way. */
+    protected fun runCommand(command: Document): Document =
+        checkNotNull(verificationClient) { "The verification client is not open." }
+            .getDatabase(databaseName)
+            .runCommand(command)
+
     /** The indexes MongoDB reports for [name]. */
     protected fun indexesOf(name: String = usersTable.name): List<Document> =
         collectionOf(name).listIndexes().toList()
