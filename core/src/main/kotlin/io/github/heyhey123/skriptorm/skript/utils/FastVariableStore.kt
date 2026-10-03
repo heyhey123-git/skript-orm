@@ -58,7 +58,9 @@ internal object FastVariableStore {
     class Prepared(
         val subtree: MutableMap<Any?, Any?>,
         val names: List<String>,
-        val values: List<Any?>
+        val values: List<Any?>,
+        val nameSet: Set<String>,
+        val caseInsensitive: Boolean
     )
 
     /** Resolves and validates everything the fast path needs. Must run on the server thread. */
@@ -162,7 +164,7 @@ internal object FastVariableStore {
             values.add(raw)
         }
         if (held.size > 8) held.clear()
-        held[System.identityHashCode(rows)] = rows to Prepared(subtree, names, values)
+        held[System.identityHashCode(rows)] = rows to Prepared(subtree, names, values, names.toHashSet(), lower)
     }
 
     /** Takes the tree prepared for [rows], if one is still waiting. */
@@ -178,16 +180,16 @@ internal object FastVariableStore {
      */
     @Suppress("UNCHECKED_CAST")
     fun attach(variable: Variable<*>, event: Event?, prepared: Prepared): Boolean {
-        if (!available || variable.isLocal) return false
+        if (!available || variable.isLocal || prepared.caseInsensitive != Variables.caseInsensitiveVariables) return false
         val raw = variable.toString(event, false)
         if (raw.length < 4 || raw[0] != '{' || raw[raw.length - 1] != '}') return false
         val list = raw.substring(1, raw.length - 1)
         if (!list.endsWith("*")) return false
         val path = list.dropLast(1).removeSuffix("::")
         if (path.isEmpty()) return false
-        val segments = path.split("::")
+        val base = if (prepared.caseInsensitive) path.lowercase(Locale.ENGLISH) else path
+        val segments = base.split("::")
         if (segments.any { it.isEmpty() }) return false
-        val base = if (Variables.caseInsensitiveVariables) path.lowercase(Locale.ENGLISH) else path
 
         val writeLock = lock.writeLock()
         writeLock.lock()
@@ -205,8 +207,8 @@ internal object FastVariableStore {
             val leaf = segments.last()
             val existing = parent[leaf]
             if (existing is MutableMap<*, *>) {
-                // Preserve any scalar value stored directly under the list name.
-                removeNames(base, existing)
+                removeNames(base, existing, prepared.nameSet)
+                if (existing.containsKey(null)) prepared.subtree[null] = existing[null]
             } else if (existing != null) {
                 return false
             }
@@ -224,14 +226,24 @@ internal object FastVariableStore {
         }
     }
 
-    /** Drops every full name under [prefix] from Skript's root hash map. */
-    private fun removeNames(prefix: String, node: Map<*, *>) {
+    /** Removes replaced scalar names from the in-memory index and Skript's persistent save queue. */
+    private fun removeNames(
+        base: String,
+        node: Map<*, *>,
+        replacements: Set<String>,
+        path: String = ""
+    ) {
         for ((key, value) in node) {
-            // Preserve the scalar value at the list root.
             if (key == null) continue
-            val name = "$prefix::$key"
-            rootHash.remove(name)
-            if (value is Map<*, *>) removeNames(name, value)
+            val relativeName = if (path.isEmpty()) "$key" else "$path::$key"
+            val name = "$base::$relativeName"
+            if (relativeName !in replacements) {
+                rootHash.remove(name)
+                if (value !is Map<*, *> || value.containsKey(null)) {
+                    saveVariableChange.invoke(name, null)
+                }
+            }
+            if (value is Map<*, *>) removeNames(base, value, replacements, relativeName)
         }
     }
 }

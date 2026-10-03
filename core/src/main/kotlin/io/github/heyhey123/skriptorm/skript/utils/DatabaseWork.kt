@@ -13,26 +13,21 @@ import io.github.heyhey123.skriptorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import org.bukkit.Bukkit
 import org.bukkit.event.Event
 import org.skriptlang.skript.log.runtime.RuntimeErrorProducer
 
 /**
- * What every asynchronous database element shares: the checks made before a statement is sent, and the
- * hand-off that runs a query off the server thread and brings the trigger back to it afterwards.
- *
- * Both are lifted from what the sections already do, down to the order of the local-variable handling,
- * because a statement written without a colon has to behave exactly like the section form it shadows.
- * Only the query and the result differ between elements.
+ * Shared connection checks, error reporting, and asynchronous execution for database elements.
+ * Section and effect forms use the same trigger and local-variable handling.
  */
 internal object DatabaseWork {
 
     /**
-     * The connection and the table a resolved statement works against, and the transaction it belongs to
-     * when there is one.
-     *
-     * The transaction travels with the target rather than being looked up again later because the scope
-     * it lives in belongs to the server thread: by the time a query runs, the frames may have moved on.
+     * The resolved database, table, and optional transaction for a statement. The transaction is
+     * captured on the server thread before the query runs asynchronously.
      */
     class Target(
         val database: Database,
@@ -41,19 +36,14 @@ internal object DatabaseWork {
     ) {
 
         /**
-         * Runs [block] on the connection the transaction pinned, or on one borrowed from the pool when
-         * the statement runs on its own.
+         * Runs [block] on the transaction's pinned connection, or a pooled connection.
          */
         suspend fun <T> withQueries(block: suspend (Queries) -> T): T =
             DatabaseWork.withQueries(database, transaction, block)
     }
 
     /**
-     * The connection a raw statement runs against, and the transaction when there is one.
-     *
-     * A raw statement names no table, so there is nothing to resolve before it runs: what is left is the
-     * connection and, if one is in effect, the transaction that belongs to it. Reporting a missing
-     * connection is the same report every declared statement makes.
+     * The resolved database and optional transaction for a raw statement, which names no table.
      */
     class ConnectionTarget(
         val database: Database,
@@ -66,10 +56,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Resolves the connection a raw statement runs against, or reports why there is none.
-     *
-     * Returns null when the caller should carry on with its next item; a message for `last database error`
-     * has already been stored at that point.
+     * Resolves a raw statement's connection. On failure, reports the error and returns null so the
+     * caller can continue to the next trigger item.
      */
     fun resolveConnection(event: Event, producer: RuntimeErrorProducer): ConnectionTarget? {
         if (skipInactiveTransaction(event, producer)) return null
@@ -88,14 +76,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Resolves the table [tableNameExpr] names, reporting a failure the way Skript itself reports one.
-     *
-     * [producer] is the effect or section the statement was written as. Reporting through it is what puts
-     * the script, the syntax and the line into the console, and what tells the players watching for
-     * runtime errors which line is failing.
-     *
-     * Returns null when the caller should let the trigger carry on with its next item instead; a message
-     * for `last database error` has already been stored at that point.
+     * Resolves the table named by [tableNameExpr]. On failure, reports through [producer] so Skript
+     * identifies the source line, then returns null for the caller to continue the trigger.
      */
     fun resolveTable(
         event: Event,
@@ -128,12 +110,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Whether a statement has to be skipped because the transaction it belongs to can no longer take it.
-     *
-     * A transaction that failed a statement leaves `last database error` as it is: the cause is already
-     * in there, and replacing it with "the transaction is rollback-only" would lose the only thing worth
-     * reading. One that was aborted from outside (its timeout, a disconnect) never had the chance to say
-     * anything, so it says it now.
+     * Skips statements in an inactive transaction. A rollback-only transaction keeps its original
+     * `last database error`; an externally aborted transaction reports its failure here.
      */
     fun skipInactiveTransaction(event: Event, producer: RuntimeErrorProducer): Boolean {
         val transaction = ConnectionScope.transaction(event) ?: return false
@@ -150,17 +128,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Reports [message] the way a section does: as the last database error, and through [producer].
-     *
-     * The console half goes through the same channel Skript's own effects use, so the line is named, the
-     * syntax is named and the script line is printed with it, and a server operator watching for runtime
-     * errors hears about it. Skript applies its own frame limits to those lines: a script that fails the
-     * same line over and over is reported the first time and summarised afterwards.
-     *
-     * It also marks the transaction in effect as rollback-only, which is what makes a statement that
-     * never reached the database count the same as one that failed there. A table that was not found is
-     * still a statement of the body that did not run, and committing the rest of them would be exactly
-     * the half-finished transaction the section exists to prevent.
+     * Stores [message] as the last database error and reports it through [producer]. If a
+     * transaction is active, marks it rollback-only even when the statement never reached the database.
      */
     fun report(event: Event?, producer: RuntimeErrorProducer, message: String) {
         event?.let {
@@ -171,16 +140,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Records a failure that came back from the database, the way [report] records one that never left.
-     *
-     * Both have to make the transaction in effect rollback-only. A failure the server reported is at
-     * least as good a reason to undo the group: the server may have ended the transaction on its own
-     * (PostgreSQL refuses every statement after an error until the transaction ends), and leaving the
-     * transaction active would let the body carry on, a later statement clear the error slot, and the
-     * body end by committing whatever the earlier statements wrote.
-     *
-     * Marking is only half of it: the statements after a failure are skipped because the transaction is
-     * no longer active, which is what keeps a number they would have written from outliving them.
+     * Stores a database failure and marks the active transaction rollback-only. Subsequent
+     * statements in that transaction are skipped, preserving the original error for the script.
      */
     fun recordFailure(event: Event?, error: Throwable) {
         event?.let {
@@ -190,12 +151,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Reports a refusal on behalf of a read, after clearing the variable it would have stored into.
-     *
-     * A read that never ran must not leave the previous result in place. A script cannot tell a stale
-     * variable from a fresh one, and the two mean opposite things: "the row is gone" against "the
-     * statement did not run". Clearing first is the same rule the affected row count follows, and the
-     * reason a read that failed at the database also clears.
+     * Clears a refused read's result variable before reporting [message], so an earlier result cannot
+     * be mistaken for the result of this statement.
      */
     fun refuseRead(
         event: Event,
@@ -208,11 +165,8 @@ internal object DatabaseWork {
     }
 
     /**
-     * Clears the event's error slot for a statement that is about to run, except inside a transaction.
-     *
-     * A transaction keeps the failure that made it rollback-only. The statements after that failure are
-     * skipped without saying anything, which is deliberate, so clearing the slot here would leave the
-     * script reading nothing at all and the body looking as if it had simply not been reached.
+     * Clears the last database error before a standalone statement. Transactions retain the error
+     * that made them rollback-only.
      */
     fun clearErrorForStatement(event: Event) {
         if (ConnectionScope.transaction(event) == null) {
@@ -221,11 +175,7 @@ internal object DatabaseWork {
     }
 
     /**
-     * Runs [block] on the connection a transaction pinned, or on one borrowed from the pool when the
-     * statement runs on its own.
-     *
-     * The transaction is passed rather than looked up, because the scope it came from belongs to the
-     * server thread while this runs on another one.
+     * Runs [block] on the captured transaction's connection, or borrows one from the database.
      */
     suspend fun <T> withQueries(
         database: Database,
@@ -234,21 +184,15 @@ internal object DatabaseWork {
     ): T = transaction?.withQueries(block) ?: database.withQueries(block)
 
     /**
-     * Runs [query] on the plugin's scope, then [deliver] on the server thread, and walks [continuation]
-     * from there.
+     * Parks the trigger, runs [query] off the server thread, then calls [deliver] and resumes
+     * [continuation] on the server thread. Returns null for the caller's `walk` method.
      *
-     * The caller's `walk` returns null after calling this: the trigger is parked, its local variables are
-     * taken away and put back around the query so that the script cannot tell the difference, and the
-     * lines after the statement run once the work is done. Every statement in this addon waits, which is
-     * what makes the order of a script the order of its statements and puts every failure in
-     * `last database error` rather than only in the console.
+     * If supplied, [prepare] runs one slice per server tick. It returns false while more work remains;
+     * the next slice runs on the following tick. Event local variables are restored for each slice and
+     * removed between slices. [query] starts only after preparation returns true.
      *
-     * That is also why the return type is `Nothing?`: the value is always null, and it exists so that a
-     * caller says what happens to the trigger in one line, `return DatabaseWork.run(...)`.
-     *
-     * [clearErrorOnSuccess] is false for the work that undoes something the script already knows failed:
-     * rolling a failed transaction back succeeds, and clearing the slot on the way out would throw away
-     * the only account of why the transaction was rolled back.
+     * Set [clearErrorOnSuccess] to false when successful cleanup must preserve an earlier failure,
+     * such as rolling back a failed transaction.
      */
     fun <T : Any> run(
         event: Event,
@@ -256,7 +200,8 @@ internal object DatabaseWork {
         query: suspend () -> T,
         deliver: (T) -> Unit = {},
         onFailure: (Throwable) -> Unit = {},
-        clearErrorOnSuccess: Boolean = true
+        clearErrorOnSuccess: Boolean = true,
+        prepare: (() -> Boolean)? = null
     ): Nothing? {
         val localVariables = SkriptLocalVariables.remove(event)
         Delay.addDelayedEvent(event)
@@ -265,6 +210,29 @@ internal object DatabaseWork {
             var result: T? = null
             var failure: Throwable? = null
             try {
+                if (prepare != null) {
+                    while (true) {
+                        val ready = withContext(SyncDispatcher) {
+                            if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) {
+                                throw CancellationException("Database lifecycle is shutting down.")
+                            }
+                            try {
+                                if (localVariables != null) {
+                                    SkriptLocalVariables.restore(event, localVariables)
+                                }
+                                val transaction = ConnectionScope.transaction(event)
+                                check(transaction == null || transaction.isActive) {
+                                    transaction?.failure?.message ?: "The database transaction is no longer active."
+                                }
+                                prepare()
+                            } finally {
+                                SkriptLocalVariables.clear(event)
+                            }
+                        }
+                        if (ready) break
+                        awaitNextTick()
+                    }
+                }
                 result = query()
             } catch (_: CancellationException) {
                 return@launch
@@ -295,7 +263,16 @@ internal object DatabaseWork {
             }
         }
 
-        // The work is in the coroutine above: this returns to park the trigger, always.
+        // Park the trigger until the coroutine resumes it.
         return null
+    }
+
+    private suspend fun awaitNextTick() = suspendCancellableCoroutine<Unit> { continuation ->
+        val task = Bukkit.getScheduler().runTaskLater(
+            SkriptOrm.instance,
+            Runnable { continuation.resumeWith(Result.success(Unit)) },
+            1L
+        )
+        continuation.invokeOnCancellation { task.cancel() }
     }
 }

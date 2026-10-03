@@ -126,8 +126,8 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL stress columns: the table holds more than 4000 rows"
     log "SKRIPTORM_SELFTEST detail: stress columns -> error=%{_wide::error}% valuesAsked=24000 rowsReported=%{_wide::rows}% rowsPaged=%{_wide::page1}%"
 
-    # Six columns and 12,000 rows exceed the statement limit. Report the split write's affected-row
-    # count and stored rows for diagnosis; this case does not currently assert their exact totals.
+    # Six columns and 12,000 rows exceed the statement limit. Check both the reported affected count
+    # and the number of rows actually stored after the split write.
     loop 12000 times:
         set {stress::split::%loop-number%::id} to loop-number
         set {stress::split::%loop-number%::name} to "row"
@@ -149,6 +149,7 @@ on load:
         select page 3 with size 5000 from table "orm_stress_split" and store the results in {stress::split::page3::*}:
             where all:
                 id > 0
+        execute query "SELECT COUNT(*) AS written FROM orm_stress_split" and store the result in {stress::split::count::*}
     set {_split::page1} to 0
     if {stress::split::page1::5000::id} is set:
         set {_split::page1} to 5000
@@ -159,6 +160,16 @@ on load:
     if {stress::split::page3::2000::id} is set:
         set {_split::page3} to 2000
     set {_split::paged} to {_split::page1} + {_split::page2} + {_split::page3}
+    if {_split::error} is set:
+        log "SKRIPTORM_SELFTEST=FAIL stress split write: %{_split::error}%"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL stress split read: %last database error%"
+    if {_split::rows} is not 12000:
+        log "SKRIPTORM_SELFTEST=FAIL stress split: affected count was %{_split::rows}% instead of 12 000"
+    if {stress::split::count::1::written} is not 12000:
+        log "SKRIPTORM_SELFTEST=FAIL stress split: table holds %{stress::split::count::1::written}% rows instead of 12 000"
+    if {_split::paged} is not 12000:
+        log "SKRIPTORM_SELFTEST=FAIL stress split: the pages hold %{_split::page1}% + %{_split::page2}% + %{_split::page3}% rows, not 12 000"
     if {stress::split::page3::2001::id} is set:
         log "SKRIPTORM_SELFTEST=FAIL stress split: the table holds more than 12 000 rows"
     log "SKRIPTORM_SELFTEST detail: stress split -> error=%{_split::error}% valuesAsked=72000 rowsReported=%{_split::rows}% rowsPaged=%{_split::paged}%"

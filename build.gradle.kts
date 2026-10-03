@@ -578,6 +578,7 @@ val serverTestChecks = buildMap {
     put("stress batch", "error=<none> valuesAsked=12000 rowsReported=12000 rowsPaged=12000")
     put("stress columns", "error=<none> valuesAsked=24000 rowsReported=4000 rowsPaged=4000")
     put("stress split", "error=<none> valuesAsked=72000 rowsReported=12000 rowsPaged=12000")
+    put("write values", "ok")
     // The declared line is the file backend's verdict, and only that. The same case failed on MySQL,
     // PostgreSQL and MongoDB with `rowsAffected=-1` in the run that first carried it (d0d86a6), and those
     // three are expected to keep failing it until the cancellation path is fixed: the case asks whether the

@@ -12,12 +12,12 @@ import io.github.heyhey123.skriptorm.queries.insertManyInStatements
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.SkriptSyntax
-import io.github.heyhey123.skriptorm.skript.utils.WriteValues
+import io.github.heyhey123.skriptorm.skript.utils.VariableValuesReader
 import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities From A Variable Without A Colon")
-@Description("Inserts rows from a list variable in select-result format. Large batches are split across statements. Use this form without a colon when no section body is needed. The next line runs after the insert finishes. Check last database error for failures or store affected rows for the reported count.")
+@Description("Inserts rows from a list variable in select-result format. Large variables are read across ticks, then written in batches. Keep the source variable unchanged until the insert finishes. Use this form without a colon when no section body is needed. The next line runs after the insert finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """select many entities from table "users" and store the results in {_rows::*}
 insert many {_rows::*} into table "archived_users" and wait
@@ -79,18 +79,24 @@ class EffInsertManyFromVariable : Effect() {
 
         val target = DatabaseWork.resolveTable(actualEvent, this, tableNameExpr) ?: return next
 
-        val rows = WriteValues.rows(actualEvent, this, valuesVariable, target) ?: return next
+        val reader = try {
+            VariableValuesReader.begin(valuesVariable, target.table, actualEvent)
+        } catch (error: Exception) {
+            DatabaseWork.report(actualEvent, this, "Failed to parse write values: ${error.message}")
+            return next
+        }
 
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
             query = {
-                target.withQueries { queries -> queries.insertManyInStatements(target.table, rows) }
+                target.withQueries { queries -> queries.insertManyInStatements(target.table, reader.rows) }
             },
             deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { failure ->
                 this.error("Write failed: ${failure.message}")
-            }
+            },
+            prepare = reader::advance
         )
     }
 

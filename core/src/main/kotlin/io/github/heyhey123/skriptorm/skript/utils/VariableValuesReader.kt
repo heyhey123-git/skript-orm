@@ -51,6 +51,41 @@ import org.skriptlang.skript.lang.converter.Converters
  */
 object VariableValuesReader {
 
+    /** Reads large write variables across ticks. The source must stay unchanged until completion. */
+    internal fun begin(variable: Variable<*>, table: Table, event: Event?): ReadSession {
+        val raw = variable.getRaw(event) as? Map<*, *>
+            ?: throw IllegalArgumentException("$variable is not set.")
+        val columns = HashMap<String, Column<*>>()
+        val cursor = BatchedVariableRows(raw, variable.toString()) { name, value ->
+            val column = columns.getOrPut(name) {
+                table.getColumnByName(name)
+                    ?: throw IllegalArgumentException("Column '$name' does not exist in table '${table.name}'.")
+            }
+            convert(variable, column, value)
+        }
+        return ReadSession(variable, event, raw, cursor)
+    }
+
+    internal class ReadSession(
+        private val variable: Variable<*>,
+        private val event: Event?,
+        private val source: Map<*, *>,
+        private val cursor: BatchedVariableRows
+    ) {
+        val rows: List<Map<String, Any?>> get() = cursor.rows
+
+        fun advance(): Boolean {
+            try {
+                require(variable.getRaw(event) === source) {
+                    "$variable changed while its write values were being read."
+                }
+                return cursor.advance()
+            } catch (error: Exception) {
+                throw IllegalArgumentException("Failed to parse write values: ${error.message}", error)
+            }
+        }
+    }
+
     /**
      * Reads and validates the rows held by [variable] against [table].
      *

@@ -85,26 +85,27 @@ class JdbcQueryTest {
         }
     }
 
-    /**
-     * What the driver throws says only that the statement was cancelled. The script author needs the two
-     * things it does not say: how long the statement was given, and that the connection is still usable.
-     */
     @Test
-    fun `a cancelled statement says how long it was given`() {
+    fun `a timed out statement reports its limit without promising the connection is usable`() {
         val connection = mockk<Connection>(relaxed = true)
         val statement = mockk<PreparedStatement>(relaxed = true)
         val dataSource = mockk<DataSource>()
         every { dataSource.connection } returns connection
         val source = PooledConnectionSource(dataSource, timeoutSeconds = 30)
         every { connection.prepareStatement(any()) } returns statement
-        every { statement.executeQuery() } throws SQLTimeoutException("Statement cancelled", "HYT00", 0)
+        val driverError = SQLTimeoutException("Statement cancelled", "HYT00", 7)
+        every { statement.executeQuery() } throws driverError
 
         val thrown = assertFailsWith<SQLTimeoutException> {
             runBlocking { TestJdbcQuery(source).executeCursor("SELECT") {} }
         }
 
-        assertTrue("did not finish within 30 second(s)" in (thrown.message ?: ""), thrown.message ?: "")
-        assertTrue("still usable" in (thrown.message ?: ""), thrown.message ?: "")
+        assertTrue("given 30 second(s)" in (thrown.message ?: ""), thrown.message ?: "")
+        assertTrue("transaction timeout" in (thrown.message ?: ""), thrown.message ?: "")
+        assertTrue("still usable" !in (thrown.message ?: ""), thrown.message ?: "")
+        assertEquals("HYT00", thrown.sqlState)
+        assertEquals(7, thrown.errorCode)
+        assertSame(driverError, thrown.cause)
     }
 
     @Test

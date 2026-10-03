@@ -119,6 +119,28 @@ on load:
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL result size big read: %last database error%"
 
+    # The first large read probes the fast path. Replace it again with a mixed-case target so the
+    # existing tree path, persisted names, and newly published names all use Skript's same casing.
+    set {RS::BIG::old} to "stale"
+    set {RS::BIG::nested} to "parent"
+    set {RS::BIG::nested::child} to "stale"
+    set {RS::BIG::1::id} to -1
+    set {RS::BIG} to "keep"
+    in connection "size":
+        select page 1 with size 5000 from table "orm_size_probe" and store the results in {RS::BIG::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size second big read: %last database error%"
+    if {rs::big::old} is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size: fast replacement kept an old leaf"
+    if {rs::big::nested} is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size: fast replacement kept an old nested scalar"
+    if {rs::big::nested::child} is set:
+        log "SKRIPTORM_SELFTEST=FAIL result size: fast replacement kept an old nested leaf"
+    if {rs::big} is not "keep":
+        log "SKRIPTORM_SELFTEST=FAIL result size: fast replacement lost the list's scalar"
+    if {rs::big::1::id} is not 1:
+        log "SKRIPTORM_SELFTEST=FAIL result size: fast replacement did not update the first row"
+
     # A short literal list is another supported loop form.
     set {_literalRan} to 0
     # Include `and` to avoid Skript's warning about an incomplete list.

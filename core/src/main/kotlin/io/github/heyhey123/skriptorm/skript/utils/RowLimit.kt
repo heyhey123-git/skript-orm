@@ -6,11 +6,10 @@ package io.github.heyhey123.skriptorm.skript.utils
  * Skript list variables are read and written on the server thread. Reads refuse results above
  * [ROWS] instead of silently truncating them; scripts can narrow a query or use `select page`.
  * Writes retain every row, but [io.github.heyhey123.skriptorm.queries.insertManyInStatements]
- * splits a large batch across statements to stay within the binding budget. Resolving all write
- * values still happens on the server thread before that split.
+ * splits a large batch across statements to stay within the binding budget. `insert many` reads
+ * variable values in bounded steps across ticks before sending those statements.
  *
- * Neither read nor write variable processing is spread across ticks. In particular, writing a
- * result clears the target list variable first, so exposing a partly populated list would change
+ * Read results are attached within one tick. Exposing a partly populated result list would change
  * what other scripts see.
  */
 internal object RowLimit {

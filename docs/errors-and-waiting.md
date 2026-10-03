@@ -17,7 +17,7 @@ Each database operation finishes before the next statement in the same trigger r
 | `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | always | Subsequent statements run after the write finishes. |
 | `disconnect ...` | yes | The trigger resumes after disconnection finishes. |
 
-Like other delayed Skript operations, these statements pause the current trigger and resume it later. **Waiting does not block the server thread**, so other players and scripts continue normally.
+Like other delayed Skript operations, these statements pause the current trigger and resume it later. Waiting for JDBC does not block the server thread. Reading values from a list variable still uses the server thread; `insert many` spreads that work across ticks as described in [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 All reads and writes still accept `and wait`, but it no longer changes their behaviour. The clause originally made writes wait; now every statement waits. These examples retain it for compatibility with the 1.1 syntax, so existing scripts need no changes.
 
@@ -40,6 +40,8 @@ send "Stored." to console
 - Failures set the error. Outside a transaction, success leaves it unset, which you can use as a success check. Inside a transaction, an earlier error may still be present.
 - **Failure does not stop the trigger.** Subsequent statements still run, so the examples check the error and explicitly `stop`. Do the same when later operations depend on the write succeeding.
 - Skript also reports failures as runtime errors in the console and to players with `skript.see_runtime_errors`. Skript may limit repeated console messages, but the script can still read every failure through `last database error`.
+
+For `insert many` from a list variable, a validation error can arrive after several ticks of reading. No SQL is sent until every row passes validation; the affected-row target stays unset on failure. Do not change the source variable while it is being read. A transaction timeout includes this reading time.
 
 ## Writing and then reading
 

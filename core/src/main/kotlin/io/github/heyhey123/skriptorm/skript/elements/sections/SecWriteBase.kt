@@ -2,7 +2,6 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 
 import ch.njol.skript.Skript
 import ch.njol.skript.config.SectionNode
-import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
@@ -20,17 +19,10 @@ import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.RawValues
 import io.github.heyhey123.skriptorm.skript.utils.RawValuesList
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
-import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
-import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.ValuesParser
 import io.github.heyhey123.skriptorm.skript.utils.VariableValuesReader
 import io.github.heyhey123.skriptorm.skript.utils.WhereParser
 import io.github.heyhey123.skriptorm.table.Table
-import io.github.heyhey123.skriptorm.utils.SyncDispatcher
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 /**
@@ -239,13 +231,11 @@ abstract class SecWriteBase : Section() {
     }
 
     override fun walk(event: Event?): TriggerItem? {
+        if (event == null) return walk(event, false)
         if (this.trigger == null) return walk(event, false)
-        event?.let {
-            DatabaseWork.clearErrorForStatement(it)
-            // Cleared before anything can refuse the statement, so a statement that never ran leaves the
-            // variable unset rather than holding what an earlier one wrote.
-            AffectedRows.clear(affectedRowsVariable, it)
-        }
+        DatabaseWork.clearErrorForStatement(event)
+        // A refused write must not leave the previous affected row count in place.
+        AffectedRows.clear(affectedRowsVariable, event)
 
         val database = ConnectionScope.resolve(event) ?: run {
             DatabaseWork.report(event, this, ConnectionScope.noConnectionMessage())
@@ -275,13 +265,14 @@ abstract class SecWriteBase : Section() {
         // a common column set, because a single statement can only bind one column list.
         var resolvedSingle: Map<String, Any?>? = null
         var resolvedMultiple: List<Map<String, Any?>>? = null
+        var reader: VariableValuesReader.ReadSession? = null
         try {
             val variable = valuesVariable
             if (variable != null) {
-                val rows = VariableValuesReader.read(variable, table, event)
                 if (supportsMultipleRows) {
-                    resolvedMultiple = rows
+                    reader = VariableValuesReader.begin(variable, table, event)
                 } else {
+                    val rows = VariableValuesReader.read(variable, table, event)
                     // Rejecting more than one row keeps this write a patch over a single row. The row
                     // itself is not padded, so a column the variable omits is left untouched.
                     require(rows.size == 1) {
@@ -311,7 +302,7 @@ abstract class SecWriteBase : Section() {
             return walk(event, false)
         }
 
-        if (event != null && DatabaseWork.skipInactiveTransaction(event, this)) {
+        if (DatabaseWork.skipInactiveTransaction(event, this)) {
             return walk(event, false)
         }
         val transaction = ConnectionScope.transaction(event)
@@ -319,62 +310,26 @@ abstract class SecWriteBase : Section() {
         // has happened, so the order a script reads is the order it wrote, and every failure is in
         // `last database error` as well as through Skript's runtime error channel. `and wait` is still
         // accepted, and does nothing, the way it has always been on a read.
-        val continuation = next
-        val localVariables = if (event != null) {
-            SkriptLocalVariables.remove(event)
-        } else {
-            null
-        }
-        if (event != null) {
-            Delay.addDelayedEvent(event)
-        }
-
-        SkriptOrm.ioScope.launch {
-            var failure: Throwable? = null
-            var result: WriteResult? = null
-            try {
-                result = DatabaseWork.withQueries(database, transaction) { queries ->
-                    executeWrite(queries, table, resolvedSingle, resolvedMultiple, whereClause, extraArguments)
+        val batchReader = reader
+        return DatabaseWork.run(
+            event = event,
+            continuation = next,
+            prepare = batchReader?.let { it::advance },
+            query = {
+                DatabaseWork.withQueries(database, transaction) { queries ->
+                    executeWrite(
+                        queries,
+                        table,
+                        resolvedSingle,
+                        batchReader?.rows ?: resolvedMultiple,
+                        whereClause,
+                        extraArguments
+                    )
                 }
-            } catch (_: CancellationException) {
-                return@launch
-            } catch (error: Throwable) {
-                failure = error
-            }
-
-            withContext(NonCancellable + SyncDispatcher) {
-                if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
-
-                try {
-                    if (event != null) {
-                        if (failure != null) {
-                            DatabaseWork.recordFailure(event, failure)
-                        } else {
-                            SkriptDatabaseErrors.clear(event)
-                        }
-                    }
-                    failure?.let {
-                        this@SecWriteBase.error("Write failed: ${it.message}")
-                    }
-                    if (event != null && localVariables != null) {
-                        SkriptLocalVariables.restore(event, localVariables)
-                    }
-                    // The count lands in a Skript variable, so it is written once the event's local
-                    // variables are back in place, the way a read stores its result.
-                    if (event != null && failure == null) {
-                        result?.let { AffectedRows.write(affectedRowsVariable, event, it) }
-                    }
-                    if (event != null) {
-                        walk(continuation, event)
-                    }
-                } finally {
-                    if (event != null) SkriptLocalVariables.clear(event)
-                }
-            }
-        }
-
-        // The trigger is parked until the write has happened and the continuation has been walked.
-        return null
+            },
+            deliver = { result -> AffectedRows.write(affectedRowsVariable, event, result) },
+            onFailure = { failure -> this.error("Write failed: ${failure.message}") }
+        )
     }
 
     protected abstract suspend fun executeWrite(

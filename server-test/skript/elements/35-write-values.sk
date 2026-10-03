@@ -1,0 +1,129 @@
+# Checks that insert-many reads large list variables over multiple ticks without changing the
+# write's ordering or error contract. The disposable SQLite table belongs only to this script.
+
+every tick:
+    if {skriptorm::selftest::started::write-values} is not set:
+        stop trigger
+    if {skriptorm::selftest::done::write-values} is set:
+        stop trigger
+    add 1 to {write-values::ticks}
+    if {write-values::mutate} is set:
+        if {write-values::mutate} is greater than 1:
+            remove 1 from {write-values::mutate}
+        else:
+            set {write-values::changing::5001::id} to 25001
+            delete {write-values::mutate}
+
+every 5 seconds:
+    if {skriptorm::selftest::done::write-values} is set:
+        stop trigger
+    if {skriptorm::selftest::started::write-values} is set:
+        stop trigger
+    set {skriptorm::selftest::started::write-values} to true
+
+    wait 6 seconds
+
+    create a connection named "write-values" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        url: "jdbc:sqlite:plugins/Skript/write-values-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values connect: %last database error%"
+
+    in connection "write-values":
+        register a database table "orm_write_values":
+            id: bigint, primary key, not null
+            name: string(64), nullable
+            age: int, nullable
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values register table: %last database error%"
+
+    # Each input needs more than 4096 reader steps, even before missing columns are filled.
+    loop 2200 times:
+        set {write-values::global::%loop-number%::id} to loop-number
+        set {write-values::global::%loop-number%::name} to "global"
+    set {write-values::global::2200::age} to 41
+    set {_globalRows} to -1
+    set {_beforeTicks} to {write-values::ticks}
+    in connection "write-values":
+        insert many {write-values::global::*} into table "orm_write_values" and store affected rows in {_globalRows} and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values global insert: %last database error%"
+    if {_globalRows} is not 2200:
+        log "SKRIPTORM_SELFTEST=FAIL write values global affected count: %{_globalRows}% instead of 2200"
+    set {_ticksElapsed} to {write-values::ticks} - {_beforeTicks}
+    if {_ticksElapsed} is less than 2:
+        log "SKRIPTORM_SELFTEST=FAIL write values global input finished after only %{_ticksElapsed}% ticks"
+
+    set {_sentinel} to "kept"
+    loop 2200 times:
+        set {_id} to 5000 + loop-number
+        set {_local::%loop-number%::id} to {_id}
+        set {_local::%loop-number%::name} to "local"
+    # The last row introduces a column missing from the first 2199 rows.
+    set {_local::2200::age} to 42
+    set {_localRows} to -1
+    set {_beforeTicks} to {write-values::ticks}
+    in connection "write-values":
+        insert many {_local::*} into table "orm_write_values" and store affected rows in {_localRows} and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values local insert: %last database error%"
+    if {_localRows} is not 2200:
+        log "SKRIPTORM_SELFTEST=FAIL write values local affected count: %{_localRows}% instead of 2200"
+    set {_ticksElapsed} to {write-values::ticks} - {_beforeTicks}
+    if {_ticksElapsed} is less than 2:
+        log "SKRIPTORM_SELFTEST=FAIL write values local input finished after only %{_ticksElapsed}% ticks"
+    if {_sentinel} is not "kept":
+        log "SKRIPTORM_SELFTEST=FAIL write values lost a local variable while waiting"
+    if {_local::2200::age} is not 42:
+        log "SKRIPTORM_SELFTEST=FAIL write values lost the local source variable while waiting"
+
+    in connection "write-values":
+        select one entity from table "orm_write_values" by id 5001 and store the result in {_first::*}
+        select one entity from table "orm_write_values" by id 7200 and store the result in {_last::*}
+        execute query "SELECT COUNT(*) AS written FROM orm_write_values" and store the result in {write-values::count::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values read back: %last database error%"
+    if {_first::age} is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values filled an omitted column with %{_first::age}% instead of NULL"
+    if {_last::age} is not 42:
+        log "SKRIPTORM_SELFTEST=FAIL write values lost the last row's new column: %{_last::age}%"
+    if {write-values::count::1::written} is not 4400:
+        log "SKRIPTORM_SELFTEST=FAIL write values stored %{write-values::count::1::written}% rows instead of 4400"
+
+    # A late invalid column must reject the whole input before the first SQL statement runs.
+    loop 2200 times:
+        set {_invalid::%loop-number%::id} to 10000 + loop-number
+        set {_invalid::%loop-number%::name} to "invalid"
+    set {_invalid::2200::missing} to 1
+    set {_invalidRows} to -1
+    in connection "write-values":
+        insert many {_invalid::*} into table "orm_write_values" and store affected rows in {_invalidRows} and wait
+    if last database error does not contain "Column 'missing' does not exist":
+        log "SKRIPTORM_SELFTEST=FAIL write values late validation: %last database error%"
+    if {_invalidRows} is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values late validation kept affected count %{_invalidRows}%"
+
+    # A second trigger changes the source on a later tick, while its reader is still running.
+    loop 5000 times:
+        set {write-values::changing::%loop-number%::id} to 20000 + loop-number
+        set {write-values::changing::%loop-number%::name} to "changing"
+    set {_changedRows} to -1
+    set {write-values::mutate} to 2
+    in connection "write-values":
+        insert many {write-values::changing::*} into table "orm_write_values" and store affected rows in {_changedRows} and wait
+    if {write-values::mutate} is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values mutation trigger never ran"
+    if last database error does not contain "changed while":
+        log "SKRIPTORM_SELFTEST=FAIL write values source change was not rejected: %last database error%"
+    if {_changedRows} is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values source change kept affected count %{_changedRows}%"
+
+    in connection "write-values":
+        execute query "SELECT COUNT(*) AS written FROM orm_write_values" and store the result in {write-values::count::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL write values final count: %last database error%"
+    if {write-values::count::1::written} is not 4400:
+        log "SKRIPTORM_SELFTEST=FAIL write values sent SQL for an invalid source: %{write-values::count::1::written}% rows"
+
+    log "SKRIPTORM_SELFTEST detail: write values -> ok"
+    set {skriptorm::selftest::done::write-values} to true

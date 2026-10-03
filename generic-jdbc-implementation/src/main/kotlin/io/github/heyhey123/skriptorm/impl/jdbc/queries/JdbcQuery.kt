@@ -110,22 +110,15 @@ interface JdbcQuery {
         }
     }
 
-    /**
-     * Runs [block], turning the driver's cancellation into something a script author can act on.
-     *
-     * What the driver throws says only that the statement was cancelled; the two things worth knowing
-     * are how long it was given and that the connection is still usable afterwards, since the script's
-     * next statement will be sent on it.
-     */
+    /** Adds the configured limit to a driver's timeout error without assuming the connection's state. */
     fun <T> executeWithTimeoutReported(seconds: Int, block: () -> T): T {
         if (seconds <= 0) return block()
         return try {
             block()
         } catch (error: SQLTimeoutException) {
             throw SQLTimeoutException(
-                "The statement did not finish within $seconds second(s) and was cancelled. " +
-                    "The connection is still usable; raise 'statement timeout' on it if this kind of " +
-                    "statement legitimately needs longer.",
+                "The statement timed out after being given $seconds second(s). " +
+                    "Check the query, the connection's 'statement timeout', and any transaction timeout.",
                 error.sqlState,
                 error.errorCode,
                 error

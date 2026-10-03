@@ -79,9 +79,11 @@ An unset or empty variable fails with `{_rows::*} is not set.` rather than succe
 
 One write statement binds at most **30,000 values**. For a six-column table, that is 5000 rows. A larger batch is split into multiple statements; no rows are silently dropped. Wider rows mean fewer rows per statement. Even a row wider than the limit is sent on its own.
 
-`and store affected rows in {_rows}` reports the total across the split statements, when the backend can provide an exact count. If a later statement fails, earlier statements remain applied unless the batch runs inside a `begin transaction` block.
+`and store affected rows in {_rows}` reports the total across the split statements, when the backend can provide an exact count. If a later statement fails, earlier statements remain applied unless the batch runs inside a `database transaction` block.
 
-The limit counts column values because reading them from Skript variables takes time on the server thread. In one benchmark, reading 30,000 values took about 10 ms. The plugin splits larger database writes, but a very large batch can still pause the server while its values are read. For large jobs, write smaller batches, such as one `select page` result at a time. See [Reading rows](reading.md#how-many-rows-one-read-may-store).
+When `insert many` reads a list variable, it checks and converts the rows on the server thread in slices of at most 4096 steps, aiming for about 2 ms per slice. If more work remains, it continues on a later tick. It validates **every row before sending any SQL**, so an unknown column or invalid value near the end of the variable cannot leave a partial write. The trigger resumes only after the database write finishes, and local variables remain available afterwards. A `values:` block does not use this sliced reader.
+
+Keep the source variable unchanged until the write finishes. The reader detects structural changes, but it cannot reliably detect a value replaced at an existing key between slices. In a transaction, the time spent reading across ticks counts toward the transaction timeout. Slicing limits the work attempted in one tick; it does not guarantee a fixed tick duration, particularly when converting an expensive value. For large jobs, smaller batches such as one `select page` result at a time also limit memory use. See [Reading rows](reading.md#how-many-rows-one-read-may-store).
 
 
 ## Upsert or insert if absent
