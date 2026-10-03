@@ -9,6 +9,25 @@ when releasing, rename that section to the version and date, then add a new `Unr
 
 ## [Unreleased]
 
+## [1.4.1] - 2026-10-03
+
+Includes the 1.4.0 changes, which were not published on skUnity or MineBBS.
+
+- **MariaDB support.** Use the dedicated `"MariaDB"` connection type with MariaDB Connector/J.
+- **Better bulk writes.** Read `insert many` list variables across ticks and use parameterized multi-row
+  inserts on MySQL, respecting value and packet limits while retaining affected-row counts.
+  Keep the source variable unchanged until the write finishes; transaction timeouts also
+  include the time spent reading it.
+- **Safer reads and transactions.** Preserve local results, correctly replace saved global
+  list results, and reject reads above 5000 rows without partial output. Discard a connection
+  if rollback fails or a statement is still running when the transaction is aborted.
+- **More reliable table definitions.** Improve repeated registration, compatible-column
+  checks, and NULL, numeric, and database-specific type handling.
+- **Clearer documentation.** Rewrite the bilingual guides and report nanosecond timings
+  for SQLite, MySQL, MariaDB, PostgreSQL, and MongoDB.
+
+**Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.3.0...v1.4.1
+
 ## [1.4.0] - 2026-10-01
 
 This release adds a dedicated MariaDB connection type, sets limits on large reads and writes,
