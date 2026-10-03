@@ -23,8 +23,9 @@ on load:
   `"PostgreSQL"`, `"MongoDB"` and `"JDBC"`. Names must match exactly; an arbitrary database *product*
   name will not work. See [Connections](connections.md#the-implementation-name).
 - `url` is required. `username` and `password` may be empty strings if the database does not require them.
-- The section always waits. After a successful connection, later statements in the same trigger can
-  use it. A script that accesses the database before the connection is ready gets `No database connected.`.
+- The `create a connection` block waits for the connection attempt to finish. After it succeeds,
+  later lines in the same `on load` block can use the connection. A script that accesses the
+  database before the connection is ready gets `No database connected.`.
   Connecting in `on load` is the usual approach, but script load order still matters.
 - Credentials are stored in the script file, so restrict access to that file.
 
@@ -79,9 +80,10 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-A select always waits, so subsequent lines can read its result. Each column becomes a variable key
-with the same name. In this example, `{_user::id} is not set` means no row matched. In general, a NULL
-column also leaves its key unset, so checks on other columns must account for both cases.
+A select always waits, so subsequent lines can read its result. Each column becomes a key under
+`{_user::*}`, such as `{_user::name}`. Here `{_user::id} is not set` means no row matched because
+`id` is non-nullable. A NULL value in another column also leaves that column's key unset, so an
+unset `{_user::age}` alone does not mean the row is missing.
 See [Reading rows](reading.md).
 
 ## 5. Change and remove

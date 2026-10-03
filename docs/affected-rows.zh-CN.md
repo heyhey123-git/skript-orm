@@ -13,7 +13,7 @@ update entities in table "accounts" with limit 1 and store affected rows in {_ro
         balance = {_balance}
 
 if {_rows} is 0:
-    send "读余额的时候它已经被改掉了。" to console
+    send "读取余额期间，余额已经发生变化。" to console
 ```
 
 ## 这个子句
@@ -39,15 +39,15 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
 | `insert one`、`insert many` | 写入的行数 | 写入的行数 | 写入的行数 |
 | `update` | **改动**的行数 | 匹配的行数 | 匹配的行数 |
 | `delete` | 删除的行数 | 删除的行数 | 删除的行数 |
-| `upsert` | 插入 `1`、更新 `2`、值未改变时 `0` | 两种都是 `1` | 插入 `1`，更新时为匹配行数 |
-| `insert ... if absent` | 插入 `1`，键已存在时 `0` | 同上 | 同上 |
-| 驱动无法计数的批量操作 | 不返回数字 | 同上 | 不会发生 |
+| `upsert` | 插入 `1`、更新 `2`、值未改变时 `0` | 插入或更新均为 `1` | 插入 `1`，更新时为匹配行数 |
+| `insert ... if absent` | 插入 `1`，键已存在时 `0` | 插入 `1`，键已存在时 `0` | 插入 `1`，键已存在时 `0` |
+| 驱动无法计数的批量操作 | 不返回数字 | 不返回数字 | 不会发生 |
 
 要在三种后端上一致地判断“是否插入了新行”，请用 `insert ... if absent`。`upsert` 不适合这一判断：MySQL 的 `2` 表示更新，另外两个后端则不区分插入和更新。
 
 部分后端无法为批量操作提供逐行计数，此时**不返回数字**，而不是给出不准确的行数。
 
-驱动也可以被要求重写批量语句：在 `"MySQL"` 的 url 上加上 `rewriteBatchedStatements=true`。此时 Connector/J 会对该批次的每一行都回答 `SUCCESS_NO_INFO`，行数因此变成没有数字——更快，但不再精确。插件不设置这个选项：`"MariaDB"` 无需任何选项就能走到服务端的批量执行，并逐行给出计数。
+驱动合并批量语句时，也可能无法返回精确行数。例如，旧版 MySQL 批量插入或通用 JDBC 批处理使用 Connector/J 的 `rewriteBatchedStatements=true` 时，驱动可能返回 `SUCCESS_NO_INFO`，表示执行成功但无法提供行数。当前 `"MySQL"` 的 `insert many` 由插件直接构造多行插入语句，不依赖这个选项；`"MariaDB"` 则使用 MariaDB 驱动的批量执行方式。详见[写入行](writing.zh-CN.md#一次写入最多能发多少行)。
 
 ## 有数字、没数字、零
 
@@ -71,9 +71,9 @@ else if {_rows} is 0:
 
 先清空变量，可以避免将上一次的数字误当成本次结果。写入会等待完成，因此下一条语句即可读取行数，无需额外等待。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
-在[事务](transactions.zh-CN.md)中也一样：每条带此子句的语句都会先清空变量，被跳过的语句不会沿用上一条的数字。与之不同，`last database error` 会保留最初的错误，便于查询回滚原因。
+在[事务](transactions.zh-CN.md)中，每条带 `store affected rows` 的语句也会先清空目标变量；即使语句被跳过，也不会沿用上一条的数字。`last database error` 则会保留最初的错误，便于查询回滚原因。
 
-事务结束不会清空这个变量，回滚也不会撤销变量赋值。因此，section 之后的 `{_rows}` 即使为 `1`，对应的数据库改动也可能已被回滚。使用事务中的行数前，请先检查 `last database error`。
+事务结束不会清空 `{_rows}`，回滚也不会撤销变量赋值。因此，`database transaction:` 段落结束后，`{_rows}` 即使为 `1`，对应的数据库改动也可能已被回滚。使用事务中的行数前，请先检查 `last database error`。
 
 ## 一次安全的读改写
 

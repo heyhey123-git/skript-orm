@@ -14,7 +14,7 @@ register a database table "users":
 
 ## 类型名
 
-| 类型 | 脚本中的值 | MySQL/JDBC 存储 | 大小 |
+| 类型 | 脚本中的值 | MySQL/MariaDB/JDBC 存储 | 大小 |
 | --- | --- | --- | --- |
 | `boolean` | `true` / `false` | `BOOLEAN` | |
 | `tinyint` | 单字节整数（−128…127） | `TINYINT` | |
@@ -36,9 +36,9 @@ register a database table "users":
 
 ### PostgreSQL 与 MongoDB
 
-上表的存储类型适用于 `"MySQL"` 和 `"JDBC"`。PostgreSQL 将 `tinyint` 存为 `SMALLINT`，`float` 存为 `REAL`，`double` 存为 `DOUBLE PRECISION`。二进制类型（`uuid`、`itemstack`、`location`、`bukkitserializable`、`nbtcompound`）都存为 `BYTEA`，不接受大小参数。因此，`uuid(16)` 和 `location(2048)` 会被拒绝。
+上表的存储类型适用于 `"MySQL"`、`"MariaDB"` 和 `"JDBC"`。PostgreSQL 将 `tinyint` 存为 `SMALLINT`，`float` 存为 `REAL`，`double` 存为 `DOUBLE PRECISION`。PostgreSQL 把二进制类型（`uuid`、`itemstack`、`location`、`bukkitserializable`、`nbtcompound`）存为不接受大小参数的 `BYTEA`，因此会拒绝 `uuid(16)` 和 `location(2048)`。
 
-MongoDB 将数据存为 BSON 文档，不使用 SQL 行列。类型映射如下；语句行为的差异见[兼容性](compatibility.zh-CN.md#mongodb)。
+MongoDB 将数据存为文档，不使用 SQL 行列。下表的 BSON 类型是 MongoDB 在文档中保存值时使用的格式；语句行为的差异见[兼容性](compatibility.zh-CN.md#mongodb)。
 
 | 类型 | BSON |
 | --- | --- |
@@ -50,10 +50,10 @@ MongoDB 将数据存为 BSON 文档，不使用 SQL 行列。类型映射如下�
 | `float` | double（由 float 扩宽） |
 | `string` | string |
 | `uuid` | binary（16 字节） |
-| `itemstack` | binary（与 SQL 实现相同的序列化数据） |
-| `location` | binary（与 SQL 实现相同的序列化数据） |
-| `bukkitserializable` | binary（与 SQL 实现相同的序列化数据） |
-| `nbtcompound` | binary（与 SQL 实现相同的序列化数据） |
+| `itemstack` | binary（序列化后的物品数据） |
+| `location` | binary（序列化后的坐标数据） |
+| `bukkitserializable` | binary（Bukkit 序列化后的数据） |
+| `nbtcompound` | binary（NBT 字节数据） |
 | `date` | int64（epoch 毫秒） |
 | `time` | int32（ticks，0…24000） |
 | `timespan` | int64（毫秒） |
@@ -70,19 +70,19 @@ MongoDB 不会强制执行声明的列大小和可空性。注册表时会创建
 
 ## NULL
 
-写入和读取 SQL NULL 时，处理方式不同：
+SQL NULL 表示列没有值。写入和读取这种空值时，处理方式不同：
 
 - **写入：** `values` 块中的字面量 `null` 会存为 SQL NULL。插入时省略某列，则使用数据库默认值；更新或 `upsert by id` 时，已有行中未指定的列保留原值。
-- **读取：** NULL 列在结果变量中没有对应的键，因为 Skript 会删除值为 null 的列表变量键。因此，`{_user::age} is not set` 可能表示 NULL，也可能表示该列不存在；它不表示 0。
+- **读取：** NULL 列在结果变量中没有对应的键，因为 Skript 会删除值为 null 的列表变量键。把 `select one entity` 的结果存入 `{_user::*}` 后，`{_user::age} is not set` 可能表示 `age` 为 NULL，也可能表示没有查到这一行；它不表示 0。
 
 ## NBT compound
 
-`nbtcompound` 是唯一依赖其他插件实现的类型。SkBee 提供在脚本中构造 compound 的语法，本插件也通过 SkBee 的类读写它。
+NBT compound 是一组有名称的 NBT 值，例如物品的标签。`nbtcompound` 是唯一需要其他插件的列类型：SkBee 提供在脚本中构造 compound 的语法，本插件通过 SkBee 的类读写它。
 
 - **没有 SkBee 时**，注册含 `nbtcompound` 列的表会被拒绝，错误信息会明确提到 SkBee。插件的其他功能不受影响。
 - **存储的是 NBT，不是文本。** compound 以 NBT 字节写入 `BLOB`，读回后仍是 compound，无需再从字符串解析。
-- **存储的是快照。** SkBee 返回的 compound 可能是物品、实体或方块的实时视图。插件取值时会保存当时的内容，此后修改原对象不会改变已保存的数据。
-- **SkBee 可以把 compound 显示为 SNBT。** 例如，可用 `"%{_row::data}%" contains "某个标签"` 检查读回的内容。
+- **源对象之后的变化不会更新数据库。** SkBee 返回的 compound 可能是物品、实体或方块的实时视图。插件取值时会保存当时的内容，此后修改原对象不会改变已保存的行。
+- **SkBee 可以把 compound 显示为 SNBT**，即便于阅读的 NBT 文本形式。例如，可用 `"%{_row::data}%" contains "某个标签"` 检查读回的内容。
 
 ## 类型不匹配会怎样
 

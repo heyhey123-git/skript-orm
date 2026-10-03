@@ -51,13 +51,13 @@ if last database error is set:
     send "Delete failed: %last database error%" to console
 ```
 
-This check tells you whether the statement succeeded, not whether the row existed. Deleting a missing key changes nothing and reports no error. Use `and store affected rows in {_rows}` to check whether a row was deleted.
+The example's `if last database error is set` checks whether the delete failed. Deleting a missing key changes nothing and reports no error. Use `and store affected rows in {_rows}` to check whether a row was deleted.
 
-A colon introduces a statement body. This statement has none, so it needs no colon. The same applies to `update`, `upsert` and `insert` when their values come from a variable; see [writing rows](writing.md).
+`delete one entity ... by id` has no indented body, so it needs no colon. An `update` using a variable and no `where` block also needs no colon, as do `upsert` and `insert` using variables; see [writing rows](writing.md).
 
 ## Leaving the where out
 
-**Without a `where` block, `update entities` and `delete entities` act on all rows allowed by the implementation.** Both sections accept this form, so forgetting `where` does not produce an error:
+**Without a `where` block, `update entities` and `delete entities` do not filter rows.** If `with limit` is also omitted, they update or delete every row in the table. Omitting `where` is not itself an error:
 
 ```sk
 # Delete every row in the table.
@@ -78,11 +78,11 @@ A limit caps the count; it is not a pagination mechanism. The database chooses w
 
 ## Waiting
 
-Both sections finish before subsequent statements run. Failures are available in `last database error`. Waiting pauses only the current trigger, not the server thread. `and wait` is still accepted but no longer changes the behaviour. See [Errors and waiting](errors-and-waiting.md).
+Both conditional and primary-key forms of `update` and `delete` finish before subsequent statements run. Failures are available in `last database error`. Waiting for the database pauses only the current script execution and does not occupy the server thread. `and wait` is still accepted but no longer changes the behaviour. See [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were changed
 
-Both sections accept `and store affected rows in {_rows}` to save the affected-row count:
+Both conditional and primary-key forms of `update` and `delete` accept `and store affected rows in {_rows}` to save the affected-row count:
 
 ```sk
 delete entities from table "sessions" and store affected rows in {_deleted} and wait:
@@ -94,7 +94,7 @@ For deletes, `0` means no row was deleted. For updates, it can mean no row match
 
 ## Updating from a variable
 
-Both `update` and `upsert` accept new values from a variable with the structure of a query result, making it straightforward to read, modify and write back a row:
+`update one entity {_user::*} ... by id {_id}` and `upsert one entity {_user::*} ... by id {_id}` read column values from a list variable. Each key names a column, such as `{_user::name}` or `{_user::age}`. You can therefore read a row with `select one`, change its values, and write it back. Pass the primary key separately to `by id` and remove it from the column-value variable:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:

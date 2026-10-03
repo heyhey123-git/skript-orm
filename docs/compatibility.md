@@ -19,13 +19,13 @@
 
 `create a connection to database "..."` takes one of five implementation names. Names are case-sensitive:
 
-| Type name | What it is |
+| Connection type | Driver and behavior |
 | --- | --- |
 | `"MySQL"` | MySQL SQL syntax, using the server's existing MySQL driver. |
-| `"MariaDB"` | The same SQL syntax, using the downloaded MariaDB driver. Use a `jdbc:mariadb://` URL. |
-| `"PostgreSQL"` | PostgreSQL's dialect, with the driver the plugin downloads for it. See [What is inside the jar](#what-is-inside-the-jar). |
-| `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [MongoDB](#mongodb). |
-| `"JDBC"` | A driver specified in the `driver` property. It uses general SQL syntax and rejects operations without a supported form. |
+| `"MariaDB"` | MySQL-family SQL syntax with the downloaded MariaDB driver. Use a `jdbc:mariadb://` URL. |
+| `"PostgreSQL"` | PostgreSQL-specific SQL syntax, with a driver downloaded by the plugin. See [What is inside the jar](#what-is-inside-the-jar). |
+| `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Transaction and affected-row behavior differs from SQL backends; see [MongoDB](#mongodb). |
+| `"JDBC"` | A driver specified in the `driver` property. It uses general SQL syntax and rejects operations that need database-specific SQL. |
 
 Any other name is rejected when the section runs, with `Database '<name>' is not supported.`
 SQLite is available through `"JDBC"`; `"SQLite"` is not a registered type name.
@@ -38,21 +38,22 @@ PostgreSQL, and MongoDB.
 **Database drivers are not bundled.** They are provided as follows:
 
 - MySQL uses Paper's MySQL Connector/J. For `"JDBC"`, the driver specified in the script must already
-  be on the server's classpath. Paper also includes SQLite's driver.
+  be on the server's Java classpath, meaning its library must be available when the server starts.
+  Paper also includes SQLite's driver.
 - MariaDB, PostgreSQL and MongoDB have their drivers declared in `plugin.yml` as `libraries` entries and
-  downloaded by Paper once, on the first start, into the server's `libraries/` directory, where they are
-  loaded onto the plugin's classpath. The list is generated from the bundled modules. The default build
+  downloaded by Paper once, on the first start, into the server's `libraries/` directory, where they become
+  available to the plugin. The list is generated from the bundled modules. The default build
   includes `org.mariadb.jdbc:mariadb-java-client:3.4.4`,
   `org.postgresql:postgresql:42.7.11` and
   `org.mongodb:mongodb-driver-sync:5.6.1`, and a build of modules that need no driver writes
-  `libraries: []`. The source is the server's mirror of Maven Central:
-  `PAPER_DEFAULT_CENTRAL_REPOSITORY`, or the `org.bukkit.plugin.java.LibraryLoader.centralURL` system
-  property. By default, Paper uses Google's mirror of Central. Downloaded drivers are reused from
-  `libraries/` on later starts.
+  `libraries: []`. Paper downloads these drivers from a server that mirrors Maven Central. The download
+  server can be changed with `PAPER_DEFAULT_CENTRAL_REPOSITORY` or the
+  `org.bukkit.plugin.java.LibraryLoader.centralURL` system property. By default, Paper uses Google's
+  mirror of Central. Downloaded drivers are reused from `libraries/` on later starts.
 
 Paper treats an unresolved library as a fatal error and will not load the plugin. If the server cannot
-reach the mirror, change the setting above; note that it affects library downloads for **all plugins**
-on that server. Alternatively, prepare the dependencies manually by copying the entire `libraries/`
+reach that download server, change one of those settings. The chosen server affects library downloads
+for **all plugins** on that server. Alternatively, prepare the dependencies manually by copying the entire `libraries/`
 directory from a server that has already started successfully.
 
 Drivers are kept outside the jar so Paper can load their published versions with their service files
@@ -60,11 +61,11 @@ and verify their checksums. MongoDB uses the synchronous `mongodb-driver-sync` r
 coroutine driver, since the plugin relocates its own kotlinx.coroutines runtime.
 
 For development builds, `-PbundleModules=` selects which modules to package. The generated `libraries`
-list then includes only their required drivers. Custom module combinations are not supported releases.
+list then includes only the drivers required by the selected modules. Custom module combinations are not officially supported.
 
 ## NBT compounds and SkBee
 
-`nbtcompound` is the one column type whose implementation lives in another plugin. SkBee is the only one
+An NBT compound is a group of named NBT values. `nbtcompound` is the one column type whose implementation needs another plugin. SkBee is the only one
 supported, for two reasons:
 
 - SkBee is what gives scripts a way to build a compound (`nbt compound from "{...}"`), so a compound in a
@@ -94,18 +95,19 @@ This table lists supported database products. Use the corresponding type name fr
 | | |
 | --- | --- |
 | MySQL | Supported. Write `"MySQL"`. Tested against MySQL 8 in CI. |
-| MariaDB | Supported. Write `"MariaDB"`; the driver is downloaded on the first start. The dialect generates the MySQL syntax MariaDB also accepts, such as `ON DUPLICATE KEY UPDATE` and `LIMIT` on updates and deletes. Tested in CI against MariaDB 11. |
+| MariaDB | Supported. Write `"MariaDB"`; the driver is downloaded on the first start. The addon generates MySQL-family SQL that MariaDB also accepts, such as `ON DUPLICATE KEY UPDATE` and `LIMIT` on updates and deletes. Tested in CI against MariaDB 11. |
 | PostgreSQL | Supported. Write `"PostgreSQL"`; the driver is downloaded on first startup. CI tests it with PostgreSQL and Paper. |
 | MongoDB | Supported. Write `"MongoDB"`; the driver is downloaded on the first start. Its transactions are not implemented here, so a `database transaction` section reports the refusal. Tested in CI against MongoDB 8. |
-| SQLite and others | SQLite works through `"JDBC"` and Paper's included driver. Inserts, reads, paging, updates, and deletes are tested. The generic dialect does not support auto increment, `insert ... if absent`, `upsert`, or write limits. Other products need a driver available on the server's classpath. |
+| SQLite and others | SQLite works through `"JDBC"` and Paper's included driver. Inserts, reads, paging, updates, and deletes are tested. The generic SQL generator does not support auto increment, `insert ... if absent`, `upsert`, or write limits. Other products need a driver available on the server's Java classpath. |
 
 ## MongoDB
 
-Like `"MySQL"`, `"MongoDB"` is both a product name and a type name. The syntax documented elsewhere
-also applies, but some SQL-specific assumptions do not. The main differences are listed below.
+Like `"MySQL"`, `"MongoDB"` is both a product name and a connection type name. Scripts still use
+`register a database table`, `insert`, `select`, `update`, and `delete` with a `"MongoDB"` connection.
+The MongoDB implementation differs from SQL backends in the following ways.
 
 - **All declared column types are supported.** UUIDs, item stacks, locations, Bukkit-serializable
-  values, and NBT compounds use BSON binary; dates, times, and timespans use numbers.
+  values, and NBT compounds are stored as binary fields in MongoDB documents; dates, times, and timespans use numbers.
 - **Auto increment is a counter document**, one per auto-increment key, kept in a collection named
   `skript_orm_sequences`. That name is therefore reserved: a table may not be called that. The counter is
   created when the table is registered, and raised to the highest key the collection already holds, so a
@@ -120,9 +122,9 @@ also applies, but some SQL-specific assumptions do not. The main differences are
   stable enough for pagination.
 - **`update`, `update by id` and `upsert by id` report what the filter matched**, not what the server
   changed. Writing a column the value it already holds still counts that row.
-- **`insert if absent` is key-based and atomic.** A write a unique index already covers is ignored rather
-  than reported as an error; on MongoDB that is a duplicate key the plugin catches, the same way the MySQL
-  dialect catches one.
+- **`insert if absent` cannot overwrite an existing key.** MongoDB checks its unique index as part of
+  the insert, so concurrent attempts cannot both create a document with the same key. If the key already
+  exists, the addon catches the duplicate-key error and leaves the existing document unchanged.
 - **`delete ... with limit n` really deletes at most n rows.** MongoDB has no delete limit, so the plugin
   selects that many identifiers first and deletes those.
 - **A filter comparing against null follows MongoDB.** `column = null` matches a row where the column is
@@ -137,6 +139,7 @@ also applies, but some SQL-specific assumptions do not. The main differences are
 
 ## Behaviours that depend on the implementation
 
-Some behavior depends on the implementation: conflict handling in `upsert` and `insert ... if absent`,
-write limits, and how missing rows are handled. MySQL and MariaDB use the same SQL dialect, so MySQL
-notes elsewhere in this guide apply to both. MongoDB differences are listed [above](#mongodb).
+Conflict handling in `upsert` and `insert ... if absent`, write limits, and missing-row behavior depend
+on the connection type. MySQL and MariaDB share SQL syntax such as `ON DUPLICATE KEY UPDATE` and
+`LIMIT` on updates and deletes, but use different drivers and `insert many` execution paths.
+MongoDB behavior is described in the [MongoDB section](#mongodb).

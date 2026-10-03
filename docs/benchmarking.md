@@ -5,24 +5,27 @@
 This page describes the benchmark setup, recorded results, and planned tests. Results identify their
 test environment; work that has not yet been measured is marked as planned.
 
+A tick is one server update. At the usual 20 ticks per second, each aims to finish within 50 ms.
+
 ## What these numbers mean for a server
 
 Reads that exceed the 5000-row result limit fail without storing a partial result. Writes that exceed
 30 000 bound values are split across statements. These limits protect against oversized operations,
 although a permitted large write can still lengthen a server tick.
-For `insert many` from a list variable, the addon reads the source across ticks, with a
-budget of roughly 2 ms or 4096 steps per pass. This reduces the main-thread work in any one
-pass, but the operation may take more ticks to finish. The script must leave the source variable
-unchanged until the write completes.
+For `insert many` from a list variable, the addon reads the source across ticks. Each pass handles
+at most 4096 processing steps and checks the clock every 64 steps, pausing after about 2 ms.
+A single value conversion can take longer than 2 ms, so this is a target rather than a hard
+main-thread limit. The operation may take more ticks to finish; the script must leave the source
+variable unchanged until the write completes.
 
 The measurements cover three different costs:
 
-- **Plugin throughput.** A 5000-row `insert many` took 8.022 ms on an Intel Xeon Platinum 8573C
-  and 8.241 ms on an AMD EPYC 7763. Those CI runs are stored in
+- **Insert timing in a JVM benchmark.** A 5000-row `insert many` took 8.022 ms on an Intel Xeon
+  Platinum 8573C and 8.241 ms on an AMD EPYC 7763. Those CI runs are stored in
   `dev/bench/intel-xeon-platinum-8573c/data.js` and
   `dev/bench/amd-epyc-7763-64-core-processor/data.js`.
 - **Historical server ticks.** On an AMD EPYC 9V45 CI runner, the older script reported a 5000-row write at 220 ms overall and
-  lengthened the longest tick by 90 ms beyond its 50 ms budget. A 10 000-row write took 320 ms
+  lengthened the longest tick by 90 ms past the 50 ms target. A 10 000-row write took 320 ms
   overall and overran a tick by 100 ms. The 5000-row read had no tick overrun in that run;
   the 10 000-row read was refused. The table below contains the other measurements.
 - **Historical database driver behavior.** In a separate benchmark, twenty 5000-row inserts took 17.04 s
@@ -42,8 +45,9 @@ the plugin write and read cases, then explicitly skips the SQL comparison.
 A Skript loop that writes to a regular variable would measure in-memory storage, so it is not
 a useful comparison with database inserts.
 
-That older 5000-row run reported about 10 ms of tick overrun on a development machine
-and 90 ms on the CI runner. The benchmark workflow records the host alongside each result.
+An earlier run using Skript's `now` clock (about 10 ms resolution) reported roughly 10 ms of
+tick overrun for 5000 rows on a development machine and 90 ms on the CI runner. The benchmark
+workflow records the host alongside each result.
 
 The current server benchmark uses skript-reflect to call `System.nanoTime()` around each
 operation and at the start of each observed tick. It logs elapsed nanoseconds (`wallNs`)
@@ -51,19 +55,19 @@ immediately when the operation returns, before validation queries or counting re
 It also logs the longest interval between observed tick starts (`gapNs`). The report shows
 milliseconds to six decimal places; the JSON report and CI history retain the original integer
 nanosecond values. Nanoseconds are the timer's unit, not a guarantee of nanosecond accuracy:
-scheduler delays, other plugins, GC,
-database work, and Skript's resume tick all affect the result.
+scheduler delays, other plugins, garbage collection (GC), database work, and Skript's resume
+tick all affect the result.
 
 **Tick overrun** is the longest observed tick-start gap minus 50 ms, floored at zero.
 It reveals a delayed tick but does not directly measure the operation's main-thread CPU
 time. Work that fits within a normal tick is invisible to this metric. Each `read` and
-`write` row is the first run at that size; `warm read` and `warm write` repeat 5000 rows
-after the other cases and are reported separately.
+`write` row is the first run at that size. The `warm read` and `warm write` labels mean the
+5000-row cases were repeated after the others; they do not establish that any cache was warm.
 
 ## Current CI coverage
 
 The tick job runs plugin writes and reads at 100, 500, 1000, 2500, 5000, and 10 000 rows,
-followed by a warm 5000-row write and read, for every backend below. It also runs a separate
+followed by another 5000-row write and read, for every database below. It also runs a separate
 5000-row plugin-versus-raw-SQL comparison where SQL is available. The input rows populate only
 the `id` column; this keeps the comparison focused on row transport and storage rather than a
 particular six-column value mix.
@@ -124,12 +128,12 @@ tick starts, and it includes scheduler and host activity. The run predates the l
 `max_allowed_packet` fix in commit `21898af`; repeat the benchmark after that fix is pushed if
 the exact current MySQL path is needed.
 
-The following historical run used Skript's coarse `now` clock and measured some writes
-through their subsequent count query. These values are retained as context, not as a
+The following historical run used Skript's `now` clock (about 10 ms resolution) and measured
+some writes through their subsequent count query. These values are retained as context, not as a
 baseline for the new timer. They come from Benchmarks #2 on commit `51aa760`, job
 `Tick benchmark`, stored per CPU at `dev/bench/amd-epyc-9v45-96-core-processor/tick/data.js`:
 
-| What | Rows | Wall clock | Tick overrun |
+| What | Rows | Elapsed time | Tick overrun |
 | --- | --- | --- | --- |
 | read | 100 | 60 ms | 10 ms |
 | read | 500 | 60 ms | — |
@@ -158,15 +162,15 @@ where each metric can be collected.
 
 The benchmarks use three layers to help locate the source of a slowdown:
 
-- **A: JVM benchmarks without Paper.** JMH cases live in a separate module. Pure code
-  paths can be measured without a database; the current insert case uses in-memory H2,
+- **A: JVM benchmarks without Paper.** JMH is a Java benchmark tool; its cases live in a separate
+  module. Pure code paths can be measured without a database; the current insert case uses in-memory H2,
   so its result includes database work as well as addon code.
 - **B: real databases.** Testcontainers starts each backend using the integration-test
   configuration. This layer captures round trips, parsing and execution, connection-pool
   behavior, and commits.
 - **C: Paper server.** Scripts run on a disposable server and record elapsed time and tick
-  gaps while the addon reads source variables and stores results. Memory use and MSPT
-  percentiles require separate measurements.
+  gaps while the addon reads source variables and stores results. Memory use and the
+  distribution of MSPT (milliseconds per tick) require separate measurements.
 
 Separating the layers helps identify the source of a slowdown: value conversion in A, driver
 batching in B, or Skript variable access on the server thread in C.
@@ -189,7 +193,7 @@ every current server case:
 | Metric | Planned measurement | Layer |
 | --- | --- | --- |
 | main-thread time | time spent on the server thread during an operation | C |
-| background time | time spent doing database work off the server thread | B, C |
+| background time | time spent doing database work on background threads | B, C |
 | trigger latency | elapsed time from statement start until Skript resumes | B, C |
 | throughput | rows and values processed per second | A, B, C |
 | statements and rows passed to the driver | calls and rows counted at the JDBC boundary | B |
@@ -197,7 +201,7 @@ every current server case:
 | allocations per operation | bytes allocated per call | A, B |
 | peak heap | maximum heap use sampled during an operation | B, C |
 | retained heap | heap use after the case and a collection | B, C |
-| MSPT distribution (p50, p99, max) | server tick durations | C |
+| MSPT distribution (p50, p99, max) | milliseconds per tick: median (p50), a time exceeded by only 1% of ticks (p99), and longest tick | C |
 
 Separating trigger latency from database and main-thread time will require additional
 instrumentation. The current `wallNs` reading includes all three.
@@ -223,7 +227,7 @@ servers, it reads `Questions` before and after a plugin call and subtracts the p
 own cost. It also reads `Innodb_rows_inserted`, `Com_insert`, and `Com_stmt_execute`.
 Because these counters cover the whole server, the test checks for other connections first;
 if it finds any, it reports the measurements without asserting them. Driver versions and
-options affect these counts, so they are recorded with the environment and do not gate CI.
+options affect these counts, so they are recorded with the environment and do not determine whether CI passes.
 
 In one run of the 5000-row test, MySQL 8.0.46 and 8.4.11 each recorded **5038 total
 statements**, including 5000 inserts (`comInsert=5000`, `comStmtExecute=0`). MariaDB
@@ -252,13 +256,13 @@ tools below are options for measurements that are not yet collected.
 
 | Purpose | Tool | Role |
 | --- | --- | --- |
-| Microbenchmarks (A) | JMH | provides warmup, separate forks, and protection against dead-code elimination |
+| Microbenchmarks (A) | JMH | runs code before timing so the JVM can optimize it, uses separate processes, and prevents the JVM from removing measured work as unused |
 | Statements and rows passed to the driver (B) | `datasource-proxy` or a counting driver | counts JDBC calls; the number of rows within a batch needs separate tracking |
 | Statements and round trips seen by the database (B) | session counters or packet capture | shows what the driver sends; results depend on driver version and connection settings |
 | Percentiles over tick samples (C) | HdrHistogram | computes a distribution from repeated tick samples |
 | Real databases (B) | Testcontainers | starts test databases; instance reuse reduces repeated startup time |
 | History and comparison | `benchmark-action/github-action-benchmark` | stores results by CPU and backend without failing the job on timing changes |
-| Allocations and pauses | JMH `-prof gc`, JFR, async-profiler | examines allocations, GC, and safepoint pauses |
+| Allocations and pauses | JMH `-prof gc`, JFR, async-profiler | examines memory use and pauses when the JVM stops threads for garbage collection or similar work |
 | MSPT (C) | Paper's tick sampling | records tick durations from the server itself |
 
 The benchmarks module declares JMH and its annotation processor directly because the available
@@ -271,7 +275,7 @@ annotation processor generates Java code.
 
 Compilation, unit tests, ktlint, and integration-test compilation already run in CI.
 
-The current job fails on incorrect row counts or script errors, not timing changes.
+The `tick` benchmark job fails on incorrect row counts or script errors, not timing changes.
 Other stable, reproducible checks can be added separately from timing trends, which
 vary on shared CI hosts.
 
@@ -305,7 +309,7 @@ Paper and Skript versions, commit, and whether the worktree had local changes.
   The scripts report `SKRIPTORM_BENCH` lines with nanoseconds as the timer unit and the
   longest observed tick-start gap. The task
   fails if a write stores the wrong number of rows or a script reports `FAIL`.
-  CI checks the 5000-row read limit and 30 000-value write budget separately; a
+  CI checks the 5000-row read limit and 30 000-value limit per write statement separately; a
   nightly and on-demand `tick` matrix records results under `dev/bench/<slug>/tick-ns/<backend>/`.
   See [Reading rows](reading.md#how-many-rows-one-read-may-store) and
   [Writing rows](writing.md#how-many-rows-one-write-may-send). MSPT percentiles

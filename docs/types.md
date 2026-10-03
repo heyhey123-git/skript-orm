@@ -14,7 +14,7 @@ register a database table "users":
 
 ## The type names
 
-| Type | Script value | MySQL/JDBC storage | Size |
+| Type | Script value | MySQL/MariaDB/JDBC storage | Size |
 | --- | --- | --- | --- |
 | `boolean` | `true` / `false` | `BOOLEAN` | |
 | `tinyint` | a one-byte integer (−128…127) | `TINYINT` | |
@@ -36,9 +36,9 @@ Specify a `string` length in parentheses, as in `string(64)`. UUIDs always occup
 
 ### PostgreSQL and MongoDB
 
-The storage column above applies to `"MySQL"` and `"JDBC"`. PostgreSQL uses `SMALLINT` for `tinyint`, `REAL` for `float`, and `DOUBLE PRECISION` for `double`. It stores binary types (`uuid`, `itemstack`, `location`, `bukkitserializable`, `nbtcompound`) as `BYTEA`, which does not take a size. Declarations such as `uuid(16)` and `location(2048)` are therefore rejected.
+The storage column above applies to `"MySQL"`, `"MariaDB"`, and `"JDBC"`. PostgreSQL uses `SMALLINT` for `tinyint`, `REAL` for `float`, and `DOUBLE PRECISION` for `double`. PostgreSQL stores binary types (`uuid`, `itemstack`, `location`, `bukkitserializable`, `nbtcompound`) as `BYTEA`, which does not take a size. Declarations such as `uuid(16)` and `location(2048)` are therefore rejected.
 
-MongoDB stores BSON documents rather than SQL rows. Its type mappings are below; see [Compatibility](compatibility.md#mongodb) for differences in statement behavior.
+MongoDB stores documents rather than SQL rows. The BSON types below are the value formats MongoDB stores in those documents; see [Compatibility](compatibility.md#mongodb) for differences in statement behavior.
 
 | Type | BSON |
 | --- | --- |
@@ -50,10 +50,10 @@ MongoDB stores BSON documents rather than SQL rows. Its type mappings are below;
 | `float` | double (widened from a float) |
 | `string` | string |
 | `uuid` | binary (16 bytes) |
-| `itemstack` | binary (the same serialized data used by SQL implementations) |
-| `location` | binary (the same serialized data used by SQL implementations) |
-| `bukkitserializable` | binary (the same serialized data used by SQL implementations) |
-| `nbtcompound` | binary (the same serialized data used by SQL implementations) |
+| `itemstack` | binary (serialized item bytes) |
+| `location` | binary (serialized location bytes) |
+| `bukkitserializable` | binary (Bukkit-serialized bytes) |
+| `nbtcompound` | binary (NBT bytes) |
 | `date` | int64 (epoch milliseconds) |
 | `time` | int32 (ticks, 0…24000) |
 | `timespan` | int64 (milliseconds) |
@@ -66,23 +66,23 @@ MongoDB does not enforce the declared size or nullability of a column. Registeri
 
 **SQL `date` columns keep only the calendar date.** Because they use SQL `DATE`, they discard hours, minutes, and seconds. To preserve an exact moment, use a `bigint` Unix timestamp (consistently in seconds or milliseconds) or a `string` containing a timestamp and time zone. MongoDB `date` columns preserve the time of day, as explained [above](#postgresql-and-mongodb).
 
-**A `time` column holds Minecraft time of day:** Skript's `time` value, from 0 to 24000 ticks. It does not hold wall-clock time. `timespan` represents a duration.
+**A `time` column holds Minecraft time of day:** Skript's `time` value, from 0 to 24000 ticks. It does not hold real-world time of day. `timespan` represents a duration.
 
 ## NULL
 
-SQL NULL is handled differently when writing and reading:
+SQL NULL means a column has no value. Writing and reading it work differently:
 
 - **Writing:** A literal `null` in a `values` block stores SQL NULL. Omitting the column instead uses its database default on insert. On update or `upsert by id`, omitted columns in an existing row keep their values.
-- **Reading:** A NULL column has no key in the result variable because Skript removes list-variable keys with null values. `{_user::age} is not set` can therefore mean either NULL or an absent column; it does not mean zero.
+- **Reading:** A NULL column has no key in the result variable because Skript removes list-variable keys with null values. For a `select one entity` result stored in `{_user::*}`, `{_user::age} is not set` can mean that `age` is NULL or that no row was found; it does not mean zero.
 
 ## NBT compounds
 
-`nbtcompound` is the only type implemented through another plugin. SkBee provides the syntax for building compounds, and this plugin uses SkBee's classes to read and write them.
+An NBT compound groups named NBT values, such as item tags. `nbtcompound` is the only column type that needs another plugin: SkBee provides the script syntax for building compounds, and this addon uses SkBee's classes to read and write them.
 
 - **Without SkBee**, registering a table with an `nbtcompound` column fails with an error that names SkBee. The rest of the plugin works normally.
 - **The stored form is NBT, not text.** The compound is written as NBT bytes into a `BLOB` and read back as a compound, with no string parsing needed.
-- **The stored value is a snapshot.** SkBee may return a live view of an item, entity, or block. The database saves the compound's contents when the operation takes its value; later changes to the source object do not change what was saved.
-- **SkBee renders compounds as SNBT.** To inspect a result as text, use an expression such as `"%{_row::data}%" contains "someTag"`.
+- **Later changes do not update the saved value.** SkBee may return a live view of an item, entity, or block. The database saves the compound's contents when the operation takes its value; changing the source object afterwards does not change the saved row.
+- **SkBee can display compounds as SNBT**, a readable text form of NBT. To inspect a result as text, use an expression such as `"%{_row::data}%" contains "someTag"`.
 
 ## What a mismatch looks like
 

@@ -41,7 +41,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 - Results are returned in **ascending primary-key order**. Pagination therefore requires a registered primary key, giving all backends a consistent ordering rule.
 - A page beyond the last page returns an empty result, not an error.
 - A page may hold at most **5000 rows**, and a page size above that is refused before the query runs. See [How many rows one read may store](#how-many-rows-one-read-may-store).
-- Pages use an **offset into the sorted rows, not a snapshot**. Inserts or deletions between reads can shift later rows, causing duplicates or omissions. For a table being modified during traversal, consider a primary-key cursor (`id > {_last}`), but also ensure stable primary-key ordering. The condition alone is not enough, and `select many` does not provide `ORDER BY`.
+- Each page runs a new query, sorts by primary key, and skips the rows covered by earlier pages. It does not preserve the data as it was on the first read. Inserts or deletions between reads can shift later rows, causing duplicates or omissions. Another approach is to remember the last primary key read and query `id > {_last}`, but that query must also sort consistently by primary key. `select many` does not provide `ORDER BY`, so the condition alone cannot reliably page through the table.
 
 ## How many rows one read may store
 
@@ -68,13 +68,13 @@ loop 100 times:
 
 Skript normally stores each result value separately on the server thread. On the benchmark server, this took about 1.0–1.4 microseconds per value, depending on the variable type. A six-column row contributes six values; storing 5000 such rows took about 47 ms. A two-column result of the same length took about 15 ms. These measurements describe work on the server thread, not a guarantee about tick length on another server.
 
-For results above **10,000 values**, the plugin can build a global variable's value tree off-thread and attach it on the server thread. In the same test, this reduced server-thread time for 30,000 values from 47 ms to 36 ms. The optimization has these limits:
+For results above **10,000 values**, the plugin can arrange the result into the list variable's nested structure in the background, then attach it to Skript's global variable store on the server thread. In the same test, this reduced server-thread time for 30,000 values from 47 ms to 36 ms. The optimization has these limits:
 
 - It applies to **global list variables**. A result stored in a local or ephemeral variable is written value by value.
 - The **first** qualifying result after startup is stored value by value while the plugin checks compatibility with Skript's variable store.
 - If the store is incompatible, every result uses the ordinary value-by-value path. No configuration change is needed.
 
-Both paths still notify Skript's persistence layer about each value in order.
+Whether values are stored individually or attached together, the plugin notifies Skript to save each value in order. The optimization does not skip the normal variable-saving process.
 
 ## Select by id
 
@@ -82,7 +82,7 @@ Both paths still notify Skript's persistence layer about each value in order.
 select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-This statement looks up the registered primary key directly and does not accept a `where` block. No result is stored if the key does not exist. It has no body, so it needs no colon, as explained in [writing rows](writing.md). The same applies to `select one`, `select many` and `select page` without a `where` block.
+`select entity ... by id` looks up the registered primary key directly and does not accept a `where` block. No result is stored if the key does not exist. A primary-key lookup has no indented body, so it needs no colon. `select one`, `select many`, and `select page` also need no colon when they have no `where` block; see [writing rows](writing.md).
 
 ## Where blocks
 

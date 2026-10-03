@@ -133,8 +133,8 @@ against boxed values.
 
 A cleanup failure must never hide the failure that caused it.
 
-When a primary operation fails and a cleanup step also fails, attach the cleanup failure as
-**suppressed** and rethrow the primary:
+When an operation and its cleanup both fail, rethrow the operation's error and attach the cleanup
+error as a **suppressed exception** (an additional error attached to the one being thrown):
 
 ```kotlin
 try {
@@ -161,8 +161,8 @@ For JDBC the chain is `DataSource → Connection → PreparedStatement → Resul
 `Blob` values bound to a statement. Two consequences:
 
 - **A cursor keeps its statement and connection alive.** Bound resources are released on cursor
-  close, not when `execute()` returns. `JdbcDataCursor.close()` is idempotent and releases in
-  order.
+  close, not when `execute()` returns. Calling `JdbcDataCursor.close()` more than once releases
+  nothing twice; it releases resources in order.
 - **A batch does not manage transactions.** `JdbcInsertMany` does not touch `autoCommit`, `commit()`,
   or `rollback()`. Transaction semantics belong to the caller or to the connection pool.
 
@@ -231,11 +231,13 @@ section produces Skript's `Empty configuration section!` warning.
   also what puts the section into the parser's current sections, which is how `exit` and `stop`
   reaching it are noticed. A `TriggerItem` of its own closes the body, because Skript has no
   end-of-body callback and whether that node is wired in decides whether the scope leaks.
-- Every statement that touches the database waits: `DatabaseWork.run` parks the trigger, preserves the
-  event continuation and puts failures in `last database error`. `and wait` is still accepted by every
-  pattern and read by nobody, because writes once needed it to ask for that.
-- All values are resolved on the main thread, before dispatch, while local variables are still
-  attached to the event.
+- Every statement that touches the database waits: `DatabaseWork.run` pauses the current Skript execution,
+  keeps the next statement to run after the database work finishes (the event continuation), and puts
+  failures in `last database error`. Every pattern still accepts `and wait` for compatibility, although
+  waiting no longer depends on it.
+- Input values are read and validated on the main thread before database work is dispatched, while local
+  variables are still available to the event. For `insert many` from a list variable, this reading is
+  spread across ticks; dispatch waits until every row is ready.
 - Report user-facing parse problems with `Skript.error(...)` during `init`, and runtime problems the way
   Skript's own elements do: through the element's inherited `error(...)`
   (`RuntimeErrorProducer`), so the console names the script, the syntax and the line, with the message
@@ -554,26 +556,27 @@ that environment, so no other workflow can read it, and the environment's deploy
 default branch, which is the only branch the job is meant to run from. A run without the secret stops at
 the first step and says what to add.
 
-`benchmarks.yml` measures rather than tests. It runs the JMH cases in the `benchmarks` module nightly, on
-a pull request whose filter says a change could move a number, and on demand — with a fork count and a
-case filter for whoever is chasing a suspicious night. `./gradlew :benchmarks:jmh` runs the same cases
-locally and takes the same two properties.
+`benchmarks.yml` runs the JMH cases in the `benchmarks` module nightly, on pull requests whose changes
+may affect performance, and on demand. It accepts a fork count (the number of separate JVM processes
+used for each benchmark) and a case filter so a particular result can be investigated. The local task,
+`./gradlew :benchmarks:jmh`, runs the same cases and accepts the same two properties.
 
-Nothing in it fails a run because a number moved, and the alert threshold it carries is a placeholder rather
-than a gate. Two back-to-back local runs with the workflow's own settings — two forks, two warmup
-iterations, three measurement iterations — put the same tree at 12.447 and 10.049 ms/op for the insert case
-and 11.708 and 11.236 ns/op for the row-limit case, with JMH's within-run error reaching 35 percent of the
-score. The run-to-run move was therefore 19 to 24 percent on the I/O bound case and 4 percent on the CPU
-bound one. That is why the threshold cannot be read off a developer machine: a threshold under roughly 50
-percent would fire on the machine, the two cases do not share a band, and a runner is a different machine
-again. The band has to come from the `gh-pages` history once enough nightly runs exist, and the gate is
-turned on after the threshold is set from it. What fails a run today is the harness: a case that stops
-compiling, or one that cannot run.
+Nothing in it fails a run because a number moved. Its alert threshold is a placeholder, not a failure
+condition. Two back-to-back local runs with the workflow's own settings — two forks, two warmup
+iterations, three measurement iterations — measured the same code at 12.447 and 10.049 ms/op for the insert
+case and 11.708 and 11.236 ns/op for the row-limit case. JMH's reported error within a run reached 35
+percent of the measured value. The two runs differed by 19 to 24 percent for the I/O-heavy insert case and
+4 percent for the CPU-heavy row-limit case. That is why the threshold cannot be read off a developer
+machine: a threshold under roughly 50 percent may produce false alerts on that machine, the two cases
+vary by different amounts, and CI
+runs on different hardware. First collect enough nightly results on `gh-pages` to establish each case's
+normal range and threshold. A result outside that threshold can fail a run only after the threshold is
+enabled for that purpose. For now, only a benchmark that fails to compile or run fails the task.
 
 The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch that holds
 nothing but the history, and it is kept per CPU: `ubuntu-latest` is a label over a pool rather than one
 machine, so two runs of the same commit can land on different hosts and differ by more than most of the
-regressions this suite exists to notice. Each result goes to `dev/bench/<slug>`, the slug derived from the
+regressions this suite exists to notice. Each result goes to `dev/bench/<slug>`, where `slug` comes from the
 CPU model the environment step records. The branch is created by hand, because a run that pushed its own
 storage into place would be writing outside the change it was run for. A pull request is compared against
 that history but never writes to it, because the numbers a branch produces are not the numbers the next
@@ -665,27 +668,22 @@ with.
 MockBukkit cannot host Skript. It loads a plugin by generating a subclass of the main class, so a
 `final` main class cannot be loaded at all, and Skript's main class is final. This addon cannot be
 loaded alone either: `plugin.yml` declares `depend: [Skript]` and `onEnable` calls
-`Skript.registerAddon`. There is therefore no mocked-server test at all: a full boot, including
-element registration and script execution, needs a real server, which is what `run-paper` is for and
-what is still missing.
+`Skript.registerAddon`. There is therefore no mocked-server test for the full plugin. The `serverTest`
+task uses `run-paper` to start a real Paper server and check element registration and script execution.
 
 MockBukkit is still used by the Skript tests, but only as a Bukkit server: Skript logs through
 `Bukkit.getConsoleSender()`, and the config parser reports through it, so without a server the parser
 NPEs instead of returning nodes.
 
-A measurement that exists only inside a test-report artifact is not a measurement. The browser used to
-read a run here is not signed in, and the artifact API answers 401, so a number that never reaches the
-job log cannot be read by the people who have to act on it — which is how the first server-side count
-was lost by the very run that produced it. Gradle hides test stdout unless the task asks for it, so a
-case that measures something turns `showStandardStreams` on for its own task and prints the number and
-the environment it was measured under on one line. An artifact is not a channel.
+Put measurements in the job log as well as test-report artifacts so they can be read without downloading
+an artifact. Gradle hides test stdout by default; a task that measures something should enable
+`showStandardStreams` and print each number alongside its test environment. This mattered in an earlier
+server test, when the artifact API returned 401 to the browser used to inspect the run.
 
-A long job log has the same edge from the other side. Downloading a step log raw truncates it near a
-hundred kilobytes, so a measurement past that cut is missing from the file even though it is in the
-run — the two MySQL lines of the first run that produced server-side numbers fell past it while the
-MariaDB and PostgreSQL lines did not, which is exactly the kind of absence that reads as "the case did
-not run". Read a long log through the viewer, which loads and searches the whole step, and treat a
-truncated download as a partial answer rather than an empty one.
+Tools that display or export long job logs may return only part of the content. In an earlier run, the
+tool used to inspect a step cut off the output at around 100 KB: two MySQL measurement lines were missing
+from that output, while the MariaDB and PostgreSQL lines remained. Search the complete job log before
+concluding that a measurement or test is missing.
 
 ---
 

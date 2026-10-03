@@ -29,19 +29,21 @@ execute update "UPDATE users SET age = ? WHERE name = ?" with {_values::*} and s
 ```
 
 - **`execute query`** stores rows like `select many`: `{_rows::1::name}`, `{_rows::2::name}`. Keys use the column labels returned by the server. For example, `SELECT name AS who` gives `{_rows::1::who}`. No matching rows means nothing is stored; it is not an error.
-- **`execute update`** can store the affected-row count. If the server reports `0`, as it may for DDL, the stored value is `0`.
-- **Both forms wait** for the database before the next line runs. Adding `and wait` has no effect.
+- **`execute update`** can store the affected-row count. If the server reports `0`, as it may
+  for a schema change such as `ALTER TABLE`, the stored value is `0`.
+- **`execute query` and `execute update` both wait** for the database before the next line runs. Adding `and wait` has no effect.
 
 ## MongoDB commands
 
-MongoDB commands return a document rather than SQL rows or an affected-row count. Use `execute command`:
+MongoDB commands return a document (a JSON-like object) rather than SQL rows or an affected-row
+count. Use `execute command`:
 
 ```sk
 execute command "{ ""count"": ""users"" }" and store the result in {_answer::*}
 send "There are %{_answer::n}% users."
 ```
 
-Write the command as JSON text. The MongoDB driver parses it, including extended JSON for dates and object IDs. Read result fields by name and array elements by index, for example `{_answer::n}` or `{_answer::cursor::firstBatch::1::name}`.
+Write the `execute command` argument as JSON text. The MongoDB driver parses the JSON, including extended JSON for dates and object IDs. Read fields from the returned document by name and array elements by index, for example `{_answer::n}` or `{_answer::cursor::firstBatch::1::name}`.
 
 `execute command` does not support parameters. Supply the complete command as JSON.
 
@@ -56,10 +58,12 @@ set {_values::*} to 18, "zh-CN"
 execute query "SELECT name FROM users WHERE age > ? AND language = ?" with {_values::*} and store the result in {_rows::*}
 ```
 
-The `with` clause accepts one value or a list variable. For multiple values, put them in a list variable first. `with (18, "zh-CN")` fails to parse because Skript cannot pass that literal list here.
+The `with` clause accepts one value or a list variable. For multiple values, put them in a list variable first. `with (18, "zh-CN")` fails to parse because Skript cannot pass that literal list to `with`.
 
 - The number of values must match the number of `?` characters in the statement. A mismatch is refused before anything is sent.
-- The driver binds parameter values rather than interpreting them as SQL. Always use parameters for values instead of concatenating them into the statement.
+- The driver sends parameter values separately from the SQL text, so a value is not interpreted
+  as part of the command. Always use `?` parameters for values instead of concatenating them
+  into the SQL string.
 - The plugin counts every `?`, including those in SQL strings and comments. Avoid `?` in those places: the plugin's count can then disagree with the driver's parameter count.
 - **Parameters must be values the driver can send directly:** strings, numbers, booleans, byte arrays, dates, or `null`. UUIDs, item stacks, locations, and other application objects are rejected because raw statements provide no column type to guide conversion. Convert them before passing them as parameters.
 
@@ -67,14 +71,14 @@ The `with` clause accepts one value or a list variable. For multiple values, put
 
 | Behavior | Raw statements |
 | --- | --- |
-| An unknown column fails before the statement is sent | **No.** The server decides, when it receives it. |
-| A declaration is compared with the table it names | **No.** Raw statements do not use table declarations. |
+| An unknown column in raw SQL fails before the statement is sent | **No.** The database checks column names after receiving the raw SQL. |
+| Registered table and column declarations are checked | **No.** Raw statements do not use the addon's registered table definitions. |
 | A value is checked against its column's type and range | **No.** Values are bound as given. |
-| A connection property nothing reads is refused | **Yes.** That check does not involve a statement. |
+| An unrecognized connection property is refused | **Yes.** Connection creation checks properties independently of raw statements. |
 | A missing connection is reported before anything runs | **Yes.** The statement is refused, not sent. |
 | A failure appears in `last database error`, in the server's own words | **Yes**, including the server's error code. |
 | Parameter values are kept separate from SQL | **Yes**, when you use `?` placeholders. |
-| A statement runs inside `database transaction` and rolls back with it | **Yes.** A raw statement is part of the transaction it runs in. |
+| A statement runs inside `database transaction` and rolls back with it | **Yes.** A raw statement inside `database transaction:` belongs to that transaction. |
 
 ## Using the right form for the connection
 

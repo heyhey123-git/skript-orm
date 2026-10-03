@@ -18,7 +18,7 @@ if {_rows} is 0:
 
 ## The clause
 
-Add `and store affected rows in {_rows}` after the arguments of any write: `insert one`, `insert many`, `insert ... if absent`, `update`, `upsert`, or `delete`. It works with or without a section body. You can also append `and wait`, though it no longer changes when the statement completes.
+Add `and store affected rows in {_rows}` after the arguments of any write: `insert one`, `insert many`, `insert ... if absent`, `update`, `upsert`, or `delete`. It works with or without an indented body. You can also append `and wait`, though it no longer changes when the statement completes.
 
 ```sk
 delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
@@ -39,15 +39,15 @@ The backend supplies the count: inserts count added rows, deletes count removed 
 | `insert one`, `insert many` | rows written | rows written | rows written |
 | `update` | rows **changed** | rows matched | rows matched |
 | `delete` | rows removed | rows removed | rows removed |
-| `upsert` | `1` inserted, `2` updated, `0` if values were unchanged | `1` either way | `1` inserted, rows matched when updated |
-| `insert ... if absent` | `1` inserted, `0` if the key already exists | same | same |
-| a batch the driver cannot count | no number | same | never happens |
+| `upsert` | `1` inserted, `2` updated, `0` if values were unchanged | `1` for an insert or update | `1` inserted, rows matched when updated |
+| `insert ... if absent` | `1` inserted, `0` if the key already exists | `1` inserted, `0` if the key already exists | `1` inserted, `0` if the key already exists |
+| a batch the driver cannot count | no number | no number | never happens |
 
 Use `insert ... if absent` to distinguish a new insert from an existing row consistently across all three backends. `upsert` cannot provide that distinction everywhere: MySQL reports `2` for an update, but the other two backends do not distinguish inserts from updates.
 
 Some backends cannot provide per-row counts for a batch. In that case, the result is **no number**, rather than an inaccurate count.
 
-The driver can also be asked to rewrite a batch, by adding `rewriteBatchedStatements=true` to a `"MySQL"` url. Connector/J then answers `SUCCESS_NO_INFO` for every row of that batch, so the count becomes no number — faster, but no longer exact. The plugin does not set the option: `"MariaDB"` reaches the server's bulk execute without it and counts every row.
+Driver batch rewriting can also make exact counts unavailable. For example, the older MySQL batch insert path or generic JDBC batching with Connector/J's `rewriteBatchedStatements=true` may return `SUCCESS_NO_INFO`: execution succeeded, but the driver cannot report a row count. The current `"MySQL"` `insert many` path builds multi-row insert statements directly and does not depend on that option. `"MariaDB"` uses the MariaDB driver's bulk execution instead. See [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 ## Set, unset and zero
 
@@ -71,9 +71,14 @@ Check what zero means for your statement and backend before treating it as a mis
 
 Clearing the variable prevents a previous count from being mistaken for the current result. Writes wait for completion, so the next statement can read the count without any extra waiting. See [Errors and waiting](errors-and-waiting.md).
 
-This also applies inside a [transaction](transactions.md): every statement with this clause clears its target, including skipped statements. In contrast, `last database error` preserves the first error so the cause of a rollback remains available.
+The target variable is also cleared inside a [transaction](transactions.md): every statement with
+`store affected rows` clears its target, including skipped statements. In contrast,
+`last database error` preserves the first error so the cause of a rollback remains available.
 
-Ending a transaction does not clear this variable, and rolling back does not undo the variable assignment. A `{_rows}` value of `1` after the section may therefore describe a database change that was rolled back. Check `last database error` before relying on a count from a transaction.
+Ending a transaction does not clear `{_rows}`, and rolling back does not undo the variable
+assignment. A `{_rows}` value of `1` after `database transaction:` may therefore describe a
+database change that was rolled back. Check `last database error` before relying on a count from
+a transaction.
 
 ## A safe conditional write
 

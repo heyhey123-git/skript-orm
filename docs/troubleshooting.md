@@ -6,9 +6,9 @@ Some problems are easy to miss: an operation has no effect, a declared column ca
 
 ## "I added a column and nothing changed"
 
-Tables are created with `CREATE TABLE IF NOT EXISTS`. Registration never alters an existing table: the new column is added to the plugin's definition, but not to the database, and no warning is issued.
+Tables are created with `CREATE TABLE IF NOT EXISTS`. Registration never alters an existing table: adding a column to the script does not add it to the database. Registration checks the existing table and reports the missing column in `last database error`.
 
-Operations that use the new column will then fail. Reading the table may also fail because the database result has no such column.
+The table cannot be registered with the new definition until the database table is changed to match it.
 
 Migrate the database yourself:
 
@@ -45,7 +45,7 @@ See [Types](types.md).
 
 `select many` results start with a one-based row index, as in `{_users::1::name}`. Even a single matching row needs that index. There is no row-count expression for these results: `size of {_users::*}` counts first-layer values, but each row is a sub-list. Walk the row indices or keep your own counter. See [Reading rows](reading.md).
 
-This is how Skript handles nested lists, including ones built by a script. Count rows by walking their indices, as shown in the [cookbook](cookbook.md#walk-every-page).
+Skript uses the same row-index layer for nested lists built by a script. To count result rows, walk the indices and check `{_users::%loop-number%::id}` at each one, as shown in the [cookbook](cookbook.md#walk-every-page).
 
 ## A `loop 1 to 20` counts nothing
 
@@ -87,15 +87,15 @@ The plugin does not return generated ids. Either assign the id in your script an
 
 ## A `date` column lost its time
 
-On SQL implementations, a `date` column stores SQL `DATE`, which discards the time of day. For an exact moment, store a Unix timestamp in a `bigint`, with a consistent choice of seconds or milliseconds, or use a `string` containing a timestamp with a time zone. `timespan` represents a duration, not a point in time. MongoDB's `date` column keeps epoch milliseconds instead. A `time` column represents a Minecraft time of day, not a wall-clock reading. See [Types](types.md).
+On SQL implementations, a `date` column stores SQL `DATE`, which discards the time of day. For an exact moment, store a Unix timestamp in a `bigint`, with a consistent choice of seconds or milliseconds, or use a `string` containing a timestamp with a time zone. `timespan` represents a duration, not a point in time. MongoDB's `date` column keeps epoch milliseconds instead. A `time` column represents a Minecraft time of day, not the time shown on a real-world clock. See [Types](types.md).
 
 ## Paging skips or repeats rows
 
-A page is an offset into primary-key order, not a snapshot. Inserts or deletes during pagination can shift later rows, causing duplicates or omissions. A keyset filter (`id > {_last}`) requires a stable primary-key sort order. `select many` does not offer `ORDER BY`, so adding that filter alone is not a complete replacement for `select page`.
+`select page` skips rows in the table's current primary-key order; it does not freeze the rows between page requests. If another operation inserts or deletes rows while the script pages through the table, later pages can repeat or miss rows. Remembering the last `id` and filtering with `id > {_last}` only works as a paging strategy when results are consistently ordered by that primary key. `select many` has no `ORDER BY`, so that filter alone cannot replace `select page`.
 
 ## "select many read more than 5000 rows ... and stored nothing."
 
-One statement moves at most 5000 rows, and a read past that stores nothing: the result variable is cleared and the refusal is in `last database error`. A `select page` larger than 5000 rows is refused before the query is sent. The ceiling is about the server thread rather than memory — a result is written into a list variable one index at a time, on that thread.
+One read stores at most 5000 rows. If `select many` finds more, the result variable is cleared and the refusal is in `last database error`. A `select page` larger than 5000 rows is refused before the query is sent. The 5000-row storage limit protects the server thread: Skript writes result values into a list variable on that thread.
 
 Narrow the read, or walk it a page at a time:
 
@@ -112,7 +112,7 @@ loop 100 times:
     # ... use this page ...
 ```
 
-A multi-row write is treated differently: `insert many` past one statement's budget is sent as several statements, and every row is written rather than the batch being cut or refused. See [Reading rows](reading.md#how-many-rows-one-read-may-store) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
+`insert many` has a separate limit: when one write would need more than 30,000 bound values, the plugin splits it into several statements instead of dropping rows. See [Reading rows](reading.md#how-many-rows-one-read-may-store) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 Pagination sorts by the registered primary key and rejects tables without one. Page numbers start at 1, and row indices restart at 1 within each page: `{_page::1::name}` is the first row on that page, not the first row in the table. See [Reading rows](reading.md).
 
@@ -122,25 +122,25 @@ The query runs in the background, but Skript stores its results on the server th
 
 ## "insert many" of a large list pauses the server
 
-The plugin reads the list variable on the server thread before sending it to the database. In one benchmark, reading 30,000 values took about 10 ms. Larger lists take longer even though the plugin splits the database writes. For large jobs, use `select page` and insert one page at a time. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+The plugin reads an `insert many` source variable on the server thread before sending SQL. It now spreads that read across ticks, with at most 4096 processing steps per slice; reading one row can take several steps. Each slice aims for about 2 ms, but an individual value conversion can exceed that budget. A larger list may take more ticks to finish, and other server work can still lengthen a tick. The earlier 10 ms measurement for reading 30,000 values predates sliced reading; it is not the current cost of one tick. For large jobs, `select page` can divide the work into smaller inserts. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
 
 ## A refused read is not a free read
 
-The ceiling is enforced after the database answers. The statement asks for one row more than it may store, so that 5001 rows can be told from exactly 5000, and it refuses once that row arrives: nothing is stored, but the query was sent and the rows were read. A script that keeps asking for more than the ceiling pays for every attempt. `select page` is the exception, because its page size is known in advance and an oversized page is refused before anything is sent.
+The 5000-row `select many` limit is enforced after the database answers. The statement asks for up to 5001 rows to distinguish an oversized result from exactly 5000 rows. If row 5001 arrives, the result variable is cleared, but the query has already run. A script that repeatedly requests oversized results pays for every attempt. `select page` is different: its requested page size is known in advance, so a page larger than 5000 is refused before the query is sent.
 
 ## "insert many" got faster, and affected rows stopped storing
 
-If you set `rewriteBatchedStatements=true` in a MySQL URL, Connector/J may report `SUCCESS_NO_INFO` for each row in a rewritten batch. The plugin then leaves the affected-row variable unset because the exact count is unavailable. Remove that URL option if your script needs the count. See [Affected rows](affected-rows.md).
+This symptom applied to older addon releases that sent `"MySQL"` inserts as JDBC batches. With `rewriteBatchedStatements=true`, Connector/J could report `SUCCESS_NO_INFO`, leaving the affected-row variable unset. A current `"MySQL"` connection sends a parameterized multi-row `INSERT` and obtains its count from that statement; the URL option does not control this path. On an older release using the batch path, remove the option if the script needs an exact count. See [Affected rows](affected-rows.md).
 
 ## The generic JDBC type refuses "auto increment"
 
-The generic `"JDBC"` type does not know how to declare an auto-increment column, so registration fails before sending a `CREATE TABLE` statement. Remove `auto increment` from the column declaration and supply its value when inserting rows. Support for a database-specific syntax requires an implementation for that dialect.
+The generic `"JDBC"` connection has no SQL syntax for declaring an auto-increment column, so registration fails before sending `CREATE TABLE`. Remove `auto increment` from the column declaration and supply its value when inserting rows. To support auto-increment on another database, the addon needs SQL generation written for that database.
 
 ## Skript says "Empty configuration section!"
 
-Skript shows this warning when a section has a colon but no indented body.
+Skript shows this warning when a statement ends with a colon but has no indented body below it.
 
-Forms that take values from a variable or operate by id need no body, so they use no colon. A line in this form is an effect, not a section, and does not trigger the empty-section warning:
+Forms that take values from a variable or operate by id need no body, so they use no colon. Skript treats each as a standalone statement (an effect), rather than a statement with an indented body (a section). They do not trigger the empty-section warning:
 
 ```sk
 insert one {_user::*} into table "archived_users"

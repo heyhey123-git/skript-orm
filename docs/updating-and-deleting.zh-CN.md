@@ -51,13 +51,13 @@ if last database error is set:
     send "删除失败: %last database error%" to console
 ```
 
-这个检查判断的是语句是否成功，而不是行是否存在。主键没有匹配的行时，删除不会产生改动，也不会报错。要确认是否删掉了行，请用 `and store affected rows in {_rows}` 读取行数。
+示例中的 `if last database error is set` 检查删除语句是否失败。主键没有匹配的行时，删除不会产生改动，也不会报错。要确认是否删掉了行，请用 `and store affected rows in {_rows}` 读取行数。
 
-冒号用于引出语句正文。这条语句没有正文，因此不加冒号；从变量取值的 `update`、`upsert` 与 `insert` 也是如此，见 [写入行](writing.zh-CN.md)。
+`delete one entity ... by id` 没有缩进正文，因此不加冒号。从变量取值且没有 `where` 块的 `update`，以及从变量取值的 `upsert` 与 `insert`，也不需要冒号；见[写入行](writing.zh-CN.md)。
 
 ## 不写 where 会怎样
 
-**不带 `where` 块的 `update entities` 和 `delete entities` 会作用于实现允许范围内的所有行。** 两个 section 都接受这种写法，因此漏写 `where` 不会报错：
+**不带 `where` 块时，`update entities` 和 `delete entities` 不会筛选行。** 若还省略 `with limit`，就会更新或删除整张表的数据。遗漏 `where` 本身不会报错：
 
 ```sk
 # 删除表中的所有行。
@@ -70,7 +70,7 @@ delete entities from table "users" and wait
 
 ## limit
 
-`with limit N` 表示最多操作 N 行。MySQL 使用 `... LIMIT N`；PostgreSQL 先通过 `ctid` 选出限定数量的行；MongoDB 则先选择 id。通用 `"JDBC"` 连接不支持这种限制，会明确报错，不会忽略 limit。
+`with limit N` 表示最多操作 N 行。MySQL 使用 `... LIMIT N`；PostgreSQL 先通过 `ctid`（行在表中的内部位置标识）选出限定数量的行；MongoDB 则先选择 id。通用 `"JDBC"` 连接不支持这种限制，会明确报错，不会忽略 limit。
 
 limit 必须求值为**单个正数**。零或负数会在运行时被拒绝，报 `Update limit must be positive.` 或 `Delete limit must be positive.`。如果表达式没有得到单个值，例如变量未设置或包含多个值，语句将**不限制行数**。若用 limit 防止误操作，请先在脚本中检查它的值。
 
@@ -78,11 +78,11 @@ limit 只限制数量，不用于分页；具体选中哪些行由数据库决�
 
 ## 等待
 
-两个 section 都会等待操作完成，再执行后续语句。失败原因可通过 `last database error` 读取。等待只暂停当前 trigger，不阻塞服务器主线程。`and wait` 仍可使用，但不再改变行为。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+按条件或按主键执行的 `update` 和 `delete` 都会等待操作完成，再执行后续语句。失败原因可通过 `last database error` 读取。等待数据库返回只暂停当前这次脚本执行，不会占用服务器主线程。`and wait` 仍可使用，但不再改变行为。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 改动了多少行
 
-两个 section 都支持 `and store affected rows in {_rows}`，将影响行数存入变量：
+按条件或按主键执行的 `update` 和 `delete` 都支持 `and store affected rows in {_rows}`，将影响行数存入变量：
 
 ```sk
 delete entities from table "sessions" and store affected rows in {_deleted} and wait:
@@ -94,7 +94,7 @@ delete entities from table "sessions" and store affected rows in {_deleted} and 
 
 ## 从变量更新
 
-`update` 与 `upsert` 都接受符合查询结果结构的变量作为新值，适合读取、修改后再写回：
+`update one entity {_user::*} ... by id {_id}` 和 `upsert one entity {_user::*} ... by id {_id}` 可以从列表变量读取要写入的列值。变量以列名作为键，例如 `{_user::name}` 和 `{_user::age}`。因此可以先用 `select one` 读取一行，再修改其中的值并写回；主键值需单独传给 `by id`，不能留在列值变量中：
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:

@@ -6,7 +6,7 @@ Use `insert one` or `insert many` to add rows. Use `insert entity if absent` to 
 
 ## The values block
 
-Write values as `column: expression`, either directly in the section body or inside a `values:` block:
+In the indented body of an insert, update, or upsert statement, write each column value as `column: expression`. Put the column lines directly in the body or inside a `values:` block:
 
 ```sk
 insert one entity into table "users" and wait:
@@ -34,7 +34,7 @@ if last database error is set:
     send "Insert failed: %last database error%" to console
 ```
 
-The same section can also read a row from a variable with the structure of a query result:
+`insert one {_user::*} into table "archived_users"` reads one row from a list variable and inserts it into the table. For a single row, each key is a column name: `{_user::name}` holds the `name` column and `{_user::age}` holds `age`. A `select one` result uses this format; you can also build the keys yourself with `set`:
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -43,9 +43,9 @@ select one entity from table "users" and store the result in {_user::*}:
 insert one {_user::*} into table "archived_users"
 ```
 
-The variable must contain exactly one row. Multiple rows are rejected; use `insert many` for those.
+`insert one` accepts exactly one row. A variable containing multiple rows is rejected; use `insert many` instead.
 
-The last statement has no indented body, so it needs no colon. Adding one produces an empty-section warning. Use a colon only when the statement has a body; the same rule applies to [reads](reading.md) and [updates and deletes](updating-and-deleting.md).
+The example's `insert one {_user::*} into table "archived_users"` names its data source in the statement and has no indented body, so it needs no colon. Adding one produces an empty-section warning. A colon introduces an indented body, such as `values:` or `where all:`; see [reads](reading.md) and [updates and deletes](updating-and-deleting.md).
 
 ## Insert many
 
@@ -62,7 +62,7 @@ insert many entities into table "users" and wait:
             age: 30
 ```
 
-You can also supply rows from a variable:
+`insert many {_rows::*}` reads rows from a list variable. Each row has its own index or other row key, with column names beneath it: `{_rows::1::name}` and `{_rows::1::age}` belong to the first row, while `{_rows::2::name}` belongs to the second. `select many` and `select page` produce this format with numbered rows:
 
 ```sk
 insert many {_rows::*} into table "archived_users" and wait
@@ -81,11 +81,11 @@ One write statement binds at most **30,000 values**. For a six-column table, tha
 
 `and store affected rows in {_rows}` reports the total across the split statements, when the backend can provide an exact count. If a later statement fails, earlier statements remain applied unless the batch runs inside a `database transaction` block.
 
-When `insert many` reads a list variable, it checks and converts the rows on the server thread in slices of at most 4096 steps, aiming for about 2 ms per slice. If more work remains, it continues on a later tick. It validates **every row before sending any SQL**, so an unknown column or invalid value near the end of the variable cannot leave a partial write. The trigger resumes only after the database write finishes, and local variables remain available afterwards. A `values:` block does not use this sliced reader.
+When `insert many` reads a list variable, it checks and converts the rows on the server thread in slices of at most 4096 processing steps (one row may take several steps), aiming for about 2 ms per slice. If more work remains, it continues on a later server tick. **Every row must pass these input checks before any SQL is sent.** If the reader finds an unknown column or a value it cannot convert, it sends none of the rows. Database execution can still fail; if some statements have already succeeded, a transaction is needed to undo their changes (roll them back). The script resumes only after the database write finishes, and local variables remain available afterwards. A `values:` block does not use this sliced reader.
 
 Keep the source variable unchanged until the write finishes. The reader rejects changes it detects, but cannot catch every edit. In particular, it may miss changes to rows already read or values replaced at existing keys. In a transaction, the time spent reading across ticks counts toward the transaction timeout. Slicing limits the work attempted in one tick; it does not guarantee a fixed tick duration, particularly when converting an expensive value. For large jobs, smaller batches such as one `select page` result at a time also limit memory use. See [Reading rows](reading.md#how-many-rows-one-read-may-store).
 
-MySQL uses parameterized multi-row inserts, splitting them by both the parameter limit and the server's `max_allowed_packet`. Values whose serialized size cannot be estimated safely, such as NBT and item stacks, are sent one row at a time. A single row must still fit within the server's packet limit. Other JDBC backends keep their existing batch insert paths.
+MySQL combines multiple rows into one insert statement, with column values passed separately as parameters. It splits statements by both the parameter limit and the server's `max_allowed_packet` (the largest data packet the server accepts). Values whose size in storage format cannot be estimated reliably, such as NBT and item stacks, are sent one row at a time. A single row must still fit within the server's packet limit. Other databases connected through JDBC keep their existing batch insert paths.
 
 
 ## Upsert or insert if absent
@@ -114,17 +114,17 @@ insert entity if absent into table "users" and wait:
 | Create the row only if missing; preserve an existing row | `insert entity if absent` |
 | Check whether a row was created | `insert entity if absent ... and store affected rows in {_rows}`: `1` means inserted, `0` means the key already exists. You can also read the data back for comparison, but only `if absent` preserves the existing row for that comparison. |
 
-Both follow the implementation's conflict rules, as noted in their syntax descriptions. The behaviour above is specific to MySQL, and applies to `"MariaDB"` unchanged, since both use the same dialect.
+The duplicate-key handling described above for `upsert` and `insert entity if absent` applies to MySQL. `"MariaDB"` uses the same SQL dialect and handles these conflicts the same way. For affected-row counts on other backends, see [Affected rows](affected-rows.md).
 
 ## Waiting
 
-Writes finish before the following statements run. Failures are available in `last database error`. Waiting pauses only the current trigger, not the server thread, so other players and scripts continue normally.
+Writes finish before the following statements run. Failures are available in `last database error`. Waiting for the database pauses only the current script execution and does not occupy the server thread, so other players and scripts continue normally.
 
-These statements still accept `and wait`, but it no longer changes their behaviour: every statement now waits, including writes. The examples retain the clause for compatibility with the older syntax. See [Errors and waiting](errors-and-waiting.md).
+`insert one`, `insert many`, `insert entity if absent`, `upsert`, and `update` still accept `and wait`, but they wait for completion with or without it. The examples retain the clause for compatibility with the older syntax. See [Errors and waiting](errors-and-waiting.md).
 
 ## How many rows were written
 
-All these statements accept `and store affected rows in {_rows}` to save the affected-row count:
+`insert one`, `insert many`, `insert entity if absent`, `upsert`, and `update` accept `and store affected rows in {_rows}` to save the affected-row count:
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:

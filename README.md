@@ -83,7 +83,8 @@ through ordinary Skript variables.
 
 ## Performance and limits
 
-Reads of up to 5000 rows did not lengthen a tick in the measurements below. Large writes did, so avoid
+One server update is a tick; at the usual 20 ticks per second, each aims to finish within 50 ms. Reads
+of up to 5000 rows did not lengthen a tick in the measurements below. Large writes did, so avoid
 running them during busy periods. Reads above the limit fail without storing a partial result; large
 writes are split into smaller statements. These measurements describe the listed machines, not a
 guaranteed result on every server. CI jobs with the same label may run on different processors.
@@ -91,9 +92,9 @@ guaranteed result on every server. CI jobs with the same label may run on differ
 | What was measured | Result | Machine |
 | --- | --- | --- |
 | Writing 5000 rows | The longest tick exceeded 50 ms by 70 to 90 ms on the first run; later runs varied from no overrun to about 30 ms | disposable Paper 26.2 server, AMD Ryzen 5 5600X, JDK 25 |
-| Writing 100 rows, and 10 000 rows | about 10 ms, and 100 to 110 ms, past a tick | the same server |
-| Reading 100 to 5000 rows | no read lengthened a tick, and every row asked for was stored | the same server |
-| Reading 10 000 rows | refused: the result variable is cleared and `last database error` names the ceiling | the same server |
+| Writing 100 rows, and 10 000 rows | about 10 ms, and 100 to 110 ms, past a tick | Paper 26.2, Ryzen 5 5600X, JDK 25 |
+| Reading 100 to 5000 rows | no read lengthened a tick, and every row asked for was stored | Paper 26.2, Ryzen 5 5600X, JDK 25 |
+| Reading 10 000 rows | refused: the result variable is cleared and `last database error` names the ceiling | Paper 26.2, Ryzen 5 5600X, JDK 25 |
 | A 5000-row `insert many` through the generic JDBC path | 9.960 ± 0.384 ms, and 6.1 to 10.0 ms across three CI hosts | Ryzen 5 5600X; AMD EPYC 9V74; Intel Xeon Platinum 8573C |
 | Statements received by the database for 5000 inserted rows | MySQL: 5038, including 5000 inserts; MariaDB: 2, including one multi-row insert; PostgreSQL: unavailable | one CI run, Intel Xeon Platinum 8370C for MySQL and MariaDB, AMD EPYC 7763 for PostgreSQL |
 
@@ -110,7 +111,9 @@ still reject excessively large requests.
 ### What is deliberately not here
 
 - **No tick percentiles.** The script records the longest tick during each operation, with a 10 ms clock
-  resolution. Measuring MSPT percentiles requires sampling the server's tick loop directly.
+  resolution. MSPT means milliseconds per tick; average MSPT is the mean time per tick. The p50 and
+  p99 figures show the median tick time and the time exceeded by only 1% of ticks. Measuring those
+  figures requires sampling the server's tick loop.
 - **No PostgreSQL statement counts.** The available PostgreSQL statistics count rows and transactions,
   but cannot attribute them to individual statements.
 

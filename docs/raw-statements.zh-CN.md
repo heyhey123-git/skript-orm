@@ -29,19 +29,19 @@ execute update "UPDATE users SET age = ? WHERE name = ?" with {_values::*} and s
 ```
 
 - **`execute query`** 与 `select many` 一样，将结果行存为 `{_rows::1::name}`、`{_rows::2::name}`。键名取自服务端返回的列标签，例如 `SELECT name AS who` 对应 `{_rows::1::who}`。没有匹配的行时不存结果，也不算出错。
-- **`execute update`** 可以存储受影响行数。服务端对某些语句（例如 DDL）可能返回 `0`，此时存下的也是 `0`。
-- **两种写法都会等待**数据库响应，再执行下一行。加上 `and wait` 不会改变行为。
+- **`execute update`** 可以存储受影响行数。数据库对 `ALTER TABLE` 等修改表结构的语句可能返回 `0`，此时存下的也是 `0`。
+- **`execute query` 和 `execute update` 都会等待**数据库响应，再执行下一行。加上 `and wait` 不会改变行为。
 
 ## MongoDB 命令
 
-MongoDB 命令返回文档，不返回 SQL 结果行或受影响行数。因此要使用 `execute command`：
+MongoDB 命令返回文档（类似 JSON 对象的结果），不返回 SQL 结果行或受影响行数。因此要使用 `execute command`：
 
 ```sk
 execute command "{ ""count"": ""users"" }" and store the result in {_answer::*}
 send "现在有 %{_answer::n}% 个用户。"
 ```
 
-命令写成 JSON 文本，由 MongoDB 驱动解析，也支持日期和对象 ID 的扩展 JSON 写法。结果中的字段按名称读取，数组元素按下标读取，例如 `{_answer::n}` 或 `{_answer::cursor::firstBatch::1::name}`。
+`execute command` 的参数应写成 JSON 文本。MongoDB 驱动会解析该 JSON，包括日期和对象 ID 的扩展 JSON 写法。返回文档中的字段按名称读取，数组元素按下标读取，例如 `{_answer::n}` 或 `{_answer::cursor::firstBatch::1::name}`。
 
 `execute command` 不支持参数，需要提供完整的 JSON 命令。
 
@@ -56,10 +56,10 @@ set {_values::*} to 18, "zh-CN"
 execute query "SELECT name FROM users WHERE age > ? AND language = ?" with {_values::*} and store the result in {_rows::*}
 ```
 
-`with` 子句接受单个值或列表变量。传多个值时，先存入列表变量。`with (18, "zh-CN")` 无法通过语法解析，因为 Skript 不能在这里传入这样的字面量列表。
+`with` 子句接受单个值或列表变量。传多个值时，先存入列表变量。`with (18, "zh-CN")` 无法通过语法解析，因为 Skript 不能把这个字面量列表传给 `with`。
 
 - 值的个数必须与语句里 `?` 的个数一致，不一致会在**发出之前**被拒绝。
-- 参数值由驱动绑定，不会被解释为 SQL。传值时始终使用参数，不要把值拼进语句文本。
+- 驱动会把参数值与 SQL 文本分开发送，因此参数值不会被当作 SQL 语句的一部分。传值时请使用 `?` 参数，不要把值拼进 SQL 字符串。
 - 插件会统计每一个 `?`，包括 SQL 字符串和注释中的问号。避免在这些位置使用 `?`，否则插件和驱动对参数数量的判断可能不同。
 - **参数必须是驱动能直接发送的值：** 字符串、数字、布尔值、字节数组、日期或 `null`。UUID、物品、坐标等对象会被拒绝，因为原始语句没有可供判断转换方式的列类型。传参前请自行转换。
 
@@ -67,14 +67,14 @@ execute query "SELECT name FROM users WHERE age > ? AND language = ?" with {_val
 
 | 行为 | 原始语句 |
 | --- | --- |
-| 未知列名在语句发出前失败 | **不成立。** 由服务端在收到时判断。 |
-| 注册时核对声明与数据库中的表 | **不成立。** 原始语句不使用表声明。 |
+| 原始 SQL 中的未知列名在发送前报错 | **不成立。** 数据库收到原始 SQL 后才会检查列名。 |
+| 检查已注册表及其列定义 | **不成立。** 原始语句不使用插件注册的表定义。 |
 | 值会按列的类型与范围检查 | **不成立。** 值按原样绑定。 |
-| 实现不读的连接属性被拒绝 | **成立。** 那条检查与语句无关。 |
+| 未识别的连接属性被拒绝 | **成立。** 创建连接时会检查属性，与是否使用原始语句无关。 |
 | 缺连接时在运行前报错 | **成立。** 语句被拒绝，不会被发出。 |
 | 失败进入 `last database error`，且是服务端原文 | **成立**，包含服务端的错误码。 |
 | 参数值不会被当作 SQL 执行 | **成立**，前提是使用 `?` 占位符。 |
-| 语句在 `database transaction` 内运行并随事务回滚 | **成立。** 原始语句属于它所在的事务。 |
+| 语句在 `database transaction` 内运行并随事务回滚 | **成立。** 写在 `database transaction:` 内的原始语句属于该事务。 |
 
 ## 按连接类型选择语句
 

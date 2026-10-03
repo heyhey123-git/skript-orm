@@ -36,7 +36,8 @@ command /adduser <text>:
 
 ## One row per player
 
-Use the player's UUID as the primary key, then use `upsert` to maintain one row per player:
+These two `players` recipes assume the table is registered with `uuid` as its primary key and
+with `name`, `last_seen`, and `age` columns. Use `upsert` to maintain one row per player:
 
 ```sk
 on join:
@@ -75,7 +76,8 @@ command /addage <integer>:
         send "Your age is now %{_new-age}%." to sender
 ```
 
-`by id` uses the primary key declared when the table was registered: `uuid` here, as in the recipe above. If a table has both `id` and `uuid` columns, `by id` uses whichever is the primary key.
+`by id` uses the column declared as the primary key when `players` was registered: `uuid` in both
+player recipes. If a table has both `id` and `uuid` columns, `by id` still uses its declared primary key.
 
 Only columns listed in the `values` block are written; the others keep their existing values.
 
@@ -105,7 +107,11 @@ delete entities from table "users" and wait:
 
 A `select many` result can be passed directly to `insert many`. Check for an empty result first: `insert many` rejects an unset variable. The insert finishes before the delete runs.
 
-These three steps are not a transaction and do not roll back together on failure. Avoid concurrent changes to the affected data: the delete matches `active = false` again, so it can remove rows that became eligible after the read and were never archived. Changes made after the read are not automatically included in the archive either. Use this example during a maintenance window with the relevant writes paused.
+The select, insert, and delete are separate statements, not a transaction; failure does not roll
+them back together. Avoid concurrent changes to these rows: the delete matches `active = false`
+again, so it can remove rows that became eligible after the read and were never archived. Changes
+made after the read are not automatically included in the archive either. Use this example during
+a maintenance window with writes to `users` paused.
 
 ## Build rows in a script and insert them
 
@@ -118,7 +124,7 @@ set {_rows::2::age} to 30
 insert many {_rows::*} into table "users" and wait
 ```
 
-The row index is one-based, exactly like the keys a read produces.
+Row indices start at 1. A `select many` result uses the same paths, such as `{_rows::1::name}`.
 
 ## Walk every page
 
@@ -149,7 +155,7 @@ while {_page} <= 100:
 
 The loop limit prevents endless pagination. If page 100 still contains data, this run stops there and leaves the remaining rows unread.
 
-A page is an offset into primary-key order, not a snapshot. Inserts or deletes between reads can shift later rows, causing duplicates or omissions, so use this recipe when nothing is writing to the table. A keyset filter (`where all: id > {_last}`) requires a stable primary-key sort order. `select many` does not offer `ORDER BY`, so adding the filter alone is not a complete replacement for pagination. See [Reading rows](reading.md).
+Each page sorts by primary key and skips the rows covered by earlier pages; it does not preserve the data as it was on the first read. Inserts or deletes between reads can shift later rows, causing duplicates or omissions, so use this recipe when nothing is writing to the table. Another approach is to remember the last primary key read and query `id > {_last}`, but that query must also sort consistently by primary key. `select many` does not offer `ORDER BY`, so the condition alone cannot reliably page through the table. See [Reading rows](reading.md).
 
 ## Store an item's NBT
 
@@ -171,7 +177,7 @@ command /savetool:
         send "Saved." to sender
 ```
 
-The saved compound is a snapshot from when the command ran; later changes to the item do not affect the row. The compound you read back works directly with SkBee syntax. You can also inspect its contents as SNBT text. See [Types](types.md).
+The row stores the NBT contents at the time the command ran; later changes to the item do not affect it. The NBT compound (a collection of named NBT values) you read back works directly with SkBee syntax. You can also inspect its contents as SNBT, the text form of NBT. See [Types](types.md).
 
 ## Delete old rows in batches
 

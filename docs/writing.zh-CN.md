@@ -6,7 +6,7 @@
 
 ## values 块
 
-值写成 `column: expression`，可以直接放在 section 主体里，也可以放在 `values:` 块里：
+在插入、更新或 upsert 语句的缩进正文中，用 `列名: 表达式` 指定要写入的值。这些列值可以直接写在正文中，也可以放在 `values:` 块里：
 
 ```sk
 insert one entity into table "users" and wait:
@@ -34,7 +34,7 @@ if last database error is set:
     send "写入失败: %last database error%" to console
 ```
 
-同一个 section 也可以从符合查询结果结构的变量中读取行数据：
+`insert one {_user::*} into table "archived_users"` 可以从列表变量中取出一行并插入表中。单行数据以列名作为键，例如 `{_user::name}` 保存 `name` 列，`{_user::age}` 保存 `age` 列。`select one` 的查询结果正是这种格式，也可以用 `set` 自行构造这些键：
 
 ```sk
 select one entity from table "users" and store the result in {_user::*}:
@@ -43,9 +43,9 @@ select one entity from table "users" and store the result in {_user::*}:
 insert one {_user::*} into table "archived_users"
 ```
 
-变量必须恰好包含一行；多行数据会被拒绝，请改用 `insert many`。
+`insert one` 一次只接受一行。变量中包含多行时会报错，请改用 `insert many`。
 
-最后一条语句没有缩进的正文，因此不需要冒号；加上冒号会触发空 section 警告。只有带正文时才写冒号，[读取行](reading.zh-CN.md)与[更新与删除](updating-and-deleting.zh-CN.md)中的语句也是如此。
+示例中的 `insert one {_user::*} into table "archived_users"` 已在语句本身指定了数据来源，没有缩进的正文，因此不需要冒号；加上冒号会触发“代码块为空”（empty section）的警告。冒号用于引出 `values:`、`where all:` 等缩进正文，见[读取行](reading.zh-CN.md)与[更新与删除](updating-and-deleting.zh-CN.md)。
 
 ## 插入多行
 
@@ -62,7 +62,7 @@ insert many entities into table "users" and wait:
             age: 30
 ```
 
-也可以从变量中读取多行：
+`insert many {_rows::*}` 从列表变量读取多行。每行用一层行号或其他行键区分，行内再以列名作为键，例如 `{_rows::1::name}` 和 `{_rows::1::age}` 属于第一行，`{_rows::2::name}` 属于第二行。`select many` 和 `select page` 会生成带有行号的这种结构：
 
 ```sk
 insert many {_rows::*} into table "archived_users" and wait
@@ -70,7 +70,7 @@ insert many {_rows::*} into table "archived_users" and wait
 
 各行的列集合需要遵循以下规则：
 
-- **`values` 块**中的每一行必须包含相同的列。一条语句只能绑定一组列；如果某行缺少其他行包含的列，运行时会报错：`Batch row 2 does not contain the same columns as the first row.`
+- **`values` 块**中的每一行必须包含相同的列。一条批量插入语句使用同一组列名；如果某行缺少其他行包含的列，运行时会报错：`Batch row 2 does not contain the same columns as the first row.`
 - 包含多行的**列表变量**会按所有行的列集合补齐，缺少的列写入 NULL，因此查询结果可以直接用于插入。MongoDB 对这两种写法都允许各行包含不同的列。
 
 变量未设置或为空时，语句会报 `{_rows::*} is not set.`，而不是成功写入 0 行。`select many` 没有匹配结果时也会留下空变量，因此将结果传给 `insert many` 前，请先检查变量是否有值。见 [读取行](reading.zh-CN.md)。
@@ -79,13 +79,13 @@ insert many {_rows::*} into table "archived_users" and wait
 
 一条写入语句最多绑定 **30000 个值**。以六列表为例，每条语句可写入 5000 行。更大的批次会拆成多条语句，不会悄悄丢行。列越多，每条语句能容纳的行就越少；即使单行超过上限，也会单独发送。
 
-后端能提供精确计数时，`and store affected rows in {_rows}` 会汇总拆分后各条语句的影响行数。如果后面的语句失败，前面已执行的语句不会自动撤销；需要整体回滚时，请使用 `database transaction`。
+数据库能提供精确计数时，`and store affected rows in {_rows}` 会汇总拆分后各条语句的影响行数。如果后面的语句失败，前面已执行的语句不会自动撤销；需要一并撤销时，请使用 `database transaction`，见[事务](transactions.zh-CN.md)。
 
-`insert many` 从列表变量读取数据时，会在主线程分批检查和转换：每批最多执行 4096 个处理步骤，并尽量控制在约 2 毫秒内；未完成的部分留到后续 tick。**所有行都通过校验后才发送 SQL**，因此末尾出现未知列或无法转换的值时，不会留下已写入的前半批数据。数据库写入完成后才会继续执行当前脚本，局部变量也会保留。`values:` 块不使用这种分片读取方式。
+`insert many` 从列表变量读取数据时，会在主线程分批检查和转换：每批最多执行 4096 个处理步骤（一行可能需要多个步骤），并尽量控制在约 2 毫秒内；未完成的部分留到后续 tick，也就是服务端之后的更新循环。**所有行都通过输入检查后才发送 SQL**；读取器发现未知列或无法转换的值时，整批数据都不会发送。数据库执行阶段仍可能失败；若已有部分语句执行成功，只有事务才能将这些改动一并撤销（回滚）。数据库写入完成后才会继续执行当前脚本，局部变量也会保留。`values:` 块不使用这种分片读取方式。
 
 写入完成前不要修改源变量。读取器发现变化时会报错，但不能检测全部修改，尤其是已经读完的行被改动，或现有键的值被覆盖。在事务中，跨 tick 读取占用的时间也计入事务超时。分片限制单个 tick 尝试处理的工作量，但无法保证固定的 tick 耗时，尤其是单个值的转换本身较慢时。处理大量数据时，也可以按 `select page` 的页大小分批写入，以减少内存占用。另见[读取行](reading.zh-CN.md#一次读取最多能存多少行)。
 
-MySQL 使用带参数的多行插入，同时按参数上限和服务端的 `max_allowed_packet` 拆分语句。NBT、物品等无法可靠预估序列化大小的值会逐行发送。单行本身仍须满足服务端的包大小限制。其他 JDBC 后端沿用各自现有的批量插入方式。
+MySQL 会将多行合并到一条插入语句中，列值仍通过参数传入，并按参数数量上限和服务端的 `max_allowed_packet`（允许接收的最大数据包大小）拆分。NBT、物品等值转换为存储格式后的大小难以可靠预估，因此会逐行发送。单行本身仍须满足服务端的包大小限制。其他通过 JDBC 连接的数据库沿用各自现有的批量插入方式。
 
 
 ## 有则更新、无则插入
@@ -114,17 +114,17 @@ insert entity if absent into table "users" and wait:
 | 仅在不存在时创建，保留已有行 | `insert entity if absent` |
 | 判断是否创建了新行 | `insert entity if absent ... and store affected rows in {_rows}`：`1` 表示已插入，`0` 表示键已存在。也可以读回数据比较，但只有 `if absent` 会保留已有行供比较 |
 
-两者都遵循具体实现的冲突规则，语法说明中也有注明。以上介绍的是 MySQL 的行为；`"MariaDB"` 使用同一方言，这些行为完全一致。
+上面介绍的是 MySQL 如何处理 `upsert` 的重复键和 `insert entity if absent` 的重复键错误。`"MariaDB"` 使用相同的 SQL 写法，也按这些规则处理。其他数据库的影响行数见[影响行数](affected-rows.zh-CN.md)。
 
 ## 等待
 
-写入完成后，后续语句才会执行；失败原因可通过 `last database error` 读取。等待只暂停当前 trigger，不阻塞服务器主线程，其他玩家和脚本仍可正常运行。
+写入完成后，后续语句才会执行；失败原因可通过 `last database error` 读取。等待数据库返回只暂停当前这次脚本执行，不会占用服务器主线程，其他玩家和脚本仍可正常运行。
 
-这些语句仍接受 `and wait`，但它不再改变行为：现在所有语句都会等待完成，包括写入。这个子句曾用于要求写入等待，本页示例为兼容旧写法而保留。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+`insert one`、`insert many`、`insert entity if absent`、`upsert` 和 `update` 仍接受 `and wait`，但有无这个子句都会等待操作完成。`and wait` 曾用于要求写入等待，本页示例为兼容旧写法而保留。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 写入了多少行
 
-这些语句都支持 `and store affected rows in {_rows}`，将影响行数存入变量：
+`insert one`、`insert many`、`insert entity if absent`、`upsert` 和 `update` 都支持 `and store affected rows in {_rows}`，将影响行数存入变量：
 
 ```sk
 upsert one entity in table "users" by id {_id} and store affected rows in {_rows} and wait:

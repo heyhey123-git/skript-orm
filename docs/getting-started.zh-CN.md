@@ -22,7 +22,7 @@ on load:
 - `"MySQL"` 是数据库实现的类型名。jar 注册了五种类型：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，
   名称必须精确匹配，不能任意填写数据库**产品**名。见 [连接](connections.zh-CN.md) 中的“实现名称”一节。
 - `url` 必填。不需要账号密码的数据库可将 `username` 与 `password` 设为空字符串。
-- 这个 section 始终等待完成。连接成功后，同一 trigger 中的后续语句即可使用它。若另一个脚本在连接建立前执行数据库操作，会得到 `No database connected.`。通常将连接写在 `on load` 中，并注意脚本的加载顺序。
+- `create a connection` 代码块会等待连接尝试结束。连接成功后，同一个 `on load` 代码块中的后续语句即可使用该连接。若另一个脚本在连接建立前执行数据库操作，会得到 `No database connected.`。通常将连接写在 `on load` 中，并注意脚本的加载顺序。
 - 账号密码保存在脚本文件中，请限制该文件的读取权限。
 
 ## 2. 描述一张表
@@ -72,7 +72,7 @@ command /whois <text>:
         send "name: %{_user::name}%, age: %{_user::age}%" to sender
 ```
 
-查询始终等待完成，后续语句可直接读取结果。每一列对应变量中的一个键，键名与列名相同。本例中，`{_user::id} is not set` 表示没有匹配的行。一般而言，值为 NULL 的列也不会设置对应的键，因此检查其他列时要区分这两种情况。详见 [读取行](reading.zh-CN.md)。
+查询始终等待完成，后续语句可直接读取结果。每一列都成为 `{_user::*}` 下的一个键，例如 `{_user::name}`。本例的 `id` 列不允许 NULL，因此 `{_user::id} is not set` 表示没有匹配的行。其他列若为 NULL，对应的键也不会设置；单凭 `{_user::age}` 未设置，不能判断整行是否存在。详见 [读取行](reading.zh-CN.md)。
 
 ## 5. 修改与删除
 
