@@ -1,152 +1,234 @@
 # skript-orm
 
-<!-- Use an absolute image URL because this page also serves as the wiki home,
-     where the repository's relative image path is unavailable. -->
+<!-- Use an absolute image URL because this page also serves as the wiki home. -->
 ![skript-orm: an ORM for Skript](https://raw.githubusercontent.com/heyhey123-git/skript-orm/master/docs/assets/banner.png)
 
-An ORM for Skript: describe a table once, then read and write rows with Skript syntax instead of
-writing SQL.
+**Store your Minecraft server's data with Skript.** Define a table once, then save player
+records, rewards or logs using Skript syntax. You do not need to learn SQL to get started.
 
 [简体中文](README.zh-CN.md) | **English**
 
-## What a script looks like
+[Download](https://github.com/heyhey123-git/skript-orm/releases) · [Getting started](docs/getting-started.md) · [Examples](docs/cookbook.md) · [Benchmarks](docs/benchmarking.md)
 
-```sk
-on load:
-    create a connection to database "MySQL" with properties:
-        url: "jdbc:mysql://localhost:3306/mydb"
-        username: "root"
-        password: "123456"
+## Why use it?
 
-    register a database table "users":
-        id: bigint, primary key, auto increment, not null
-        name: string(64), not null
-        age: int, nullable
-
-command /whois <text>:
-    trigger:
-        select one entity from table "users" and store the result in {_user::*}:
-            where all:
-                name = arg-1
-        if last database error is set:
-            send "Lookup failed: %last database error%" to sender
-            stop
-        send "name: %{_user::name}%, age: %{_user::age}%" to sender
-```
-
-```sk
-command /adduser <text> <integer>:
-    trigger:
-        insert one entity into table "users" and wait:
-            values:
-                name: arg-1
-                age: arg-2
-        if last database error is set:
-            send "Insert failed: %last database error%" to console
-```
-
-The plugin generates and runs the database statements off the server thread. Results are available
-through ordinary Skript variables.
+- **Write scripts, not SQL strings.** Dedicated syntax for reading, inserting, updating and
+  deleting, with results in normal Skript variables.
+- **Store Minecraft values directly.** UUIDs, item stacks, locations, dates and timespans have
+  column types. NBT compounds are supported with SkBee.
+- **Keep player input separate from SQL.** Structured statements bind values as parameters
+  and check column names and value types. A player's name or message is data, not part of a
+  query. Handwritten raw statements need their own precautions.
+- **Handle batches without a query per script row.** `insert many` reads its input in portions
+  across ticks, then submits database work in the background. MySQL inserts use parameterized
+  multi-row statements.
+- **Know when a save finishes.** The current trigger resumes after the operation completes;
+  the server can keep ticking while it waits. Check `last database error` before telling a
+  player their data was saved.
+- **Use the database that fits your server.** MySQL, MariaDB, PostgreSQL, SQLite and MongoDB
+  are covered by real database and Paper tests. Named connections let one script use more
+  than one database.
 
 ## Requirements
 
-| | |
+| Component | Requirement |
 | --- | --- |
-| **Paper** | 26.2 or newer. This build targets the 26.2 release series. |
-| **Skript** | 2.16.2 or newer. With an older version, the addon disables itself and explains why in the console. |
-| **MySQL** | Support is included and tested with MySQL 8. Paper includes the driver. |
-| **PostgreSQL** | Support is included and tested in CI. The driver is downloaded to the server's `libraries/` directory on first startup; see [Compatibility](docs/compatibility.md#what-is-inside-the-jar). |
-| **MongoDB** | Support is included and tested with MongoDB 8 in CI. Its driver is also downloaded on first startup. |
-| **SkBee** | Optional; required only for `nbtcompound` columns. SkBee also provides the NBT compound objects used in scripts. |
+| Paper | 26.2 or newer; the plugin targets the 26.2 server series. |
+| Skript | 2.16.2 or newer. |
+| Java | 25 or newer. |
+| SkBee | Optional; needed only for `nbtcompound` columns. |
+
+### Choose a database
+
+These are the database products tested by the project and the names to use in your connection
+declaration. SQLite uses the general `"JDBC"` connection type.
+
+| Database | Connection type | What you need |
+| --- | --- | --- |
+| MySQL | `"MySQL"` | A MySQL server and account; Paper supplies the driver. |
+| MariaDB | `"MariaDB"` | A MariaDB server and account. |
+| PostgreSQL | `"PostgreSQL"` | A PostgreSQL server and account. |
+| SQLite | `"JDBC"` | A database file on your server; no separate database service. Paper supplies the driver. |
+| MongoDB | `"MongoDB"` | A MongoDB server and account; the same structured read/write syntax is available. |
+
+Paper downloads the MariaDB, PostgreSQL and MongoDB drivers on first startup. If a download
+fails, see [Compatibility](docs/compatibility.md#what-is-inside-the-jar).
+MongoDB transactions are not exposed by this addon; SQLite's general JDBC path also has
+[some operation limits](docs/compatibility.md#database-products).
 
 ## Install
 
-1. Download `skriptorm-<version>.jar` from the releases page, or build it yourself
-   ([CONTRIBUTION.md](CONTRIBUTION.md)).
-2. Put the jar in `plugins/`, next to Skript.
-3. Start the server once, then add a connection and table definition to a script and load it with
-   `/sk reload`. Both are defined in Skript; no configuration file changes are needed.
+1. Download `skriptorm-<version>.jar` from [Releases](https://github.com/heyhey123-git/skript-orm/releases).
+2. Put the jar in `plugins/` with Skript, then restart the server.
+3. Add a script in `plugins/Skript/scripts/`, set your database credentials, and load it with
+   `/sk reload <script>`.
 
-## How it works
+Connections and tables are defined in your script. There is no separate addon configuration
+file to edit. For a complete walkthrough, see [Getting started](docs/getting-started.md).
 
-- **Multiple connections.** `create a connection` sets up the default connection; `named "logs"`
-  creates a named connection. Use `in connection "logs":` or `use connection "logs"` to select one.
-- **Skript syntax for each data operation.** Inserts, queries, updates and deletes have dedicated syntax.
-  Forms with a `values` or `where` body use sections. All statements wait for completion.
-- **One section per transaction.** `database transaction:` commits when its body ends, rolls back if
-  a statement fails, and holds one connection throughout.
-- **Affected-row counts.** `and store affected rows in {_rows}` saves the count. Its meaning depends
-  on the operation and database; conditional updates can use it to detect concurrent changes.
-  See [Affected rows](docs/affected-rows.md).
-- **Errors available to scripts.** Every statement waits, so `last database error` contains any error
-  from that operation before the next line runs. Successful statements leave it unset.
+## Example: save and read a player record
 
-## Performance and limits
+This MySQL example keeps one row per player. Joining updates their name and latest join
+date; `/myrecord` reads the saved data. Create the `minecraft` database and its account
+before loading the script, and replace the example credentials.
 
-One server update is a tick; at the usual 20 ticks per second, each aims to finish within 50 ms. Reads
-of up to 5000 rows did not lengthen a tick in the measurements below. Large writes did, so avoid
-running them during busy periods. Reads above the limit fail without storing a partial result; large
-writes are split into smaller statements. These measurements describe the listed machines, not a
-guaranteed result on every server. CI jobs with the same label may run on different processors.
+```sk
+on load:
+    set {playerdb::ready} to false
+    create a connection to database "MySQL" with properties:
+        url: "jdbc:mysql://localhost:3306/minecraft"
+        username: "minecraft"
+        password: "change-me"
+    if last database error is set:
+        send "Database connection failed: %last database error%" to console
+        stop
 
-| What was measured | Result | Machine |
+    register a database table "players":
+        uuid: uuid, primary key, not null
+        name: string(64), not null
+        last_join: date, not null
+    if last database error is set:
+        send "Player table failed: %last database error%" to console
+        stop
+    set {playerdb::ready} to true
+
+on join:
+    if {playerdb::ready} is not true:
+        stop
+    upsert one entity in table "players" by id uuid of player and wait:
+        values:
+            name: name of player
+            last_join: now
+    if last database error is set:
+        send "Could not save player data: %last database error%" to console
+
+command /myrecord:
+    executable by: players
+    trigger:
+        if {playerdb::ready} is not true:
+            send "The database is not ready."
+            stop
+        select one entity from table "players" and store the result in {_row::*}:
+            where all:
+                uuid = uuid of player
+        if last database error is set:
+            send "Could not read your data. Please try again later."
+            send "Player lookup failed: %last database error%" to console
+            stop
+        if {_row::uuid} is not set:
+            send "No saved record yet."
+            stop
+        send "Saved name: %{_row::name}%"
+        send "Latest join date: %{_row::last_join}%"
+```
+
+`by id` refers to the table's primary key: `uuid` here. `upsert` creates a missing row or
+updates the existing one. A SQL `date` column stores the calendar date, without the time of day.
+
+Keep connection creation and table registration in one script; other scripts can reuse them.
+Registration creates a missing table but does not change an existing table's columns.
+See [Tables](docs/tables.md) before changing a deployed table.
+
+## Performance on a real server
+
+The addon is designed for batch work: database operations run in the background, and large
+input lists are read in portions across ticks. This helps avoid one long scan of a Skript
+variable on the server thread. It does not guarantee zero tick delay: storing query results
+and processing individual values still involve the server thread.
+
+The following test saves or reads **5000 rows in one operation**. Keeping the row count fixed
+shows how each supported database handled the same workload in this run. All writes finished
+in under 750 ms and reads in under 105 ms.
+
+| Database | Write: total time | Write: largest tick gap | Read: total time | Read: largest tick gap |
+| --- | ---: | ---: | ---: | ---: |
+| SQLite | 735.828866 ms | 65.767643 ms | 103.186998 ms | 103.066121 ms |
+| MySQL | 462.517747 ms | 50.395059 ms | 78.302884 ms | 78.218777 ms |
+| MariaDB | 685.122311 ms | 66.066614 ms | 95.789059 ms | 95.813175 ms |
+| PostgreSQL | 585.103286 ms | 66.926809 ms | 94.172914 ms | 94.082624 ms |
+| MongoDB | 717.433104 ms | 50.968606 ms | 78.761947 ms | 78.579400 ms |
+
+**How to read this table:**
+
+- **Database** is the database used for that row.
+- **Total time** is how long the trigger waits for the entire operation, including variable
+  processing, database work and resuming the script. It is not continuous server-thread blocking.
+- **Largest tick gap** is the longest interval between two executions of the tick observer,
+  measured from the operation's start until one tick after it returns. A normal gap is about
+  50 ms at 20 TPS. It indicates observed delay, not the plugin's CPU time.
+
+For example, the MySQL write took `462.517747 ms`, but its largest observed tick gap was
+`50.395059 ms`, close to the normal 50 ms interval. The read measurements also show why
+total time and tick delay should be reported separately.
+
+These are [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500)
+measurements from 2026-10-03 at commit `6476c9b`: Paper 26.2 build 124, Skript 2.16.2,
+Java 25.0.4.1, four visible CPUs, and input rows containing only an `id`.
+SQLite, MariaDB and PostgreSQL ran on AMD EPYC 7763; MySQL and MongoDB ran on Intel Xeon
+6973P-C. Shared runners and different CPUs prevent a general ranking of databases.
+The run predates the MySQL packet-limit fix in `21898af`; it is not a measurement of that fix.
+
+Timing uses `System.nanoTime()`; six-decimal milliseconds retain the recorded nanoseconds.
+See [Benchmarking](docs/benchmarking.md) for the 100–10000-row cases, repeated runs,
+raw SQL comparisons and full measurement limits.
+
+### Practical limits
+
+- A read returns at most **5000 rows**. A larger result is rejected rather than partly saved;
+  use [pagination](docs/reading.md) for larger datasets.
+- Large writes are split into database statements with at most **30000 bound values** each.
+  Keep an `insert many` source variable unchanged until the operation finishes.
+- SQL transactions can commit a group of writes together or roll them back on failure.
+  Splitting a bulk write into statements does not by itself make it atomic; use a
+  [transaction](docs/transactions.md) when all rows must succeed together.
+
+## How does it compare with skript-db?
+
+`skript-db` names several projects. The comparison below uses the
+[btk5h original](https://github.com/btk5h/skript-db) and
+[Limework fork](https://github.com/Limework/skript-db) as SQL-oriented examples.
+Check the exact fork you install: features and compatibility differ, and the name alone does
+not mean that a project is abandoned.
+The [4w3 fork](https://hangar.papermc.io/4w3/skript-db) is maintained and also offers parameter
+binding, batches and transactions; these features are not exclusive to skript-orm.
+
+The comparison is about how you write and maintain a script. There is no same-server
+performance benchmark against these addons, so the figures above do not establish a speed
+advantage over them.
+
+| What matters to your script | skript-orm | SQL-oriented skript-db addons |
 | --- | --- | --- |
-| Writing 5000 rows | The longest tick exceeded 50 ms by 70 to 90 ms on the first run; later runs varied from no overrun to about 30 ms | disposable Paper 26.2 server, AMD Ryzen 5 5600X, JDK 25 |
-| Writing 100 rows, and 10 000 rows | about 10 ms, and 100 to 110 ms, past a tick | Paper 26.2, Ryzen 5 5600X, JDK 25 |
-| Reading 100 to 5000 rows | no read lengthened a tick, and every row asked for was stored | Paper 26.2, Ryzen 5 5600X, JDK 25 |
-| Reading 10 000 rows | refused: the result variable is cleared and `last database error` names the ceiling | Paper 26.2, Ryzen 5 5600X, JDK 25 |
-| A 5000-row `insert many` through the generic JDBC path | 9.960 ± 0.384 ms, and 6.1 to 10.0 ms across three CI hosts | Ryzen 5 5600X; AMD EPYC 9V74; Intel Xeon Platinum 8573C |
-| Statements received by the database for 5000 inserted rows | MySQL: 5038, including 5000 inserts; MariaDB: 2, including one multi-row insert; PostgreSQL: unavailable | one CI run, Intel Xeon Platinum 8370C for MySQL and MariaDB, AMD EPYC 7763 for PostgreSQL |
+| Getting started | Declare columns, then use `insert`, `select`, `update` and `delete`. | Write SQL queries and manage the table definition in SQL. |
+| Player input | Structured statements bind values and validate declared columns and value types. | The original and Limework projects provide SQL injection protection; safe use still depends on the query API and how the script supplies values. |
+| Minecraft data | Built-in types for UUIDs, items and locations; NBT with SkBee. | Scripts need to arrange the database representation and conversion of these values. |
+| Database choice | Structured operations for MySQL, MariaDB, PostgreSQL, SQLite and MongoDB, with documented differences. | The compared projects use JDBC for SQL databases; MongoDB is outside that API. |
+| Bulk writing | `insert many`, input reading across ticks, and parameterized multi-row MySQL inserts. | Batch behavior depends on the fork, query construction and database driver. |
+| Query control | Common tasks have dedicated syntax; handwritten statements are also available. | Direct SQL offers fine control over joins, aggregates and database-specific features. |
 
-The plugin submits a batch to the driver, but the driver decides how many statements the server
-receives. That explains the difference between MySQL and MariaDB in the last row. Statement counts
-are repeatable; timings on shared CI machines fluctuate. [Benchmarking and stress testing](docs/benchmarking.md)
-explains the measurements and which metrics can fail a build. Timings are reported but do not fail builds.
-
-**Limits.** A read stores at most 5000 rows. If the result exceeds that limit, nothing is stored and
-`last database error` explains why. A write statement binds at most 30 000 values (for example,
-5000 rows of six columns); larger batches are split across statements. Other resource limits may
-still reject excessively large requests.
-
-### What is deliberately not here
-
-- **No tick percentiles.** The script records the longest tick during each operation, with a 10 ms clock
-  resolution. MSPT means milliseconds per tick; average MSPT is the mean time per tick. The p50 and
-  p99 figures show the median tick time and the time exceeded by only 1% of ticks. Measuring those
-  figures requires sampling the server's tick loop.
-- **No PostgreSQL statement counts.** The available PostgreSQL statistics count rows and transactions,
-  but cannot attribute them to individual statements.
-
-**MySQL batch inserts need attention.** With the tested Connector/J defaults, the driver sent one
-insert per row. In a benchmark of twenty 5000-row inserts, MySQL took 17.04 seconds, compared with
-1.99 seconds for PostgreSQL and MariaDB. Enabling batch rewriting can improve throughput, but the
-driver then stops reporting a usable affected-row count. See [Troubleshooting](docs/troubleshooting.md#insert-many-got-faster-and-affected-rows-stopped-storing).
+Choose skript-orm when you want database storage to fit the way you already write Skript,
+especially when storing Minecraft values or importing lists of rows. A SQL addon can suit
+scripts that already rely on complex SQL. The main advantage here is less query construction
+and conversion code to maintain, with explicit errors and tested database behavior.
 
 ## Documentation
 
-| Page | What is in it |
+| You want to… | Read |
 | --- | --- |
-| [Getting started](docs/getting-started.md) | The shortest path from an empty script to a stored row. |
-| [Connections](docs/connections.md) | Connection properties, named connections, switching, disconnecting. |
-| [Tables](docs/tables.md) | Column syntax, every type, keys and modifiers, and what registering does not do. |
-| [Raw statements](docs/raw-statements.md) | Statements you write yourself: what they skip, what they still owe, and why they are unsafe. |
-| [Writing rows](docs/writing.md) | Insert one, insert many, insert from a variable, upsert, `values` blocks. |
-| [Reading rows](docs/reading.md) | Select one, many, page and by id, `where` blocks, and the shape of a result. |
-| [Updating and deleting](docs/updating-and-deleting.md) | Update and delete by condition or by id, and limits. |
-| [Affected rows](docs/affected-rows.md) | The `store affected rows` clause, and a conditional write without transactions. |
-| [Errors and waiting](docs/errors-and-waiting.md) | What waits, `last database error`, and what a failure does. |
-| [Transactions](docs/transactions.md) | All-or-nothing groups of statements, and what ends them. |
-| [Types](docs/types.md) | What each column type accepts and how it is stored. |
-| [Troubleshooting](docs/troubleshooting.md) | Schema changes that do not take effect, missing NULL values, and NBT without SkBee. |
-| [Cookbook](docs/cookbook.md) | Recipes for the things scripts usually need. |
-| [Compatibility](docs/compatibility.md) | Versions, the type names a script can write, what ships in the jar, and what is not supported. |
-| [Changelog](CHANGELOG.md) | What each release changed, which is also what its release page says. |
+| Save your first row | [Getting started](docs/getting-started.md) |
+| Connect a database or use several connections | [Connections](docs/connections.md) |
+| Define columns and keys | [Tables](docs/tables.md) |
+| Save one row, import a list, or update-or-insert | [Writing rows](docs/writing.md) |
+| Filter results or read pages | [Reading rows](docs/reading.md) |
+| Change or remove data | [Updating and deleting](docs/updating-and-deleting.md) |
+| Check errors or affected-row counts | [Errors and waiting](docs/errors-and-waiting.md), [Affected rows](docs/affected-rows.md) |
+| Keep several writes together | [Transactions](docs/transactions.md) |
+| Store Minecraft values | [Types](docs/types.md) |
+| Adapt a complete example | [Cookbook](docs/cookbook.md) |
+| Solve a problem or check compatibility | [Troubleshooting](docs/troubleshooting.md), [Compatibility](docs/compatibility.md) |
+| Understand the performance tests | [Benchmarking](docs/benchmarking.md) |
+| See release changes | [Changelog](CHANGELOG.md) |
 
-## Building from source
+## Building and license
 
-`./gradlew build` produces the shaded jar in `build/dist/`. `./gradlew serverTest` boots a real Paper
-server and runs the plugin against it. Both are described in [CONTRIBUTION.md](CONTRIBUTION.md).
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+To build from source or run tests, see [CONTRIBUTION.md](CONTRIBUTION.md).
+Released jars are built in `build/dist/`. MIT license; see [LICENSE](LICENSE).
