@@ -30,7 +30,7 @@ object MysqlDatabaseFactory : DatabaseFactory {
 
     override fun create(properties: Map<String, String>) = JdbcDatabase(
         driverName,
-        MysqlJdbcDialect,
+        MysqlServerJdbcDialect,
         JdbcDatabase.statementTimeoutSeconds(properties),
         typeName
     )

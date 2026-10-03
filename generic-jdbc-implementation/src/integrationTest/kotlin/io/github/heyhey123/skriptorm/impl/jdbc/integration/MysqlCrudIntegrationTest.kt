@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
 import kotlinx.coroutines.runBlocking
+import java.sql.SQLException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -112,6 +113,19 @@ class MysqlCrudIntegrationTest : MysqlIntegrationTestBase() {
         assertEquals(2L, result.affectedCount)
         assertTrue(result.countExact)
         assertEquals(listOf(1, 2), allUsers().map { it.id })
+    }
+
+    @Test
+    fun `insertMany rejects a duplicate primary key without inserting either row`() = runBlocking<Unit> {
+        recreateTable()
+
+        assertFailsWith<SQLException> {
+            queries.insertMany(
+                listOf(userValues(id = 1, name = "first"), userValues(id = 1, name = "duplicate"))
+            ).execute(usersTable)
+        }
+
+        assertEquals(0L, rawRowCount())
     }
 
     @Test

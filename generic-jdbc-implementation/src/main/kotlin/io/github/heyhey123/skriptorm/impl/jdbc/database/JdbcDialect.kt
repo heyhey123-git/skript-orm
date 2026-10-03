@@ -172,6 +172,11 @@ interface JdbcDialect {
     }
 }
 
+/** SQL support used only by MySQL's explicit multi-row insert path. */
+interface MultiRowInsertDialect {
+    fun insertMany(table: String, columns: List<String>, rows: Int): String
+}
+
 enum class JdbcPageParameter {
     LIMIT,
     OFFSET
@@ -285,4 +290,20 @@ object MysqlJdbcDialect : JdbcDialect {
         "MEDIUMBLOB" to "BLOB",
         "LONGBLOB" to "BLOB"
     )
+}
+
+/** MySQL's insert path uses parameterized multi-row statements without relying on driver batch rewriting. */
+object MysqlServerJdbcDialect : JdbcDialect by MysqlJdbcDialect, MultiRowInsertDialect {
+
+    override fun insertMany(table: String, columns: List<String>, rows: Int): String {
+        require(rows > 0) { "Insert row count must be positive." }
+        val placeholders = columns.joinToString(", ", prefix = "(", postfix = ")") { "?" }
+        return buildString {
+            append(insert(table, columns))
+            repeat(rows - 1) {
+                append(", ")
+                append(placeholders)
+            }
+        }
+    }
 }

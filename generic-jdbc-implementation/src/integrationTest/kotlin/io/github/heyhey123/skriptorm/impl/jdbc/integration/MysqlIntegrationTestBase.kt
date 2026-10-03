@@ -5,6 +5,7 @@ import com.zaxxer.hikari.HikariPoolMXBean
 import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabase
 import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
+import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlServerJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.BigIntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.BooleanJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.DoubleJdbcDataType
@@ -32,7 +33,7 @@ private val IDLE_TIMEOUT: Duration = Duration.ofSeconds(5)
  * Base class for integration tests that exercise the JDBC implementation against a real
  * MySQL-family server.
  *
- * One dialect serves both products, so the tests are shared and the product is what a subclass
+ * The tests are shared, while the MySQL insert path uses its own dialect marker. The product is what a subclass
  * names: `"MySQL"` and `"MariaDB"` are separate connection types with separate drivers, and a
  * statement one driver accepts is not evidence for the other. [product] is abstract rather than
  * defaulted for that reason — a test class that does not say which server it runs against would
@@ -92,7 +93,8 @@ abstract class MysqlIntegrationTestBase {
             // conditional on there being a default connection: a named one can outlive it.
             Database.shutdown()
             Database.beginLifecycle()
-            val opened = JdbcDatabase(endpoint.driverClassName, MysqlJdbcDialect)
+            val dialect = if (product == MysqlTestServer.Product.MYSQL) MysqlServerJdbcDialect else MysqlJdbcDialect
+            val opened = JdbcDatabase(endpoint.driverClassName, dialect)
             Database.connectDefault(opened, endpoint.settings)
             database = opened
         }

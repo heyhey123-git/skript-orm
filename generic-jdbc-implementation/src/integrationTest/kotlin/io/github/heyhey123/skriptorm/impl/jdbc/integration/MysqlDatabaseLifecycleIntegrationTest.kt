@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabase
 import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDatabaseFactory
 import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlDatabaseFactory
 import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
+import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlServerJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
 import io.github.heyhey123.skriptorm.table.Column
@@ -164,7 +165,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
         val database = MysqlDatabaseFactory.create(emptyMap())
 
         assertEquals("com.mysql.cj.jdbc.Driver", database.driver)
-        assertSame(MysqlJdbcDialect, database.dialect)
+        assertSame(MysqlServerJdbcDialect, database.dialect)
     }
 
     @Test
@@ -178,7 +179,7 @@ class MysqlDatabaseLifecycleIntegrationTest {
         val database = assertIs<JdbcDatabase>(DatabaseRegistry.get("MySQL", emptyMap()))
 
         assertEquals("com.mysql.cj.jdbc.Driver", database.driver)
-        assertSame(MysqlJdbcDialect, database.dialect)
+        assertSame(MysqlServerJdbcDialect, database.dialect)
     }
 
     @Test

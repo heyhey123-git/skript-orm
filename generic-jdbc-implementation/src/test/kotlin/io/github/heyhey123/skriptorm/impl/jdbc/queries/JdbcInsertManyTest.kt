@@ -1,7 +1,10 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.queries
 
 import io.github.heyhey123.skriptorm.impl.jdbc.database.GenericJdbcDialect
+import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
+import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlServerJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
+import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
@@ -69,6 +72,91 @@ class JdbcInsertManyTest {
         }
         verify { statement.close() }
         verify { source.release(connection) }
+    }
+
+    @Test
+    fun `MySQL binds mixed and nullable values in one multi-row statement`() = runBlocking {
+        val typedTable = Table(
+            "items",
+            listOf(Column("id", IntJdbcDataType()), Column("name", StringJdbcDataType()), Column("age", IntJdbcDataType()))
+        )
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } returns connection
+        every { source.statementTimeoutSeconds() } returns 3
+        every {
+            connection.prepareStatement("INSERT INTO `items` (`name`, `id`, `age`) VALUES (?, ?, ?), (?, ?, ?)")
+        } returns statement
+        every { statement.executeLargeUpdate() } returns 2L
+
+        val result = JdbcInsertMany(
+            listOf(
+                linkedMapOf("name" to "first", "id" to 1, "age" to null),
+                linkedMapOf("age" to 22, "id" to 2, "name" to "second")
+            ),
+            source,
+            MysqlServerJdbcDialect
+        ).execute(typedTable)
+
+        assertEquals(WriteResult(2), result)
+        verifyOrder {
+            statement.setObject(1, "first", JDBCType.VARCHAR.vendorTypeNumber)
+            statement.setObject(2, 1, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setNull(3, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setObject(4, "second", JDBCType.VARCHAR.vendorTypeNumber)
+            statement.setObject(5, 2, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setObject(6, 22, JDBCType.INTEGER.vendorTypeNumber)
+            statement.executeLargeUpdate()
+        }
+        verify { statement.queryTimeout = 3 }
+        verify(exactly = 0) { statement.addBatch() }
+        verify(exactly = 0) { statement.executeLargeBatch() }
+        verify { statement.close() }
+        verify { source.release(connection) }
+    }
+
+    @Test
+    fun `MySQL direct query splits more than 30000 bound values`() = runBlocking {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        val statements = mutableListOf<String>()
+        every { source.borrow() } returns connection
+        every { connection.prepareStatement(capture(statements)) } returns statement
+        every { statement.executeLargeUpdate() } returnsMany listOf(30_000L, 1L)
+
+        val result = JdbcInsertMany(
+            List(30_001) { mapOf("id" to it) },
+            source,
+            MysqlServerJdbcDialect
+        ).execute(table)
+
+        assertEquals(WriteResult(30_001), result)
+        assertEquals(2, statements.size)
+        assertEquals(30_000, statements[0].count { it == '?' })
+        assertEquals("INSERT INTO `items` (`id`) VALUES (?)", statements[1])
+        verify(exactly = 2) { statement.executeLargeUpdate() }
+        verify(exactly = 1) { source.borrow() }
+        verify(exactly = 1) { source.release(connection) }
+    }
+
+    @Test
+    fun `MariaDB dialect keeps the JDBC batch path`() = runBlocking {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } returns connection
+        every { connection.prepareStatement("INSERT INTO `items` (`id`) VALUES (?)") } returns statement
+        every { statement.executeLargeBatch() } returns longArrayOf(1, 1)
+
+        val result = JdbcInsertMany(listOf(mapOf("id" to 1), mapOf("id" to 2)), source, MysqlJdbcDialect)
+            .execute(table)
+
+        assertEquals(WriteResult(2), result)
+        verify(exactly = 2) { statement.addBatch() }
+        verify(exactly = 1) { statement.executeLargeBatch() }
+        verify(exactly = 0) { statement.executeLargeUpdate() }
     }
 
     @Test
