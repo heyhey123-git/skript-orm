@@ -62,22 +62,67 @@ after the other cases and are reported separately.
 
 ## Current CI coverage
 
-The tick job is configured to run plugin writes and reads at 100, 500, 1000, 2500, 5000,
-and 10 000 rows, followed by a warm 5000-row write and read, for each backend below.
-It also runs a separate 5000-row plugin-versus-raw-SQL comparison where SQL is available.
-The next CI run will supply the new measurements; none are inferred from older results.
+The tick job runs plugin writes and reads at 100, 500, 1000, 2500, 5000, and 10 000 rows,
+followed by a warm 5000-row write and read, for every backend below. It also runs a separate
+5000-row plugin-versus-raw-SQL comparison where SQL is available. The input rows populate only
+the `id` column; this keeps the comparison focused on row transport and storage rather than a
+particular six-column value mix.
 
 | Backend | Plugin curve and warm case | Raw SQL comparison | New CI results |
 | --- | --- | --- | --- |
-| SQLite | Configured | Configured | Pending |
-| MySQL | Configured | Configured | Pending |
-| MariaDB | Configured | Configured | Pending |
-| PostgreSQL | Configured | Configured | Pending |
-| MongoDB | Configured | Skipped: SQL is unavailable | Pending |
+| SQLite | Configured | Configured | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, SQLite |
+| MySQL | Configured | Configured | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), Intel Xeon 6973P-C, `mysql:8.4` |
+| MariaDB | Configured | Configured | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, `mariadb:11.4` |
+| PostgreSQL | Configured | Configured | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, `postgres:17` |
+| MongoDB | Configured | Skipped: SQL is unavailable | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), Intel Xeon 6973P-C, `mongo:8` |
 
 The SQL comparison logs `pluginwrite`, `pluginread`, `rawwrite`, and `rawread` as
 `SKRIPTORM_BENCH=COMPARE` lines. MongoDB logs its plugin cases and an explicit
 `SKRIPTORM_BENCH=SKIP` for the raw SQL cases.
+
+Run #4 completed successfully on 2026-10-03, on commit `6476c9b`, with Paper `26.2 build 124`, Skript `2.16.2`,
+Java `25.0.4.1`, Linux `6.17.0-1022-azure`, and four visible CPUs. The following 5000-row
+measurements are the values from that run. `wallNs` is shown here in milliseconds for readability;
+the uploaded JSON and CI history retain nanoseconds. Each value is one run on a shared GitHub
+runner, so it describes that host and database image rather than a general ranking.
+
+| Backend | Write wall | Write gap | Read wall | Read gap |
+| --- | ---: | ---: | ---: | ---: |
+| SQLite | 735.828866 ms | 65.767643 ms | 103.186998 ms | 103.066121 ms |
+| MySQL | 462.517747 ms | 50.395059 ms | 78.302884 ms | 78.218777 ms |
+| MariaDB | 685.122311 ms | 66.066614 ms | 95.789059 ms | 95.813175 ms |
+| PostgreSQL | 585.103286 ms | 66.926809 ms | 94.172914 ms | 94.082624 ms |
+| MongoDB | 717.433104 ms | 50.968606 ms | 78.761947 ms | 78.579400 ms |
+
+Larger writes and the repeated 5000-row write from the same curve:
+
+| Backend | 10 000-row write wall | 10 000-row write gap | Warm 5000-row write wall | Warm write gap |
+| --- | ---: | ---: | ---: | ---: |
+| SQLite | 1501.908676 ms | 94.670715 ms | 779.342861 ms | 50.628368 ms |
+| MySQL | 1398.534310 ms | 51.944607 ms | 684.881529 ms | 50.515912 ms |
+| MariaDB | 1149.905662 ms | 101.135769 ms | 675.078706 ms | 50.746686 ms |
+| PostgreSQL | 1255.801227 ms | 95.786030 ms | 623.383051 ms | 50.885682 ms |
+| MongoDB | 1196.824500 ms | 53.798503 ms | 683.646486 ms | 50.583169 ms |
+
+The following comparison runs separately from the curve above. All four columns are elapsed
+time for 5000 rows. The plugin's write includes sliced input reading; the raw SQL string is
+already built when its timer starts. These are different write paths, so their elapsed-time
+ratio does not measure ORM overhead alone.
+
+| Backend | Plugin write | Raw SQL write | Plugin read | Raw SQL read |
+| --- | ---: | ---: | ---: | ---: |
+| SQLite | 727.519482 ms | 17.148948 ms | 112.968835 ms | 104.414372 ms |
+| MySQL | 586.972838 ms | 46.793973 ms | 76.245264 ms | 91.635107 ms |
+| MariaDB | 628.867037 ms | 74.916475 ms | 91.608649 ms | 89.937610 ms |
+| PostgreSQL | 778.881589 ms | 61.349564 ms | 99.224999 ms | 102.880893 ms |
+| MongoDB | 685.494020 ms | Not applicable | 78.850687 ms | Not applicable |
+
+The benchmark also completed the 100, 500, 1000, 2500, and 10 000-row cases, the warm 5000-row
+cases, affected/stored-row checks, and the expected refusal of a 10 000-row read. The current
+report does not treat the gap as plugin CPU time: it is the largest observed interval between
+tick starts, and it includes scheduler and host activity. The run predates the later MySQL
+`max_allowed_packet` fix in commit `21898af`; repeat the benchmark after that fix is pushed if
+the exact current MySQL path is needed.
 
 The following historical run used Skript's coarse `now` clock and measured some writes
 through their subsequent count query. These values are retained as context, not as a
@@ -106,22 +151,29 @@ longest tick overran by 20 ms. Activity elsewhere on the shared host may have co
 Tick timings are reported for comparison, but the workflow does not fail on them.
 Do not compare this table directly with runs using `wallNs` and `gapNs`.
 
-The sections below describe the measurement layers, tools, and remaining gaps.
+The sections below distinguish the available measurements from planned ones and show
+where each metric can be collected.
 
 ## Measurement layers
 
-Database operations spend time in three places:
+The benchmarks use three layers to help locate the source of a slowdown:
 
-- **A: the JVM alone.** Value conversion, the SQL a dialect builds, how a batch is split, turning a result into rows, the bookkeeping around a transaction. No database and no server: JMH, in a module of its own, so ordinary builds do not pay for it.
-- **B: real databases.** Round trips, the server's own parse and execute, the connection pool, commits. Testcontainers, a real instance per backend, with the fixtures the integration tests already use.
-- **C: a real Paper server.** What a statement costs the *tick*: reading a batch out of a variable, writing a result into one, the memory a large result holds, MSPT. A disposable server, driven by scripts.
+- **A: JVM benchmarks without Paper.** JMH cases live in a separate module. Pure code
+  paths can be measured without a database; the current insert case uses in-memory H2,
+  so its result includes database work as well as addon code.
+- **B: real databases.** Testcontainers starts each backend using the integration-test
+  configuration. This layer captures round trips, parsing and execution, connection-pool
+  behavior, and commits.
+- **C: Paper server.** Scripts run on a disposable server and record elapsed time and tick
+  gaps while the addon reads source variables and stores results. Memory use and MSPT
+  percentiles require separate measurements.
 
 Separating the layers helps identify the source of a slowdown: value conversion in A, driver
 batching in B, or Skript variable access on the server thread in C.
 
-Timing a trigger measures how long it waited, including work done off the server thread.
-Tick overrun measures a different cost: reading input variables and storing results on the
-server thread. Report both to distinguish database latency from server lag.
+Trigger latency includes database work, main-thread variable handling, and the wait until
+Skript resumes the trigger. A long tick gap shows a delay, but cannot divide that time
+among those causes.
 
 ## What the current server cases report
 
@@ -134,17 +186,18 @@ It does not isolate main-thread CPU time, database time, allocations, or MSPT pe
 The following are targets for the separate measurement layers, not fields emitted by
 every current server case:
 
-| Metric | Read in | Comes from |
+| Metric | Planned measurement | Layer |
 | --- | --- | --- |
-| on-thread milliseconds | time on the server thread | C |
-| off-thread milliseconds | wall clock | B, C |
-| trigger latency | wall clock, as the script sees it | B, C |
-| throughput | per value and per row | A, B, C |
-| statements and rows handed to the driver | counted, not timed | B |
-| statements the server received, and the rows it wrote | counted, not timed | B, in the installed-server jobs |
-| allocations per operation | bytes, not time | A, B |
-| peak heap | after the case, after a collection | B, C |
-| MSPT percentiles (p50, p99, max) | the server's own ticks | C |
+| main-thread time | time spent on the server thread during an operation | C |
+| background time | time spent doing database work off the server thread | B, C |
+| trigger latency | elapsed time from statement start until Skript resumes | B, C |
+| throughput | rows and values processed per second | A, B, C |
+| statements and rows passed to the driver | calls and rows counted at the JDBC boundary | B |
+| statements received and rows written by the database | database-side counters | B |
+| allocations per operation | bytes allocated per call | A, B |
+| peak heap | maximum heap use sampled during an operation | B, C |
+| retained heap | heap use after the case and a collection | B, C |
+| MSPT distribution (p50, p99, max) | server tick durations | C |
 
 Separating trigger latency from database and main-thread time will require additional
 instrumentation. The current `wallNs` reading includes all three.
@@ -192,18 +245,21 @@ The test reads PostgreSQL's `pg_stat_user_tables.n_tup_ins` and
 They count rows, not the statements that inserted them. A statement count would need
 `pg_stat_statements` configured and the server restarted, or a protocol-level counter.
 
-## Tools
+## Tools and options
 
-| Purpose | Tool | Why this one |
+JMH, Testcontainers, and benchmark history are part of the current setup. The other
+tools below are options for measurements that are not yet collected.
+
+| Purpose | Tool | Role |
 | --- | --- | --- |
-| Microbenchmarks (A) | JMH, wired by hand | the harness that JDK engineers use; warmup, forks and dead-code elimination are its job, not ours |
-| Statements and rows handed to the driver (B) | `datasource-proxy`, or a counting driver wrapper | counts the plugin's own splitting without changing the code under test — but at this level a batch is one call whether it carries one row or five thousand |
-| Statements and round trips the server received (B) | the database's own session counters, or a packet capture | the only level at which the driver's batching is visible, which is where the MySQL difference lived; it follows the driver version and its options, so it is reported with each run rather than gated |
-| Percentiles over tick samples (C) | HdrHistogram | JMH reports its own confidence intervals; a sampling loop needs a histogram of its own |
-| Real databases (B) | Testcontainers, with reuse enabled | the integration tests already start real instances; reuse stops every run paying for startup |
+| Microbenchmarks (A) | JMH | provides warmup, separate forks, and protection against dead-code elimination |
+| Statements and rows passed to the driver (B) | `datasource-proxy` or a counting driver | counts JDBC calls; the number of rows within a batch needs separate tracking |
+| Statements and round trips seen by the database (B) | session counters or packet capture | shows what the driver sends; results depend on driver version and connection settings |
+| Percentiles over tick samples (C) | HdrHistogram | computes a distribution from repeated tick samples |
+| Real databases (B) | Testcontainers | starts test databases; instance reuse reduces repeated startup time |
 | History and comparison | `benchmark-action/github-action-benchmark` | stores results by CPU and backend without failing the job on timing changes |
-| Allocations and pauses | JMH `-prof gc`, JFR, async-profiler | bytes per operation, plus GC and safepoint detail when a case is slower than expected |
-| MSPT (C) | Paper's own tick sampling | the tick measured without a plugin of ours having to be trusted |
+| Allocations and pauses | JMH `-prof gc`, JFR, async-profiler | examines allocations, GC, and safepoint pauses |
+| MSPT (C) | Paper's tick sampling | records tick durations from the server itself |
 
 The benchmarks module declares JMH and its annotation processor directly because the available
 Gradle plugin does not support this project's Gradle version. Run `./gradlew :benchmarks:jmh`
@@ -215,9 +271,9 @@ annotation processor generates Java code.
 
 Compilation, unit tests, ktlint, and integration-test compilation already run in CI.
 
-Performance checks should fail only on stable metrics, such as statement counts and allocations
-per operation. Shared-runner timing varies too much for a reliable failure threshold, so timing
-results are reported separately.
+The current job fails on incorrect row counts or script errors, not timing changes.
+Other stable, reproducible checks can be added separately from timing trends, which
+vary on shared CI hosts.
 
 ## Where the baseline lives
 
@@ -264,6 +320,6 @@ Paper and Skript versions, commit, and whether the worktree had local changes.
 
 - **Active players.** Measurements on a quiet server do not predict the same operation under heavy player and entity load.
 - **Long-running tests.** Current cases last seconds, so they cannot detect leaks that take days to appear.
-- **Backends the suite cannot start.** The generic JDBC connection reaches drivers this repository does not test, and a result measured on MySQL does not describe them.
+- **Untested drivers.** Generic JDBC can use drivers outside this repository's test matrix; MySQL results do not represent them.
 - **PostgreSQL statement counts.** The available statistics count rows and transactions, not individual statements.
 - **Cross-machine timing comparisons.** Timings are meaningful only with their test environment.
