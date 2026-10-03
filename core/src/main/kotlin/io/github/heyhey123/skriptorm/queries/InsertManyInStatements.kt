@@ -5,21 +5,13 @@ import io.github.heyhey123.skriptorm.skript.utils.RowLimit
 import io.github.heyhey123.skriptorm.table.Table
 
 /**
- * Inserts every one of [rows] and answers what the server reported for all of them together.
+ * Inserts [rows] in order, splitting large batches into statements of at most
+ * `RowLimit.rowsPerStatement(table.columns.size)` rows. This limits the number of bound values
+ * per statement; all rows have already been resolved before this function runs.
  *
- * A batch is the author's: every row in it was asked for, so every row is written. What a batch larger than
- * one statement may carry changes is how many statements carry it — rows in the order they were given, each
- * statement at most `RowLimit.rowsPerStatement(table.columns.size)` of them — because a driver binds a fixed
- * number of values to a statement and refuses a statement that asks for more. A read is held to a row count
- * so the server thread is not held for seconds; a write is spread over statements so no statement is larger
- * than a driver can take, and because the work is counted in values, the two boundaries are the same line on
- * a six-column table.
- *
- * The count is the sum of the statements, exact only when every one of them reported exactly. A failure part
- * way through leaves the statements before it applied, exactly as it would with any other sequence of
- * statements: whether that is rolled back is the caller's transaction scope, not this loop's.
- *
- * A batch within the boundary is one statement and is passed through untouched.
+ * Returns the sum of affected-row counts. The count is exact only if every statement reports an
+ * exact count. Earlier statements remain applied if a later one fails, unless the caller runs the
+ * operation in a transaction.
  *
  * @param table the table to insert into
  * @param rows the rows to insert, each a column-to-value map

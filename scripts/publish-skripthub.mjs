@@ -4,26 +4,19 @@
 //   ./gradlew gendocs
 //   SKRIPTHUB_TOKEN=<token> node scripts/publish-skripthub.mjs [--dry-run]
 //
-// The dashboard imports the whole JSON by hand, and that stays the way to publish examples; this script
-// is for the syntax itself, so a release does not have to wait for someone to paste a file. The API has
-// no bulk import — it has one endpoint per element — so this is a diff: it reads what SkriptHub has,
-// updates the elements whose pattern, description or since version changed, creates the ones that are
-// not there yet, and reports the ones it will not touch.
+// The API publishes syntax one element at a time. This script compares the generated JSON with
+// SkriptHub, updates changed entries, creates new ones, and reports entries it leaves alone.
+// Examples still need the dashboard's JSON import.
 //
-// What it deliberately does not do:
+// This script does not:
 //
-//   - Delete. An element that is on SkriptHub and not in the generated file is reported, not removed:
-//     the annotations cannot say whether it was renamed, dropped, or belongs to an entry somebody made by
-//     hand, and SkriptHub has `mark as removed` for the case where it was really dropped.
-//   - Write examples. They live in their own endpoint, SkriptHub joins the examples of one element with a
-//     single newline where SkriptHubDocsTool leaves a blank line, and the dashboard import handles them
-//     as a set. A difference is reported so that it is a decision instead of a surprise.
-//   - Set supporting plugins. The generated file does not carry them for the elements it lists here;
-//     SkriptHub's own import cannot either, and its documentation says they are set by hand.
+//   - Delete entries missing from the generated file. They may have been renamed or added by hand;
+//     remove them in SkriptHub after review.
+//   - Write examples. The API handles them separately, so differences are reported for dashboard import.
+//   - Set supporting plugins. The generated file does not include that information.
 //
-// The token is read from SKRIPTHUB_TOKEN and never written or printed. `SKRIPTHUB_ADDON` overrides which
-// SkriptHub addon to publish to; without it the addon is found by the repository url, because the name on
-// SkriptHub is not the plugin's name and renaming it there must not break this.
+// Read the token from SKRIPTHUB_TOKEN without printing it. SKRIPTHUB_ADDON overrides the addon
+// selected by repository URL, so a dashboard rename does not break publication.
 
 import { appendFileSync, readFileSync } from 'node:fs'
 
@@ -33,7 +26,7 @@ const REPOSITORY = process.env.GITHUB_REPOSITORY ?? 'heyhey123-git/skript-orm'
 const TOKEN = process.env.SKRIPTHUB_TOKEN
 const dryRun = process.argv.includes('--dry-run')
 
-/** The kinds the documentation tool writes, and the singular name the API gives the same kind. */
+/** Plural categories in the generated file; the API uses their singular forms. */
 const KINDS = ['events', 'conditions', 'effects', 'expressions', 'types', 'functions', 'sections', 'structures']
 
 const failures = []
@@ -53,8 +46,8 @@ const headers = () => ({
 /**
  * Reads a response as JSON.
  *
- * The site sometimes appends an HTML comment to what it returns, which is not JSON, and a body that is
- * not JSON at all is handed back as text so the caller can report it as the server sent it.
+ * Strips an HTML comment if SkriptHub appends one. Returns a non-JSON response as text so the
+ * caller can include it in an error.
  */
 const readJson = async (response) => {
   const text = await response.text()
@@ -62,7 +55,7 @@ const readJson = async (response) => {
     try {
       return JSON.parse(candidate)
     } catch {
-      // The next form, or the text itself below.
+      // Try the next form; return the original text if neither parses.
     }
   }
   return text
@@ -84,7 +77,7 @@ const request = async (method, path, body) => {
 
 const list = (payload) => (Array.isArray(payload) ? payload : (payload.results ?? []))
 
-/** Everything the generated file says, keyed by the title SkriptHub knows the element by. */
+/** Generated syntax entries keyed by their SkriptHub titles. */
 const readDocument = () => {
   const document = JSON.parse(readFileSync(DOCUMENT, 'utf8'))
   const entries = new Map()
@@ -103,7 +96,7 @@ const readDocument = () => {
   return { version: document.metadata?.version ?? 'unknown', entries }
 }
 
-/** An example without blank lines at either end, the way the gendocs task leaves it. */
+/** Removes blank lines around an example. */
 function withoutBlankEdges(example) {
   const kept = String(example).replace(/\r\n/g, '\n').split('\n')
   while (kept.length > 1 && kept[0].trim() === '') kept.shift()
@@ -112,10 +105,7 @@ function withoutBlankEdges(example) {
 }
 
 /**
- * The addon to publish to.
- *
- * Found by url rather than named here: SkriptHub calls this addon `skript orm` while the plugin is
- * `skript-orm`, that name is the dashboard's to change, and a constant would fail on the day it did.
+ * Finds the SkriptHub addon by repository URL, which remains stable if its dashboard name changes.
  */
 const resolveAddon = async () => {
   if (process.env.SKRIPTHUB_ADDON) return process.env.SKRIPTHUB_ADDON
@@ -132,18 +122,16 @@ const resolveAddon = async () => {
   return match.name
 }
 
-/** The body of a write: the fields the generated file owns, plus what the existing row must keep. */
+/** Combines generated fields with metadata preserved from an existing SkriptHub entry. */
 const bodyFor = (entry, row, addon) => {
   const body = {
     title: entry.title,
     description: entry.description,
     syntax_pattern: entry.pattern,
     syntax_type: entry.syntaxType,
-    // The one field SkriptHub cannot infer: a new element has none, so it starts empty and is filled in
-    // by hand where an element needs another plugin loaded.
+    // Preserve supporting plugins on updates; new entries start without them.
     required_plugins: (row?.required_plugins ?? []).map((plugin) => (typeof plugin === 'string' ? plugin : plugin.name)),
-    // Every element belongs to an addon and the API refuses a create without this field. An update can
-    // take it from the row being replaced; a create has no row, so it uses the addon this run resolved.
+    // A new entry needs the addon resolved for this run; updates keep their existing association.
     addon: row?.addon ?? addon
   }
   if (entry.since) body.compatible_addon_version = entry.since
@@ -158,7 +146,7 @@ const bodyFor = (entry, row, addon) => {
 
 const same = (left, right) => (left ?? '').trim() === (right ?? '').trim()
 
-/** The examples of one element as SkriptHub holds them, joined the way it joins them. */
+/** Reads and normalizes the examples SkriptHub stores for one element. */
 const examplesOf = async (id) => {
   const payload = await request('GET', '/syntaxexample/?syntax=' + id)
   return list(payload).map((example) => withoutBlankEdges(example.example_code ?? ''))
@@ -199,8 +187,7 @@ if (!TOKEN) {
   process.exit(1)
 }
 
-// Everything below reports through `failures` rather than throwing out of the script, so that a request
-// that fails still leaves a summary saying what was and was not published.
+// Collect failures so the summary still reports successful and unsuccessful updates.
 try {
   const document = readDocument()
   const addon = await resolveAddon()
@@ -240,7 +227,7 @@ try {
     }
 
     if (plan.creates.length) {
-      // One call, because the endpoint takes a list; every element of it is created or none is.
+      // Create all new entries in one API request.
       const body = plan.creates.map((entry) => bodyFor(entry, null, addon))
       try {
         await request('POST', '/syntax/', body)
@@ -249,8 +236,7 @@ try {
       }
     }
 
-    // Read back rather than trust the status codes: what was written is only published once the entry
-    // says so, and a field the API silently ignored would otherwise be found by a reader.
+    // Read back entries to catch fields the API accepted but did not save.
     const after = list(await request('GET', '/syntax/?addon=' + encodeURIComponent(addon)))
     const remaining = compare(document, after)
     for (const { entry, row } of remaining.updates) {
@@ -262,8 +248,7 @@ try {
     }
   }
 
-  // Examples are compared last and loosely: SkriptHub joins several examples of one element with a single
-  // newline where the tool leaves a blank line, so only a real difference is worth reporting.
+  // Ignore blank-line differences introduced when SkriptHub joins multiple examples.
   const join = (examples) => examples.map((example) => example.trim()).join('\n').replace(/\n\s*\n/g, '\n')
   for (const entry of document.entries.values()) {
     const row = rows.find((candidate) => candidate.title === entry.title)
@@ -284,19 +269,15 @@ if (failures.length) {
   say()
   say('**' + failures.length + ' failure(s)**')
   for (const failure of failures) say('- ' + failure)
-  // Also on stderr, so the reason reaches the workflow annotation. Written to the summary alone it
-  // reached nobody who was looking at the run from a commit: the check reported "exit code 1" and the
-  // list of what went wrong sat on a page that has to be opened by hand.
+  // Write failures to stderr as well, so CI annotations show the cause.
   console.error(failures.length + ' SkriptHub failure(s):')
   for (const failure of failures) console.error('- ' + failure)
 }
 
-// The workflow appends this to the run summary, so it has to survive being read on its own.
+// Publish a self-contained summary for the workflow run.
 if (process.env.GITHUB_STEP_SUMMARY) {
   appendFileSync(process.env.GITHUB_STEP_SUMMARY, lines.join('\n') + '\n')
 }
 
-// The exit code is set rather than exited with: `process.exit()` cuts a connection off while it is still
-// closing, which Node turns into an assertion failure on Windows. Whatever is left of the connection is
-// let go of on its own, and the code still reaches the shell and CI.
+// Let pending connections close naturally; process.exit() can interrupt them on Windows.
 process.exitCode = failures.length ? 1 : 0

@@ -2,13 +2,12 @@
 
 [简体中文](README.zh-CN.md) | **English**
 
-Every page is available in English (`name.md`) and Chinese (`name.zh-CN.md`). The
-[same list is in the README](../README.md).
+Each page has an English (`name.md`) and Simplified Chinese (`name.zh-CN.md`) version.
+The [project README](../README.md) also links to these guides.
 
-## If you are new
+## Getting started
 
-Start with [Getting started](getting-started.md) to write a script that stores and retrieves a row.
-Use the remaining pages as a reference when you need them.
+Start with [Getting started](getting-started.md) for a script that writes and reads a row. Use the other pages when you need a specific operation or detail.
 
 ## Reference
 
@@ -16,7 +15,7 @@ Use the remaining pages as a reference when you need them.
 | --- | --- |
 | [Connections](connections.md) | Connecting, named connections, switching, and disconnecting. |
 | [Tables](tables.md) | Column syntax, types, keys, modifiers, and the limits of table registration. |
-| [Raw statements](raw-statements.md) | Statements written by the script itself: SQL and MongoDB commands, what they skip, and what they still owe. |
+| [Raw statements](raw-statements.md) | Send SQL or MongoDB commands directly; understand parameters and skipped checks. |
 | [Writing rows](writing.md) | Single and bulk inserts, inserting from variables, upsert, and `values` blocks. |
 | [Reading rows](reading.md) | Single-row, multi-row, paginated, and primary-key queries; `where` blocks and result structure. |
 | [Updating and deleting](updating-and-deleting.md) | Updates and deletes by condition or primary key, and row limits. |
@@ -25,19 +24,19 @@ Use the remaining pages as a reference when you need them.
 | [Transactions](transactions.md) | Committing and rolling back groups of statements, failure handling, and timeouts. |
 | [Types](types.md) | Accepted values and storage formats for each column type. |
 
-## When something goes wrong
+## Troubleshooting and examples
 
 | Page | Contents |
 | --- | --- |
 | [Troubleshooting](troubleshooting.md) | Common issues with schema changes, NULL columns, and NBT without SkBee. |
-| [Cookbook](cookbook.md) | Practical examples: upsert, pagination, bulk inserts, item NBT, and read-modify-write. |
+| [Examples](cookbook.md) | Upsert, pagination, bulk inserts, item NBT, and read-modify-write. |
 | [Compatibility](compatibility.md) | Versions, connection type names, jar contents, and unsupported features. |
 
-## For the wiki on GitHub
+## GitHub wiki
 
-The wiki publishes both languages, with Chinese first. When documentation or publishing files change,
-`.github/workflows/wiki.yml` runs `scripts/publish-wiki.ps1` to generate the pages. Edit the source files
-in this repository; direct wiki edits are overwritten on the next sync.
+The GitHub wiki publishes both languages, with Chinese pages listed first. Changes to documentation or
+publishing files trigger `.github/workflows/wiki.yml`, which runs `scripts/publish-wiki.ps1`.
+Edit the source files in this repository; the next sync overwrites edits made directly in the wiki.
 
 `scripts/wiki-pages.tsv` maps source files to page names, and `scripts/wiki-sidebar.md` defines the sidebar.
 Chinese pages retain their existing addresses; English page names have an `-EN` suffix.

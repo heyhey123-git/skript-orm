@@ -9,7 +9,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select One Entity")
-@Description("Selects at most one row and stores it by column name, such as {_user::name}. A nested where block may filter it. Selects always wait, whether or not and wait is written, and failures are exposed as the last database error.")
+@Description("Selects at most one row, optionally filtered by a where block. Columns are stored by name, such as {_user::name}. The next line runs after the query finishes; check last database error for failures.")
 @Example(
     """select one entity from table "users" and store the result in {_user::*}:
     where any:

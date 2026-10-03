@@ -1,12 +1,8 @@
-# 菜谱
+# 示例
 
 **简体中文** | [English](cookbook.md)
 
-这里收集了几种常用写法，可以复制后按需调整。所用语法都在文档的其他页面中介绍过。
-
-[`docs/examples/cookbook.sk`](examples/cookbook.sk) 提供了配套示例，由人工维护，并非从本页自动提取，也不保证逐字同步。
-
-CI 会在真实服务端上检查示例能否解析，但不执行命令，因此不验证运行结果。示例放在 `command /example-…` 中，使用英文消息；所有示例文件会加载到同一台测试服，所以命令名必须唯一。
+这里收集了常见的数据库操作。请按自己的脚本调整表名和列名。配套脚本见 [`docs/examples/cookbook.sk`](examples/cookbook.sk)。
 
 ## 知道自己刚建的行的 id
 
@@ -60,6 +56,9 @@ command /addage <integer>:
         select one entity from table "players" and store the result in {_row::*}:
             where all:
                 uuid = uuid of player
+        if last database error is set:
+            send "读取数据失败: %last database error%" to sender
+            stop
         if {_row::uuid} is not set:
             send "你还没有对应的行。" to sender
             stop
@@ -88,6 +87,11 @@ command /addage <integer>:
 select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
+if last database error is set:
+    send "读取待归档数据失败: %last database error%" to console
+    stop
+if {_rows::1::id} is not set:
+    stop
 
 insert many {_rows::*} into table "archived_users" and wait
 if last database error is set:
@@ -99,7 +103,7 @@ delete entities from table "users" and wait:
         active = false
 ```
 
-`select many` 的结果结构可以直接交给 `insert many`，无需重新整理。插入完成后，脚本才会继续执行删除；1.2 中所有数据库语句都会等待完成，示例保留的 `and wait` 不改变行为。
+`select many` 的结果可以直接交给 `insert many`。先检查结果是否为空：`insert many` 不接受未设置的变量。插入完成后，脚本才会继续执行删除。
 
 这三步不是一个事务，失败时不会整体回滚。执行期间应避免并发修改相关数据：删除会重新匹配 `active = false`，可能删掉读取后才符合条件、尚未归档的行；读取后发生的修改也不会自动进入归档。请在暂停相关写入的维护时段使用这段示例。
 
@@ -126,6 +130,9 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
+    if last database error is set:
+        send "读取第 %{_page}% 页失败: %last database error%" to console
+        exit loop
     # 按行号遍历，以主键是否存在判断还有没有下一行。每一行都是一个子列表。
     # 不用其他列判断，因为 NULL 列没有对应的键，会让遍历提前结束。
     # 遍历后 {_row} 仍为 1，说明当前页为空。

@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 /**
- * Shared behaviour of write sections.
+ * Common parsing and execution for write sections.
  *
  * A write either reads its values from the section body, from a list variable given as an expression,
  * or has no values at all, as a delete does. The first two sources are mutually exclusive, and both
@@ -42,31 +42,24 @@ import org.bukkit.event.Event
  *
  * ## Missing columns
  *
- * Both sources resolve to a map keyed by column name, and both may leave a column out. They do not
- * agree on what leaving a column out means:
+ * Both sources produce maps keyed by column name, but they handle null differently:
  *
- * - The body source can tell an omitted key from a key written as `null`, because the latter resolves
- *   to a present entry holding null and is bound as SQL NULL.
- * - A list variable cannot. Skript deletes a key when it is set to null, so "not supplied" and
- *   "supplied as NULL" are both just an absent key.
+ * - In a section body, an explicit `null` remains in the map and is bound as SQL NULL.
+ * - In a list variable, Skript removes keys set to null. An absent key cannot be distinguished
+ *   from one explicitly set to null.
  *
- * An absent key is therefore never read as NULL. The column simply does not reach the statement,
- * which makes every write except `insert many` a patch: an omitted column is not part of the `SET`
- * or `ON DUPLICATE KEY UPDATE` list and keeps its stored value, while an insert omits it so that the
- * database default applies. [VariableValuesReader] documents the full contract, including why
- * `insert many` has to fill a common column set instead.
+ * An absent key is omitted from the statement. Updates leave that column unchanged; inserts let
+ * the database apply its default. `insert many` is the exception: all rows in one statement need
+ * the same column set. See [VariableValuesReader] for that behavior.
  *
- * Reading an absent key as null would only be meaningful for an explicit full-row replacement
- * operation. That is deliberately not offered: the same input would otherwise clear every column a
- * dynamic variable happens to miss, and an unknown column name is the only mistake this reader can
- * reject, while a forgotten column passes silently.
+ * Treating missing keys as null would silently clear columns omitted from a dynamically built
+ * variable. This API does not offer full-row replacement.
  *
  * ## The affected row count
  *
- * Every write pattern ends with [AffectedRows.PATTERN], an optional clause that stores the number of rows
- * the statement affected into a variable the script names. It is cleared when the statement starts and
- * written when it succeeds with an exact count, which is documented on [AffectedRows] and is what lets a
- * script express a conditional write without transactions.
+ * [AffectedRows.PATTERN] lets a script store the number of affected rows in a variable. The variable
+ * is cleared before the write and set after a successful statement with an exact count. See
+ * [AffectedRows] for details.
  */
 abstract class SecWriteBase : Section() {
 
@@ -214,8 +207,7 @@ abstract class SecWriteBase : Section() {
                 }
                 rawValuesNode.toList()
             } else if (supportsWhere) {
-                // When only where is supported, we can assume that all other sections are values sections.
-                // In that case, exclude the where section from the value nodes is required, otherwise the where section will be treated as a values section and cause an error.
+                // Without an explicit values block, collect body nodes other than `where` as values.
                 sectionNode.filter { !WhereParser.isWhereSection(it) }
             } else {
                 sectionNode.toList()

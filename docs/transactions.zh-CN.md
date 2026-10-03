@@ -2,7 +2,7 @@
 
 **简体中文** | [English](transactions.md)
 
-事务让一组数据库改动要么全部提交，要么全部回滚。事务内的语句使用同一条连接，可以读取彼此尚未提交的改动；其他脚本能看到哪些数据，则取决于后端及其隔离级别。
+事务让一组数据库改动一起提交，或一起回滚。事务内的语句共用一条连接，可以读取彼此尚未提交的改动。其他脚本能看到什么，取决于数据库的隔离级别。
 
 ```sk
 database transaction:
@@ -18,7 +18,7 @@ if last database error is set:
     send "转账已回滚: %last database error%"
 ```
 
-这个 section 与其他语句一样，使用当前生效的连接。`database transaction on connection "logs":` 可指定具名连接，`with timeout 5 seconds` 可设置事务最长持续时间，见[超时](#超时)。
+事务默认使用当前连接。要指定具名连接，写 `database transaction on connection "logs":`；要限制执行时间，可加上 `with timeout 5 seconds`。详见[超时](#超时)。
 
 ## 它怎样结束
 
@@ -27,21 +27,21 @@ if last database error is set:
 | 主体正常执行到末尾 | 提交 |
 | 主体中的语句失败 | 主体结束后回滚 |
 | `exit`、`stop` 或 `return` 离开主体 | 回滚 |
-| `rollback database transaction` | 回滚，并离开 section |
+| `rollback database transaction` | 回滚，并退出事务块 |
 | 超过超时时间仍未结束 | 自动回滚 |
 | 连接被关闭，或插件被禁用 | 自动回滚 |
 
-不提供显式 `commit` 语句。事务只在主体正常结束时提交，避免中途提交后，剩余语句的事务归属不明确。
+没有显式的 `commit` 语句。事务块正常结束时会自动提交。
 
 `rollback database transaction` 只能用于事务内部，用于提前回滚并退出：
 
 ```sk
 database transaction:
+    if {_from::balance} < {_amount}:
+        rollback database transaction
     update one entity in table "accounts" by id {_from} and wait:
         values:
             balance: {_from::balance} - {_amount}
-    if {_from::balance} < {_amount}:
-        rollback database transaction
 ```
 
 ## 有语句失败时
@@ -61,15 +61,15 @@ database transaction:
             what: "order stored"
 ```
 
-即使回滚成功，section 之后仍可通过 `last database error` 读取最初的错误。事务内的语句不会清空这条错误信息。`store affected rows` 的目标变量则仍按语句清空，避免将上一条语句的行数误当成被跳过语句的结果。见 [影响行数](affected-rows.zh-CN.md)。
+即使回滚成功，事务块结束后仍可通过 `last database error` 读取最初的错误。事务内的语句不会清空这条错误信息。`store affected rows` 的目标变量则会清空，以免将上一条语句的行数误当成被跳过语句的结果。见[影响行数](affected-rows.zh-CN.md)。
 
-## 一条连接上一次一条
+## 执行顺序
 
-事务内的所有语句都使用事务占用的同一条连接，依次执行，不会并发或乱序。事务也会等所有语句结束后才提交。每条语句本来就会等待，因此无需额外设置；事务内仍接受 `and wait`，但它不改变行为。
+事务内的语句依次使用同一条专用连接，全部完成后才提交。这里可以写 `and wait`，但不会改变执行方式。
 
-## 事务里再开事务
+## 嵌套事务
 
-嵌套的 `database transaction` 会**加入外层事务**。只有最外层 section 才会提交，内层不是保存点，也不能单独撤销。需要注意：
+嵌套的 `database transaction` 会**加入外层事务**。只有最外层事务块会提交；内层不是保存点，无法单独回滚。需要注意：
 
 - 内层指定**另一条连接**会被拒绝，报 `A database transaction is already open on another connection.`。这会使外层事务进入只能回滚的状态，整个事务的改动都将撤销。
 - 内层执行 `rollback database transaction` 会回滚**整笔事务**，而不只是内层主体。之后外层主体中的数据库语句会报告事务已不再运行。
@@ -78,7 +78,7 @@ database transaction:
 
 ## 超时
 
-事务在整个生命周期中占用连接池的一条连接，若迟迟不结束，连接就无法归还。默认超时为 30 秒，用来防止脚本中途停止后连接一直被占用：主体内的错误可能让 Skript 直接终止 trigger，却不通知 section；`wait` 也可能暂停很长时间。
+事务从开始到结束都占用连接池中的一条连接，默认超时为 30 秒。
 
 可以在开启事务时指定其他时长：
 
@@ -90,7 +90,7 @@ database transaction with timeout 2 minutes:
 - 超时使用 Skript 时间值，例如 `2 minutes`、`500 milliseconds`，且必须为正数。
 - `with a timeout of 2 minutes` 是同一子句，`a` 和 `of` 都可省略。
 - 超时子句必须写在 `on connection` 之后：`database transaction on connection "logs" with timeout 2 minutes:`。
-- 从事务开启、占用连接时开始计时，不是从第一条语句开始。计时**不会暂停**：数据库语句、语句间的脚本处理和 `wait` 都计入总时长。即使每条语句都很快，较长的主体也可能超时回滚；限制的是连接与行锁的占用时间，而不是单条语句的执行速度。
+- 从事务占用连接时开始计时。数据库语句、脚本处理和 `wait` 都计入总时长，即使每条数据库语句都很快，事务仍可能超时。这个时限也限制了连接和已取得的行锁被占用的时间。
 - 非正数会报 `The transaction timeout has to be positive.`；表达式求值为空会报 `The transaction timeout is not set.`。这两种情况都不会开启事务。
 - 超时按事务设置。连接可以设置[语句超时](connections.zh-CN.md)，但没有连接级的事务超时；需要更长时间时，请在开启该事务的位置指定。
 
@@ -100,21 +100,9 @@ database transaction with timeout 2 minutes:
 
 回滚需要使用同一条连接，因此不能绕过尚未结束的语句立即执行，必须先等待语句退出。如果连接完全无响应，实际回滚和连接释放可能晚于既定期限；截止时间本身不会延后。此时需要 URL 中的 `socketTimeout` 限制等待时间，见[语句超时](connections.zh-CN.md#语句超时)。
 
-驱动完全可以在语句真正结束之前就返回回滚结果。这种情况下，连接上可能仍带着那条语句的工作，事务一旦释放就会出事。遇到这种连接，会**直接关闭，而不是交回连接池**：把自动提交恢复回来的那条连接，正是在归还的路上把这份工作提交掉。回滚本身失败时同理——失败会记在事务上（作为脚本看到的那个失败原因的抑制原因，脚本读到的仍是超时），连接被丢弃而不是复用。丢弃只损失连接池里的一条连接，而复用它会让回滚失去意义。
+如果回滚后仍可能有语句在执行，或回滚本身失败，插件会关闭连接，不把它归还连接池。这能避免恢复自动提交时意外提交尚未完成的操作。回滚失败会附在报告的错误中；若事务超时，`last database error` 仍会显示超时原因。
 
-确实需要较长时间的事务，应明确设置超时。如果耗时只是因为主体包含过多工作，可以考虑拆分：将不必纳入事务的慢查询和长时间计算移到外面，只保留必须一起生效的语句。
-
-### 超时这条承诺是用什么验证的
-
-回滚是在事务固定的那条连接上发出的，因此它理应撤销该事务写下的全部内容，之后这条连接也理应还能继续使用。服务端测试正是按这一点检查，并且把三个答案分开报告，而不是只给一个：超时事务插入的那一行是否还在、这条连接是否还能接受写入、该事务用过的那个键是否已经空出来。
-
-截至 2026-10-02，该检查在文件型后端通过；在 MySQL、PostgreSQL 与 MongoDB 上同样通过：三个安装型服务端作业各自报出本用例那行，三者完全相同。
-
-```text
-stress cancel -> error=The database transaction was open for longer than 5 seconds and was rolled back. inserted=1 found=0 readError=<none> fresh=1 freshError=<none> rowsAffected=1 sameError=<none>
-```
-
-`readError=<none>` 才是让 `found=0` 在这里有意义的东西：读取执行了、什么都没找到，所以回滚在每一个被测后端上都删掉了那一行。`fresh=1` 表示这条连接随后仍能接受写入，`rowsAffected=1` 表示那个键已经空出来。此前那次红灯来自测试工具而不是插件：database 模式下，断连元素在 stress 用例停在自己事务里的那段窗口内执行了它的“断开所有连接”形式，在用例发问之前就把连接注册表清空了；而事务、abort 与丢弃路径都不会关闭连接。可能让留存的行漏过去的那条路径——语句可能仍在执行时就恢复自动提交并把连接交回连接池，或者回滚已经失败之后仍然复用这条连接——仍然通过丢弃这类连接堵住：`JdbcTransactionDiscardTest` 用进程内的 H2 验证了这一点，其中一组对照复现了旧的释放路径，并显示出那一行确实留了下来。
+事务确实需要更多时间时，可延长超时。不需要纳入事务的慢查询和耗时计算，尽量移到事务外。
 
 ## 它不做什么
 

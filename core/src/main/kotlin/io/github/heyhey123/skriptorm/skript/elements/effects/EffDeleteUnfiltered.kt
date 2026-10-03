@@ -15,7 +15,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Delete Entities Without A Colon")
-@Description("Deletes rows, optionally with a positive limit, without a where block: every row the implementation allows is deleted. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Deletes all rows allowed by the database implementation, optionally up to a positive limit. Use this form without a colon when there is no where block. The next line runs after the delete finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """delete entities from table "logs" with limit 500 and wait
 """

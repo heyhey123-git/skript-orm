@@ -11,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Update Entities")
-@Description("Updates rows, optionally with a positive limit and nested where block. The new values may be written in the section body, or taken from a list variable shaped like a select result. Omitting where updates all rows allowed by the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Updates rows matching an optional where block. Without a filter, it updates all rows allowed by the database implementation. Supply new values in the section body or through a list variable in select-result format. A positive limit may restrict the number updated. The next line runs after the update finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """update entities in table "users" with limit 10 and wait:
     values:

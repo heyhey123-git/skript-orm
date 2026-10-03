@@ -2,11 +2,9 @@
 
 [English version](CONTRIBUTION.md)
 
-Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展。项目处于开发初期：公开 API 和内部结构
-都仍可能调整。单元测试与可选的 MySQL、PostgreSQL、MongoDB 集成测试覆盖了当前行为（见第 8 节）。
+Skript ORM 为 Skript 添加数据库操作。公开 API 和内部结构仍可能调整。单元测试以及可选的 MySQL、PostgreSQL、MongoDB 集成测试覆盖当前行为（见第 8 节）。
 
-我们遵循三个原则：**适度抽象**、**可读性优于技巧**、**对外接口小而友好**。当某处改动与原则冲突时，
-以原则为准。
+请保持抽象适度、代码易读，并让 Skript API 简单好用。
 
 ---
 
@@ -19,13 +17,7 @@ Skript ORM 是一个把数据库操作暴露为 Skript 元素的 Skript 扩展�
 | `postgresql-implementation`   | PostgreSQL 专属 JDBC 行为    |
 | `mongodb-implementation`      | MongoDB 行为               |
 
-根项目负责产出 shadow 插件 jar。它会打包**每一个实现模块**——通用 JDBC 那一个、PostgreSQL 那一个，还有
-MongoDB 那一个——并且**不带任何数据库驱动**：`plugin.yml` 里的 `libraries` 条目由 jar 打包的模块在构建时
-生成，某个模块需要驱动就在那里写上它，Paper 会在首次启动时把驱动下载到服务端的 `libraries/` 目录。默认构建里
-这份清单是 `org.postgresql:postgresql:42.7.11` 与 `org.mongodb:mongodb-driver-sync:5.6.1`，而不需要任何
-驱动的模块组合会写出 `libraries: []`。这样 jar 就只有插件本身的体积，驱动也仍是其作者发布的那份库，代价是服务端
-必须能连上一次它自己的 Maven Central 镜像。`-PbundleModules=a,b` 则按别的组合构建 jar，尚未发布的模块就是靠
-它来试的：
+根项目构建包含通用 JDBC、PostgreSQL 和 MongoDB 实现的插件 jar，数据库驱动不打包在其中。构建时会根据所选模块生成 `plugin.yml` 的 `libraries` 条目；Paper 在首次启动时将所需驱动下载到服务端的 `libraries/` 目录。默认构建需要 `org.postgresql:postgresql:42.7.11` 和 `org.mongodb:mongodb-driver-sync:5.6.1`，因此服务端首次启动时需要访问其配置的 Maven 镜像。使用 `-PbundleModules=a,b` 可选择其他模块组合：
 
 ```bash
 ./gradlew build                                  # shadow jar 输出到 build/dist
@@ -166,8 +158,7 @@ JDBC 的链条是 `DataSource → Connection → PreparedStatement → ResultSet
 新增元素时必须同时加进那份清单：服务端测试会逐个驱动它期望的元素，所以「忘记注册」会在那里失败，而不是
 悄悄不存在。
 
-section 只有在该行以冒号结尾时才会被识别，因此 body 可省略的元素要写成行尾带冒号、下面留空。Skript 会在
-日志里记一条 `Empty configuration section!`，然后照常执行该 section。这些提示是预期行为，不是缺陷。
+section 需要以冒号结尾，并包含主体。可省略主体的元素另有无冒号的 effect 写法；独立语句应使用这种写法。空 section 会触发 Skript 的 `Empty configuration section!` 警告。
 
 - `SecSelectBase` 与 `SecWriteBase` 承载共享的解析与派发逻辑。`SecCreateConnection` 与
   `SecRegisterTable` 独立实现，因为它们不符合这两种形态。
@@ -199,8 +190,7 @@ section 只有在该行以冒号结尾时才会被识别，因此 body 可省略
 要点：
 
 - 4 空格缩进、LF、UTF-8、行尾无空白、文件末尾保留一个换行。
-- import 顺序为 `*`、`java.**`、`javax.**`、`kotlin.**`。禁止通配导入，但 `.editorconfig` 中允许的
-  两条路径例外：`java.util.*` 与 `ch.njol.skript.doc.*`。
+- import 顺序为 `*`、`java.**`、`javax.**`、`kotlin.**`。通常禁止通配导入；`.editorconfig` 仅允许 `ch.njol.skript.doc.*`。
 - 多行参数列表不写尾随逗号。
 - 父类型列表与类型参数上界写作 `Foo : Bar`。
 - **代码、KDoc 与注释使用英文。** 中文可以出现在文档和 `build.gradle.kts` 中。源码内保持单一语言，

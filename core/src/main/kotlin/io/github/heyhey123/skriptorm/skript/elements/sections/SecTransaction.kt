@@ -26,7 +26,7 @@ import org.skriptlang.skript.addon.SkriptAddon
 import java.time.Duration
 
 @Name("Database Transaction")
-@Description("Runs the code inside as one database transaction on the connection in effect, or on a named one. Reaching the end of the body commits; `exit`, `stop` and `return` roll back. A statement that fails makes the rest of the body's database statements do nothing, and the transaction is rolled back when the body ends. The timeout defaults to 30 seconds and rolls the transaction back on its own if it is still open after that.")
+@Description("Runs the section in one transaction on the current or a named connection. Completing the section commits. Using exit, stop or return, or encountering a failed database statement, rolls it back. After a statement fails, later database statements in the section are skipped. The default timeout is 30 seconds; an open transaction is rolled back when it expires.")
 @Example(
     """database transaction:
     update one entity in table "accounts" by id {_from} and wait:

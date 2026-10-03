@@ -10,7 +10,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Many Entities")
-@Description("Selects matching rows using row-index and column-name keys such as {_users::1::name}. The one-based row index remains even for one result. A result of more than 5000 rows is refused and stores nothing, because storing it would stop the server while the variable is written. Selects always wait and expose failures as the last database error.")
+@Description("Selects matching rows into numbered list entries such as {_users::1::name}. Numbering starts at 1, even if only one row matches. Results over 5000 rows are rejected without storing a partial list. The next line runs after the query finishes; check last database error for failures.")
 @Example(
     """select many entities from table "users" and store the results in {_users::*}:
     where all:

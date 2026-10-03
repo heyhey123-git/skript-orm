@@ -13,7 +13,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Execute Raw Command")
-@Description("Sends a command document of your own to the connected document database, written as JSON text, and stores the document the server answers with. UNSAFE: the command is sent as written — it is not checked against any registered table, and the plugin does not interpret it. There are no parameters: the command is the whole statement. It fails when the connection takes SQL statements instead of commands.")
+@Description("Runs a JSON command on a document database and stores the response document. The command is sent as written, without checking registered tables or binding parameters. It does not work with SQL connections.")
 @Example(
     """execute command "{ ""count"": ""users"" }" and store the result in {_answer::*}
 send "There are %{_answer::n}% users."

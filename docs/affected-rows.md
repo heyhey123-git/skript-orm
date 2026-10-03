@@ -18,7 +18,7 @@ if {_rows} is 0:
 
 ## The clause
 
-The optional `store affected rows in {_rows}` clause is available on every write: `insert one`, `insert many`, `insert ... if absent`, `update`, `upsert` and `delete`, with or without a section body. Place it after the statement's arguments, joined with `and`. That conjunction tells Skript where the preceding argument ends. You can still append `and wait`, but it does not change the waiting behaviour.
+Add `and store affected rows in {_rows}` after the arguments of any write: `insert one`, `insert many`, `insert ... if absent`, `update`, `upsert`, or `delete`. It works with or without a section body. You can also append `and wait`, though it no longer changes when the statement completes.
 
 ```sk
 delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
@@ -62,12 +62,12 @@ The variable is **cleared when the statement starts**, before any validation tha
 
 ```sk
 if {_rows} is not set:
-    send "Nothing reported how many rows were written." to console
+    send "The affected-row count is unavailable." to console
 else if {_rows} is 0:
-    send "No row matched." to console
+    send "The statement affected zero rows." to console
 ```
 
-The zero-count message above applies only when zero means no match; it is not suitable for every write.
+Check what zero means for your statement and backend before treating it as a missing row.
 
 Clearing the variable prevents a previous count from being mistaken for the current result. Writes wait for completion, so the next statement can read the count without any extra waiting. See [Errors and waiting](errors-and-waiting.md).
 

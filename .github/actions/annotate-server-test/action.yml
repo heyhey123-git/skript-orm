@@ -1,9 +1,7 @@
 name: Annotate the server test
 description: >-
-  Turns what the Skript server test wrote beside its log into check annotations. A failing step's log
-  needs admin rights to read while annotations are public, and the harness writes its own problem list
-  for exactly this reason; the server log is the fallback for the cases where the server, rather than an
-  assertion, is what went wrong.
+  Reports Skript server test failures as check annotations. Uses the harness's problem list when
+  available and falls back to the server log otherwise.
 
 runs:
   using: composite
@@ -13,15 +11,13 @@ runs:
       run: |
         problems=build/server-test/logs/test-problems.txt
         if [ -f "$problems" ]; then
-          # These already carry the evidence, and annotations are capped, so do not spend the budget on
-          # the log as well.
+          # Use the explicit problem list when the harness produced one.
           while IFS= read -r line; do
             echo "::error::$line"
           done < "$problems"
           exit 0
         fi
-        # No problems file means the harness never got to write one, so the server itself is what went
-        # wrong; fall back to whatever it complained about.
+        # Fall back to the server log if the harness stopped before writing a problem list.
         log=build/server-test/logs/latest.log
         if [ -f "$log" ]; then
           grep -E 'SKRIPTORM_SELFTEST|\[Skript\] Line|Exception|ERROR' "$log" | tail -n 40 | while IFS= read -r line; do

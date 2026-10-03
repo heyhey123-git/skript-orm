@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Disconnect Database")
-@Description("Disconnects a database connection asynchronously. Without a name it closes the connection in effect: the innermost 'in connection' scope, then a 'use connection' from this event, then the default one. The named form closes one connection, and the all form closes every connection. The following trigger item runs after disconnection finishes. Failures are reported as a runtime error and exposed as the last database error.")
+@Description("Closes a database connection and waits for disconnection before continuing. Without a name, it closes the connection currently in use: first the innermost in connection section, then an event-level use connection selection, then the default. A name closes that connection; all closes every connection. Check last database error for failures.")
 @Example("disconnect from the current database")
 @Example("disconnect from connection \"logs\"")
 @Example("disconnect from all connections")

@@ -66,7 +66,7 @@ delete entities from table "users" and wait
 
 An empty `where` block is rejected when the script is parsed, for both updates and deletes. To act on all rows, omit the block entirely, as in `delete entities from table "users"`. Add `with limit` when you need to cap the number of affected rows.
 
-**On a generic `"JDBC"` connection, neither form runs.** `update entities` and `delete entities` are refused whether or not `with limit` is written — measured in the server test (`elements/31-statement-shape.sk`), where a bare `delete entities from table "..." and wait`, the same statement with a `where all:` block, and the same with `with limit 1` all come back `Limited delete is not supported by this JDBC dialect.` and claim no affected rows, while an `update entities` written without a limit comes back `Limited update ...`. So on that type, leaving the limit out is not a workaround: act on one key at a time with `delete one entity ... by id` / `update one entity ... by id`, or use a type whose dialect has the spelling. See ["Limited delete is not supported by this JDBC dialect."](troubleshooting.md#limited-delete-is-not-supported-by-this-jdbc-dialect).
+On a generic `"JDBC"` connection, `update entities` and `delete entities` are refused even without `with limit`. Use the `by id` form for individual rows, or a supported connection type for multi-row operations. See [Troubleshooting](troubleshooting.md#limited-delete-is-not-supported-by-this-jdbc-dialect).
 
 ## Limits
 

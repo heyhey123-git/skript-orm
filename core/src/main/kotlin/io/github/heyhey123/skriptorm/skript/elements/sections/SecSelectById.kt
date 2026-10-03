@@ -11,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Entity By ID")
-@Description("Selects one row by its registered primary-key value and stores it by column name, such as {_user::name}. It does not accept where. Selects always wait and expose failures as the last database error.")
+@Description("Selects the row with the given primary-key value. Columns are stored by name, such as {_user::name}. This form does not accept a where block. The next line runs after the query finishes. Check last database error for failures.")
 @Example(
     """select entity from table "users" by id {_id} and store the result in {_user::*}
 send "%{_user::name}%"

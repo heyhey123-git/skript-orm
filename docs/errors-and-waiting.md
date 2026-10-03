@@ -2,7 +2,7 @@
 
 [简体中文](errors-and-waiting.zh-CN.md) | **English**
 
-Every database statement waits for its operation to finish before subsequent statements run. Local variables retain their values during the wait, and failures are recorded in `last database error`. Database operations within a single trigger execution therefore run in the order they are written; writes do not finish silently after later statements have already run.
+Each database operation finishes before the next statement in the same trigger runs. Local variables keep their values during the wait. If an operation fails, the reason is available in `last database error`.
 
 ## What waits
 
@@ -15,7 +15,7 @@ Every database statement waits for its operation to finish before subsequent sta
 | `make ... the default` | always | Includes closing the connection that previously held that role. |
 | `select one`, `select many`, `select page`, `select ... by id` | always | Continues after the query finishes. |
 | `insert`, `insert many`, `insert ... if absent`, `update`, `upsert`, `delete` | always | Subsequent statements run after the write finishes. |
-| `disconnect ...` | following line waits | Runs asynchronously; the trigger resumes after completion. No form reports success. |
+| `disconnect ...` | yes | The trigger resumes after disconnection finishes. |
 
 Like other delayed Skript operations, these statements pause the current trigger and resume it later. **Waiting does not block the server thread**, so other players and scripts continue normally.
 
@@ -39,7 +39,7 @@ send "Stored." to console
 - An unset error is displayed as `<none>`. Test it with `is set`, rather than comparing the displayed text.
 - Failures set the error. Outside a transaction, success leaves it unset, which you can use as a success check. Inside a transaction, an earlier error may still be present.
 - **Failure does not stop the trigger.** Subsequent statements still run, so the examples check the error and explicitly `stop`. Do the same when later operations depend on the write succeeding.
-- Failures are also reported as a Skript runtime error, through Skript's own channel: the console names the script, the syntax, the line number and the line itself, and players with `skript.see_runtime_errors` are told about it. When one line keeps failing, Skript applies its frame limits to those console lines (see `runtime errors.*` in its configuration); what a script reads is always in `last database error`, unaffected.
+- Skript also reports failures as runtime errors in the console and to players with `skript.see_runtime_errors`. Skript may limit repeated console messages, but the script can still read every failure through `last database error`.
 
 ## Writing and then reading
 

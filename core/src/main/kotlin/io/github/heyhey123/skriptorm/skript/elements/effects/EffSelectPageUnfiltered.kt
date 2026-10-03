@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Page Without A Filter")
-@Description("Selects a one-based page with positive size, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. Results use page-local row-index and column-name keys, pagination requires a registered primary key, and a page holds at most 5000 rows. Selects always wait.")
+@Description("Selects an unfiltered page by its one-based page number and positive page size. Results are numbered from 1 within the page, such as {_users::1::name}. The table needs a registered primary key, and a page may contain at most 5000 rows. Use this form without a colon; use the section form for a where block.")
 @Example(
     """select page 2 with size 20 from table "users" and store the results in {_page::*}
 send "%{_page::1::name}%"

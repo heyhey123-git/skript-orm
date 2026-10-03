@@ -45,13 +45,9 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 ## How many rows one read may store
 
-One read stores at most **5000 rows**. A result larger than that is **refused**: nothing is stored, the result variable is cleared, and `last database error` names the ceiling and says what to do about it.
+A read can store at most **5000 rows**. If more rows match, it clears the result variable and sets `last database error`; it never returns a partial result.
 
-The ceiling is not about memory. Skript writes a list variable one index at a time, on the server thread, so the size of a result is spent out of the tick budget of the server itself: a hundred thousand rows of a six-column table written that way is about a second of the server stopped, most of which is the writing. 5000 rows is the largest result that stays inside a hitch nobody notices — measured, about fifty milliseconds of a six-column table — and it is the same batch of values one write statement may bind — see [Writing rows](writing.md#how-many-rows-one-write-may-send). A result above ten thousand values is stored more cheaply than this: it is built off the server thread and attached in one step, which measured about a quarter less of that server-thread time, and on a Skript whose variable store differs from what that path needs it falls back to writing value by value.
-
-That the boundary sits where it does is an observation rather than a reading of the constant. On the benchmark server — the generic JDBC connection, which on the machine that ran it is SQLite — reads of 100, 500, 1000, 2500 and 5000 rows of a six-column table each stored every row they asked for, and in none of them did the longest tick inside the statement exceed a tick's own length; the same read at 10 000 rows stored nothing and was refused, with `select many read more than 5000 rows from table 'orm_bench_probe' and stored nothing.` The script's own wall clock over those reads was 50 to 100 milliseconds each. The observer's own floor is a tick, which is worth knowing before reading that as a cost of zero: the same run shows it reporting a block of 290 milliseconds as 250 milliseconds of overhang, and reporting nothing at all for anything smaller than a tick — see [what storing a result costs](#what-storing-a-result-costs).
-
-A refusal is preferred over a truncated result because the two cannot be told apart afterwards. A script handed the first 5000 rows of a table goes on to answer questions about rows it never saw, and the answer is wrong rather than missing.
+This limit protects the server thread. The query runs asynchronously, but Skript stores the result in variables on the server thread. In a benchmark with a six-column table, storing 5000 rows took roughly 36–47 ms of server-thread time; a 10,000-row read was refused. The cost depends on the number of values and the server's Skript installation. See [What storing a result costs](#what-storing-a-result-costs) and the write limit in [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 Narrow the result, or walk it a page at a time:
 
@@ -60,6 +56,9 @@ loop 100 times:
     select page loop-number with size 1000 from table "users" and store the results in {_rows::*}:
         where all:
             active = true
+    if last database error is set:
+        send "Read failed: %last database error%" to console
+        stop loop
     if {_rows::1::id} is not set:
         stop loop
     # ... use this page ...
@@ -67,19 +66,15 @@ loop 100 times:
 
 ### What storing a result costs
 
-The query runs off the server thread; storing its answer does not. Skript writes a list variable one value at a time, and only on the server thread, because the name of a variable may contain expressions that only that thread can resolve. Measured on this plugin's own test server, one value costs about 1.4 microseconds in a global variable (`{users::*}`), 1.1 in an ephemeral one (`{-users::*}`) and 1.0 in a local one (`{_users::*}`). A six-column result is six values per row, so 5000 rows is 30 000 values, about 47 milliseconds of server-thread time. **That is a cost to the server thread, not a lengthened tick, and the two are now reconciled.** A cost of that size fits inside the 50 milliseconds a tick has, and what a tick does with it was settled on the benchmark server by measuring a block whose size the script chose rather than one a plugin reported. A counted loop that held the same thread for 290 milliseconds came back as a 300-millisecond tick — 250 milliseconds of overhang — so the observer does see a tick that was lengthened; a block of about 50 milliseconds came back as 0 to 10, and an idle window as 20, which is its noise. Its floor is therefore one tick: work under 50 milliseconds cannot lengthen a tick whatever it costs, so a cost of 36 to 47 milliseconds and a lengthened tick are never both observable. The read this section describes — 5000 rows of six columns, 30 000 values, on the attaching path — stored every row with 90 to 110 milliseconds of wall clock and a longest tick of exactly 50. Values are what cost, not rows: 5000 rows of a two-column table cost about 15 milliseconds.
+Skript normally stores each result value separately on the server thread. On the benchmark server, this took about 1.0–1.4 microseconds per value, depending on the variable type. A six-column row contributes six values; storing 5000 such rows took about 47 ms. A two-column result of the same length took about 15 ms. These measurements describe work on the server thread, not a guarantee about tick length on another server.
 
-Where that time goes is worth knowing before trying to shrink it. About a quarter is persistence — serializing the change and queueing it for the save — together with the lock and the bookkeeping around the store, and the rest is Skript's own variable tree, which is what the store is for. Only the tree can be built somewhere else.
-
-**Above 10 000 values the result is built that way.** The tree is assembled on the thread that read the rows, and the server thread then attaches it in one step: it takes the write lock once, detaches what the variable held, and puts the new subtree in its place. Measured, that is about a quarter less of that server-thread time — 30 000 values went from 47 to 36 milliseconds, and 9000 from 14.9 to 12.8 — while below the threshold the two ways measure the same (600 values: 1.25 milliseconds against 1.35). That is why there is a threshold rather than one way of storing everything.
-
-The path has conditions, and the plugin checks them on a real result instead of assuming them:
+For results above **10,000 values**, the plugin can build a global variable's value tree off-thread and attach it on the server thread. In the same test, this reduced server-thread time for 30,000 values from 47 ms to 36 ms. The optimization has these limits:
 
 - It applies to **global list variables**. A result stored in a local or ephemeral variable is written value by value.
-- The **first** result above the threshold after the server starts is written value by value. The technique depends on the running Skript's variable store looking a particular way, which the plugin confirms once before using it.
-- If it does not look that way — a different Skript version, or another plugin replacing the store — every result is written value by value. Nothing else changes and no setting has to be adjusted.
+- The **first** qualifying result after startup is stored value by value while the plugin checks compatibility with Skript's variable store.
+- If the store is incompatible, every result uses the ordinary value-by-value path. No configuration change is needed.
 
-The properties of the store are kept either way: the change still notifies persistence for every value, in the order the values arrived, so a saved variable and a variable in memory do not drift apart.
+Both paths still notify Skript's persistence layer about each value in order.
 
 ## Select by id
 
@@ -129,6 +124,9 @@ After confirming the query succeeded, check a non-NULL column such as the primar
 select one entity from table "users" and store the result in {_user::*}:
     where all:
         name = arg-1
+if last database error is set:
+    send "Lookup failed: %last database error%" to sender
+    stop
 if {_user::id} is not set:
     send "No such user." to sender
     stop
@@ -136,7 +134,7 @@ if {_user::age} is not set:
     send "That user has no age stored." to sender
 ```
 
-Check `last database error` first. The two checks above distinguish a missing row from a NULL column only after a successful query; an unset variable alone does not rule out failure.
+Always check `last database error` before treating an unset key as a missing row or a NULL column.
 
 ## Failures
 

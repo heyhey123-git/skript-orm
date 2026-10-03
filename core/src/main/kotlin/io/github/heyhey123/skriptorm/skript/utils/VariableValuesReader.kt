@@ -11,54 +11,43 @@ import org.skriptlang.skript.lang.converter.Converters
 /**
  * Reads the values of a write section from a Skript list variable.
  *
- * The accepted shapes mirror the select result format, so a value produced by a select section can
- * be written back without reshaping it:
+ * Accepts the same shape as select results, so selected rows can be written back directly:
  *
  * ```
  * {_row::columnName}                single row, keyed by column name
  * {_rows::rowIndex::columnName}     rows, keyed by one-based row index and column name
  * ```
  *
- * Skript stores a list variable as a nested map, where the scalar value of a node lives under the
- * `null` key of its branch. A level therefore holds rows when every value is itself a map, and a
- * single row when none of them is.
+ * Skript stores list variables as nested maps, with a node's scalar value under a `null` key.
+ * A level whose values are maps contains rows; a level of scalar values contains one row.
  *
- * Reading happens on the main thread so that local variables are still attached to the event. Values
- * are converted to the domain type of their column, which keeps the variable form as permissive as
- * the expression form used by a `values` block.
+ * Reading happens on the main thread while local variables are attached to the event. Values are
+ * converted to their column types, as they are for a `values` block.
  *
  * ## Missing columns and SQL NULL
  *
- * A Skript variable cannot hold null: assigning null to a key removes it. A list variable therefore
- * cannot distinguish a column that the author left out on purpose from one that was meant to be
- * stored as NULL, because both appear as an absent key. The reader does not guess between them and
- * never invents a value for an absent key on its own.
+ * Assigning null to a Skript variable removes its key. A list variable therefore cannot express
+ * the difference between an omitted column and an explicit SQL NULL. This reader leaves absent
+ * keys absent.
  *
- * Which columns a write then touches is decided by the operation, not by this reader:
+ * Each write operation decides how to handle missing columns:
  *
  * - `insert` uses exactly the supplied columns, so an omitted column is absent from the statement
  *   and the database default applies.
- * - `update`, `update by id` and `upsert by id` treat the supplied columns as a patch: an omitted
- *   column is not part of the `SET` list and keeps its stored value, and an omitted column is not
- *   part of the `ON DUPLICATE KEY UPDATE` list either.
+ * - `update`, `update by id`, and `upsert by id` change only supplied columns. Omitted columns
+ *   stay out of both `SET` and `ON DUPLICATE KEY UPDATE`.
  * - `insert many` is the one exception, described below.
  *
- * Writing a SQL NULL is therefore impossible through a list variable. The only form that expresses
- * it is the literal `null` in a `values` block, as in a body containing `nickname: null`, which is
- * resolved to a present key holding null. A dedicated full-row replacement mode that would read an
- * absent key as null is deliberately not implemented; if it is ever added it has to be an explicit
- * opt-in, because the same input would otherwise silently clear every column that a dynamic
- * variable happens to miss.
+ * To write SQL NULL, use an explicit `null` in a `values` block, such as `nickname: null`.
+ * Treating every missing key as null would silently clear columns from dynamic variables, so
+ * this reader does not support full-row replacement.
  *
  * ## Why multiple rows are filled differently
  *
- * A single statement binds one column list, so rows taken from a variable must agree on their
- * columns before they reach the query layer. A batch read therefore gives every row the union of the
- * columns the variable supplies, in the order they first appear, and writes null wherever a row
- * omitted one. This applies only when more than one row is present, which is exactly the `insert
- * many` payload. A select section leaves the key of a NULL column unset, so filling the union is what
- * makes a select-many result round trip unchanged. A single row is left sparse so that the patch
- * semantics above stay intact.
+ * One statement binds one column list. For multiple rows (`insert many`), this reader collects
+ * the union of supplied columns in first-seen order and fills missing values with null. That
+ * also allows a select-many result with unset NULL keys to be inserted again. A single row
+ * remains sparse so an update changes only its supplied columns.
  */
 object VariableValuesReader {
 
@@ -90,12 +79,7 @@ object VariableValuesReader {
 
         if (!nested) return listOf(readRow(variable, table, raw))
 
-        // The union of the columns the batch supplies, in the order they first appear, resolved to the
-        // table's columns once per column instead of once per value, and the source rows kept aside so
-        // that the rows can be built in the same pass. Filling a batch used to be a second pass over
-        // finished rows, which cost about a quarter of what reading the batch costs; measured on a
-        // six-column table, 30000 values went from about 13ms to about 10ms and 120000 from about 52ms to
-        // about 40ms.
+        // Resolve each distinct column once, then build rows against the shared column set.
         val sources = ArrayList<Map<*, *>>(entries.size)
         val columns = LinkedHashMap<String, Column<*>>()
         for (entry in entries) {
@@ -116,14 +100,12 @@ object VariableValuesReader {
         for ((index, source) in sources.withIndex()) {
             val row = LinkedHashMap<String, Any?>(columns.size)
             if (index == 0) {
-                // The query layer takes the column list of the statement from the first row, so this
-                // row is written in the batch's own column order.
+                // The query layer takes the statement's column order from the first row.
                 for ((columnName, column) in columns) {
                     row[columnName] = convert(variable, column, source[columnName])
                 }
             } else {
-                // Every other row is written from its own keys, and only looks the union up for the
-                // columns it left out, which is what a round trip of a NULL column leaves behind.
+                // Preserve each row's supplied values and fill columns it omitted with null.
                 for ((key, value) in source) {
                     val columnName = key as String
                     row[columnName] = convert(variable, columns.getValue(columnName), value)
@@ -155,9 +137,8 @@ object VariableValuesReader {
     }
 
     /**
-     * Rejects a level that holds a scalar of its own. Skript keeps such a value under the `null` key
-     * of the branch, and because a row and its parent row index are stored the same way, that value
-     * cannot be told apart from a column.
+     * Rejects scalar values stored alongside keys. Skript stores such values under a `null` key,
+     * which cannot be interpreted as a column name or row index.
      */
     private fun requireKeysOnly(variable: Variable<*>, source: Map<*, *>) {
         require(source.keys.none { it == null }) {
@@ -173,17 +154,14 @@ object VariableValuesReader {
     ): Any? {
         if (value == null) return null
 
-        // A compound from SkBee belongs to a live object and only means what it meant when the script
-        // named it; normalising replaces it with a detached compound holding the same data. Skript's
-        // converters cannot be asked to do this, because it would mean converting between two classes
-        // that belong to different plugins.
+        // Detach SkBee compounds from their source objects before the write. Skript's converters
+        // cannot convert directly between classes owned by different plugins.
         val compound = NbtSupport.normalize(value)
         if (NbtSupport.isNbt(compound)) return compound
 
         val domainType = column.type.domainType
         if (NumericValues.isNumeric(domainType)) {
-            // Read as a number and narrowed here rather than by Skript's converter, which would turn a
-            // value the column cannot hold into one it can without saying so. See [NumericValues].
+            // Narrow here so out-of-range values are rejected instead of silently converted.
             val number = Converters.convert(value, Number::class.java)
                 ?: throw IllegalArgumentException(
                     "The value of '${column.name}' in $variable cannot be read as a number."

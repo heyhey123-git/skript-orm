@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Many Entities Without A Filter")
-@Description("Selects every row using row-index and column-name keys such as {_users::1::name}, for the case with no where block. Written without a colon, because a section with no body is what Skript warns about. Use the section form when a filter is needed. A result of more than 5000 rows is refused and stores nothing, because storing it would stop the server while the variable is written. Selects always wait and expose failures as the last database error.")
+@Description("Selects all rows into numbered list entries such as {_users::1::name}. Use this form without a colon; use the section form for a where block. Results over 5000 rows are rejected without storing a partial list. The next line runs after the query finishes. Check last database error for failures.")
 @Example(
     """select many entities from table "users" and store the results in {_users::*}
 send "first: %{_users::1::name}%"

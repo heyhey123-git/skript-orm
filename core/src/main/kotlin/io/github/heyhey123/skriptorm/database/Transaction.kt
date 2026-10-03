@@ -13,15 +13,11 @@ import java.util.concurrent.atomic.AtomicReference
 /**
  * One open transaction on one connection.
  *
- * A transaction owns a connection from the moment it begins until it commits or rolls back, and every
- * statement written inside it runs on that connection through [queries]. Who ends it is not always the
- * script: the timeout below, a disconnect, and plugin shutdown all end transactions on their own. That
- * is why the state here is the authority and a script that resumes afterwards is not: a continuation
- * that arrives too late finds a transaction which is no longer active and does nothing.
+ * Every statement runs through [queries] on the same pinned connection until commit or rollback.
+ * A timeout, disconnect, or plugin shutdown may end the transaction before the script resumes;
+ * subsequent statements then see an inactive transaction.
  *
- * The lease a [Database] hands out for the whole transaction is released once, in [finish], whichever
- * way the transaction ended. Without that, a script that errored inside a transaction would hold a
- * pooled connection until the server restarted.
+ * [finish] releases the [Database] lease exactly once, regardless of how the transaction ends.
  */
 abstract class Transaction protected constructor(
     /** The database this transaction belongs to, and the one it holds a lease on. */
@@ -50,9 +46,8 @@ abstract class Transaction protected constructor(
     private var watchdog: Job? = null
 
     /**
-     * The first thing that went wrong, which is also what a script is told after a rollback. The first
-     * one is kept on purpose: a later statement failing because the transaction is already rollback-only
-     * says nothing about the cause.
+     * The first failure reported to the script after rollback. Later errors may result from the
+     * transaction already being rollback-only, so they must not replace the original cause.
      */
     @Volatile
     var failure: Throwable? = null
@@ -69,21 +64,16 @@ abstract class Transaction protected constructor(
         get() = stateRef.get() in TERMINAL
 
     /**
-     * Whether the rollback this transaction ran cannot be trusted to have undone everything the pinned
-     * connection saw.
-     *
-     * Set when [doRollback] fails. A driver that refuses a rollback while a statement is in flight says
-     * so by throwing, and the work that statement was doing is then known to be neither committed nor
-     * undone. Read together with [hasStatementInFlight] through [mustDiscardConnection].
+     * Whether [doRollback] failed, leaving the outcome uncertain. Combined with
+     * [hasStatementInFlight] by [mustDiscardConnection].
      */
     private var undoIsUncertain = false
 
     /**
      * Whether the pinned connection may still be running a statement from this transaction.
      *
-     * A statement still running when the deadline passes can land after the rollback, and restoring
-     * automatic commits on that connection on the way out commits exactly that work. An implementation
-     * that can tell says so here; the default answers for implementations that cannot.
+     * A statement that finishes after rollback may be committed when automatic commits are restored.
+     * Implementations that can detect in-flight statements override this method.
      */
     protected open fun hasStatementInFlight(): Boolean = false
 
@@ -111,13 +101,8 @@ abstract class Transaction protected constructor(
     }
 
     /**
-     * Keeps [error] as this transaction's first failure, or attaches it to that one when something failed
-     * before it.
-     *
-     * A script is told the first failure, because that is the one that explains the outcome, and a later
-     * one is not allowed to replace it. It is not dropped either: a rollback that failed after a statement
-     * did is recorded as suppressed, so the reason the connection had to be thrown away can be read from a
-     * log rather than guessed at.
+     * Keeps [error] as the first failure, or suppresses it under an earlier failure. This preserves
+     * the cause reported to the script while retaining later rollback errors for diagnostics.
      */
     private fun record(error: Throwable) {
         val first = failure
@@ -147,8 +132,8 @@ abstract class Transaction protected constructor(
      * Commits the transaction. Only the section that opened it does this, and only when the script
      * reached the end of its body.
      *
-     * A failure here means the outcome is unknown rather than "nothing was written": the server may
-     * have applied the transaction and lost the answer. It is never retried for that reason.
+     * If commit fails, the server may still have applied the transaction. The outcome is unknown,
+     * so commit is not retried.
      */
     suspend fun commit() {
         if (!stateRef.compareAndSet(State.ACTIVE, State.COMMITTING)) {
@@ -186,8 +171,7 @@ abstract class Transaction protected constructor(
     internal suspend fun abort(reason: Throwable) {
         record(reason)
         if (!claimForRollback()) return
-        // Asked before the rollback, never after: a statement still running now is one the rollback may or
-        // may not have covered, and either way this connection is not one the pool can hand on as clean.
+        // Check before rollback: an in-flight statement may finish after it, leaving the connection unsafe to reuse.
         if (hasStatementInFlight()) undoIsUncertain = true
         try {
             doRollback()
@@ -202,10 +186,9 @@ abstract class Transaction protected constructor(
     /**
      * Arms the watchdog that rolls this transaction back when it stays open for longer than [timeout].
      *
-     * This is not a convenience. A script can stop mid-body without any notification Skript offers us
-     * (an exception in the body is caught by `TriggerItem.walk`), and a `wait` inside a transaction can
-     * park it for minutes. Without a deadline the pinned connection, and the lease that keeps the
-     * database from closing, would be held for the life of the server.
+     * Skript may catch an exception inside the body without notifying this transaction, and a `wait`
+     * may suspend it for minutes. The deadline prevents either case from holding the connection and
+     * its lifecycle lease indefinitely.
      */
     internal fun startWatchdog(scope: CoroutineScope) {
         watchdog = scope.launch {
@@ -237,7 +220,7 @@ abstract class Transaction protected constructor(
         }
     }
 
-    /** Ends the transaction exactly once: the watchdog stops, the connection goes back, the lease frees. */
+    /** Stops the watchdog, releases the connection, and returns the lifecycle lease. */
     private suspend fun finish(state: State) {
         stateRef.set(state)
         watchdog?.cancel()

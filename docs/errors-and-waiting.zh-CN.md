@@ -2,7 +2,7 @@
 
 **简体中文** | [English](errors-and-waiting.md)
 
-每条数据库语句都会等待操作完成，再执行后续语句。等待期间局部变量保持不变，失败原因记录在 `last database error` 中。因此，同一次 trigger 执行中的数据库操作按书写顺序执行，不会在后续语句已经运行后才完成写入。
+同一次触发中，每项数据库操作完成后才会执行下一条语句。等待期间局部变量保持不变；操作失败时，可从 `last database error` 读取原因。
 
 ## 哪些会等
 
@@ -15,7 +15,7 @@
 | `make ... the default` | 总是 | 包括关闭原先承担该角色的连接。 |
 | `select one`、`select many`、`select page`、`select ... by id` | 总是 | 查询完成后才继续。 |
 | `insert`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete` | 总是 | 写入完成后才执行后续语句。 |
-| `disconnect ...` | 下一行会等 | 异步执行，完成后 trigger 才继续；所有形式都不报告成功。 |
+| `disconnect ...` | 是 | 断开连接后，触发才会继续执行。 |
 
 这些语句与 Skript 中其他延迟操作一样，会暂停当前 trigger，稍后再执行后续语句。**等待不会阻塞服务器主线程**，其他玩家和脚本不受影响。
 
@@ -39,7 +39,7 @@ send "已保存。" to console
 - 没有错误时，显示值为 `<none>`。请用 `is set` 判断，不要比较显示文本。
 - 失败会设置错误信息；事务外成功的操作会留下空值，可据此判断成功。事务内仍须留意之前保留的错误。
 - **失败不会终止 trigger。** 后续语句仍会执行，因此示例会主动检查错误并 `stop`。如果后续操作依赖本次写入成功，也应先做检查。
-- 失败也会作为 Skript 的运行时错误报出来，走的是 Skript 自己的那条通道：控制台会写明脚本、语法、行号以及那一行的内容，持有 `skript.see_runtime_errors` 权限的玩家会收到提示。同一行反复失败时，Skript 会按自己的帧限制合并这些输出（见其配置的 `runtime errors.*`）；脚本要读的那份始终在 `last database error` 里，不受影响。
+- Skript 也会将失败作为运行时错误输出到控制台，并通知拥有 `skript.see_runtime_errors` 权限的玩家。重复报错可能受到 Skript 的控制台输出限制，但脚本仍能通过 `last database error` 读取每次失败的原因。
 
 ## 先写后读
 

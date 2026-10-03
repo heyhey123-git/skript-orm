@@ -1,8 +1,4 @@
-# What the element layer does when there is far more to write than one statement may carry, and when a write
-# is taken away part-way through.
-#
-# One element per file is the rule here; this file holds one subject instead — a write under load, and a
-# write that does not survive to the end — and each case still reports under its own name.
+# Exercises large writes and a transaction interrupted by its timeout.
 #
 # The three write cases are one experiment, and they differ only in the load they put on one statement:
 #
@@ -11,44 +7,24 @@
 #   4000   6         24000    no       all 4000 rows stored
 #   12000  6         72000    yes      all 12000 rows stored
 #
-# A statement binds at most 30 000 values, so the third write is sent as several statements and the first two
-# are not. Measured on Skript 2.16.2 over SQLite through a generic connection, all three stored every row they
-# were asked for, and each case counts its rows back out of the table because a statement's own count and the
-# rows it stored are two different claims.
+# A statement binds at most 30,000 values. The third case crosses that limit and is split; each
+# case records both the affected-row count and the rows read back from the table.
 #
-# Two wrong answers from the first attempts at this file are worth keeping, because both of them read as a
-# plugin defect. Counting 12 000 six-column rows with one `select many` was refused: 72 000 values is past the
-# read ceiling, which the row-ceiling probe checks for on purpose. Counting a page with `size of` reported 0
-# for a page that held 5000 rows, every one of them present under its index — which is Skript's rule for any
-# list of sub-lists rather than anything this plugin stores, as elements/34-result-size.sk establishes with a
-# script-built control of the same shape. So the count-back pages, carries a `where` block like every other
-# successful read in this suite, and is read by index rather than by size.
+# Count-back uses pages to stay below the read limit. Row keys are checked directly because Skript's
+# `size of` returns zero for a list of nested rows; see 34-result-size.sk.
 #
-# The interrupted write asserts three answers separately and reports all three, because the run that first
-# carried it (d0d86a6) failed on MySQL, PostgreSQL and MongoDB with a bare `rowsAffected=-1` that could not
-# say which answer was wrong: whether the row the timed-out transaction inserted is still there (read back by
-# its key, so a duplicate key cannot hide the answer), whether the connection takes a write on an unused key
-# afterwards, and whether the key the transaction used is free. On the file backend the earlier form passed,
-# and it still does in this form; the three external backends are expected to keep failing until the
-# cancellation path is fixed.
-#
-# What an earlier run of this file also established: the write was first spelled `insert {list::*} into
-# table ...`, which is not the form this plugin accepts. Skript dropped the line without a word — the count
-# kept its sentinel and the table stayed empty. The form is `insert many {list::*} into table ...`, which the
-# benchmark script and the row-ceiling probe both use. A transaction body left with `exit` did not reach the
-# lines after it before the suite's 60-second guard stopped the run either, so the case below uses the
-# documented timeout, which is deterministic.
+# The timeout case checks three outcomes independently: whether the inserted row was rolled back,
+# whether the connection accepts a later write, and whether the original key is free.
 
 on load:
     set {skriptorm::selftest::started::stress} to true
 
-    # Every other element reports on the first tick, and a connection made before that would be the default
-    # their unqualified statements resolve to.
+    # Let earlier element tests finish before this connection can become the default.
     wait 6 seconds
 
     create a connection named "stress" to database "JDBC" with properties:
         driver: "org.sqlite.JDBC"
-        # The same two pragmas as the other probes: this file is a throwaway under `plugins/Skript`.
+        # The database file is disposable and uses the same performance settings as other probes.
         url: "jdbc:sqlite:plugins/Skript/stress-probe.db?synchronous=OFF&journal_mode=MEMORY"
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL stress connect: %last database error%"
@@ -90,9 +66,7 @@ on load:
         select page 3 with size 5000 from table "orm_stress_narrow" and store the results in {stress::narrow::page3::*}:
             where all:
                 id > 0
-    # Counted by index, not with `size of`: the rows are stored under their indices, which is what the
-    # ceiling probe reads and what these pages are checked by, while `size of` over the same result read 0
-    # for a page that held 5000 rows — measured here, in the run that also showed every page index present.
+    # Check page boundaries by index; `size of` does not count nested result rows.
     set {_narrow::page1} to 0
     if {stress::narrow::page1::5000::id} is set:
         set {_narrow::page1} to 5000
@@ -123,9 +97,7 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL stress batch: the pages hold %{_narrow::page1}% + %{_narrow::page2}% + %{_narrow::page3}% rows, not 12 000"
     log "SKRIPTORM_SELFTEST detail: stress batch -> error=%{_narrow::error}% valuesAsked=12000 rowsReported=%{_narrow::rows}% rowsPaged=%{_narrow::paged}%"
 
-    # The same shape of write with six columns per row and 4000 rows: 24 000 values, still inside the budget,
-    # so this too is one statement. It is here to separate "six columns at once" from "split", which the case
-    # below cannot tell apart on its own.
+    # Six columns and 4,000 rows remain below the 30,000-value statement limit.
     loop 4000 times:
         set {stress::wide::%loop-number%::id} to loop-number
         set {stress::wide::%loop-number%::name} to "row"
@@ -154,10 +126,8 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL stress columns: the table holds more than 4000 rows"
     log "SKRIPTORM_SELFTEST detail: stress columns -> error=%{_wide::error}% valuesAsked=24000 rowsReported=%{_wide::rows}% rowsPaged=%{_wide::page1}%"
 
-    # 12 000 rows of six columns is 72 000 values, more than twice the 30 000 a statement may bind, so this
-    # one is sent as several statements. It reports every row it was asked for and stores none of them; that
-    # is the defect this case documents, and the count below is deliberately not asserted as correct. When
-    # the write is fixed the numbers change and this case has to be re-measured rather than quietly pass.
+    # Six columns and 12,000 rows exceed the statement limit. Report the split write's affected-row
+    # count and stored rows for diagnosis; this case does not currently assert their exact totals.
     loop 12000 times:
         set {stress::split::%loop-number%::id} to loop-number
         set {stress::split::%loop-number%::name} to "row"
@@ -193,24 +163,15 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL stress split: the table holds more than 12 000 rows"
     log "SKRIPTORM_SELFTEST detail: stress split -> error=%{_split::error}% valuesAsked=72000 rowsReported=%{_split::rows}% rowsPaged=%{_split::paged}%"
 
-    # A transaction that is not allowed to finish: the timeout rolls it back, and what it wrote must be
-    # gone. This case failed on MySQL, PostgreSQL and MongoDB in the run of d0d86a6 that first carried it,
-    # with `rowsAffected=-1`, while the file backend here passed. `-1` is the sentinel the follow-up insert
-    # starts its count at, so that statement's store clause never ran: either the key was still occupied, or
-    # the statement never reached the database. The earlier form could not tell those apart, and they are
-    # different faults — a rollback that did not undo the plugin's own write, against a statement refused
-    # before it ran — so the questions are now asked separately, and no insert is allowed to answer a
-    # question a read can answer:
+    # The timeout should roll back the inserted row. Check these separately so a failed follow-up
+    # insert does not obscure whether rollback or connection recovery failed:
     #
     #   1. is the row the timed-out transaction inserted still there?
     #   2. can this connection take a write at all after the timeout?
     #   3. is the key free, which is what the timeout promises?
     #
-    # The insert inside the transaction stores its own count as well, so a run can tell "the write happened
-    # and survived" from "the write never happened". The code path says the insert runs on the transaction's
-    # pinned connection (EffInsertOneFromVariable -> DatabaseWork.Target.withQueries ->
-    # JdbcTransaction.queries, built on the connection JdbcTransaction.doRollback rolls back), which is why
-    # question 1 is the one that separates a broken promise from a refusal.
+    # Preserve the first insert's count to distinguish a write that never ran from one that survived
+    # the rollback.
     set {_cancel::key} to 900001
     set {_cancel::inserted} to -1
     database transaction on connection "stress" with timeout 5 seconds:
@@ -220,8 +181,7 @@ on load:
         wait 8 seconds
     set {_cancel::error} to last database error
 
-    # 1. The row, read back by its key. A read is not refused for a duplicate key, so its answer is about
-    #    the rollback rather than about the insert that follows.
+    # 1. Read the row by key to check the rollback independently of later inserts.
     in connection "stress":
         select entity from table "orm_stress_narrow" by id {_cancel::key} and store the result in {_cancel::row::*}
     set {_cancel::readError} to last database error
@@ -229,8 +189,7 @@ on load:
     if {_cancel::row::1::id} is set:
         set {_cancel::found} to {_cancel::row::1::id}
 
-    # 2. A write on a key nothing else uses. If this is refused, the timeout left the connection unable to
-    #    take statements, which is a different fault from a key that was not freed.
+    # 2. Write to an unused key to check whether the connection still accepts statements.
     set {_cancel::fresh} to -1
     in connection "stress":
         insert one entity into table "orm_stress_narrow" and store affected rows in {_cancel::fresh} and wait:
@@ -238,7 +197,7 @@ on load:
                 id: 900002
     set {_cancel::freshError} to last database error
 
-    # 3. And the question the case was written for: the key the timed-out transaction used.
+    # 3. Reuse the key from the timed-out transaction.
     set {_cancel::rows} to -1
     in connection "stress":
         insert one entity into table "orm_stress_narrow" and store affected rows in {_cancel::rows} and wait:

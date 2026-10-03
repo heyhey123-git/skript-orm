@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Rollback Database Transaction")
-@Description("Rolls back the database transaction the script is inside and leaves its section, so the statements after the section run on the connection again. Can only be written inside a 'database transaction' section. Failures are reported as a runtime error and exposed as the last database error.")
+@Description("Rolls back the current database transaction and exits its section. Execution continues after the section using the same connection. This effect can only be used inside database transaction. Check last database error for failures.")
 @Example(
     """database transaction:
     update one entity in table "accounts" by id {_from} and wait:

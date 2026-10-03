@@ -1,10 +1,8 @@
 name: Release
 
-# Manual, and only from the default branch. The tag it creates points at the commit this run built
-# and tested, so a release cannot end up naming a commit that was never verified.
+# Run manually from the default branch. The release tag points to the commit built and tested here.
 #
-# What the release says about itself comes from CHANGELOG.md: this workflow publishes the section for the
-# version in gradle.properties and refuses to publish without one, so a version cannot go out undescribed.
+# Release notes come from the CHANGELOG.md section for the version in gradle.properties.
 # Editing the notes of a release that is already published is `./gradlew releaseNotes` followed by
 # `gh release edit v<version> --notes-file build/release-notes.md`.
 on:
@@ -32,8 +30,7 @@ jobs:
 
       - uses: ./.github/actions/prepare-build
 
-      # The version is the one in the repository, not an input: a release records what was committed,
-      # and refusing a snapshot keeps a development build from being published as a release.
+      # Release the committed version and reject development snapshots.
       - name: Read and check the version
         id: version
         run: |
@@ -58,21 +55,15 @@ jobs:
             echo "::error::tag v$version already exists."
             exit 1
           fi
-          # Asked here rather than only where the notes are written, so a release with nothing written
-          # about it fails before the build instead of after it.
+          # Check for release notes before starting the build.
           if ! grep -q "^## \[$version\]" CHANGELOG.md; then
             echo "::error::CHANGELOG.md has no '## [$version]' section. Write what this release changes first."
             exit 1
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      # What a release can run without provisioning a database server, on the exact commit about to be
-      # tagged: the unit tests, the Skript-layer integration tests, and the real Paper server test in the
-      # mode that starts no external server — the jar being published is the one that test just drove.
-      #
-      # This is not all of what ci.yml runs. `:generic-jdbc-implementation:integrationTest` is missing, and
-      # so are its PostgreSQL and MongoDB counterparts: each needs a container or a server, which the jobs
-      # in ci.yml provide for them and this step does not.
+      # Verify the release jar with unit, Skript integration, and Paper server tests. Database
+      # integration tests run separately in ci.yml, where their servers are available.
       - name: Build and verify
         run: ./gradlew clean test :core:integrationTest serverTest --stacktrace
 
@@ -86,9 +77,7 @@ jobs:
           fi
           sha256sum "$jar" | tee "$jar.sha256"
 
-      # The release body comes from CHANGELOG.md, through the same task a person runs to correct a release
-      # that is already published: one extraction, so the file and the release page cannot disagree. It
-      # fails on a missing or empty section, which is what the version check above asks for early.
+      # Extract the release body from CHANGELOG.md with the shared releaseNotes task.
       - name: Write the release notes
         run: ./gradlew releaseNotes --stacktrace
 

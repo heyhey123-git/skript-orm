@@ -3,154 +3,127 @@ package io.github.heyhey123.skriptorm.queries
 import io.github.heyhey123.skriptorm.condition.WhereClause
 
 /**
- * Queries factory interface for creating different types of query objects.
- *
+ * Creates backend-specific queries from the addon's common query operations.
  */
 interface Queries {
 
     /**
-     * The type name a script connected with, for messages that have to name the backend — such as the
-     * refusal a raw statement of the wrong kind meets.
-     *
-     * It is the name from [io.github.heyhey123.skriptorm.database.DatabaseFactory.typeName], not a class
-     * name, because it is the name the script wrote and the only one it can act on. It names the backend;
-     * it is never what decides whether a statement is accepted.
+     * The backend name used in script-facing messages. This is the connection type supplied by the
+     * script, not an implementation class name.
      */
     val typeName: String
 
     /**
-     * The shape of this backend's own raw entry point, or null when it has none.
-     *
-     * This is the whole of what the core knows about backends: it never asks what kind of database it is
-     * talking to, and it enumerates nothing. An implementation that takes raw SQL overrides [rawQuery] and
-     * [rawUpdate]; one that takes command documents overrides [rawCommand]. The methods that are left
-     * alone refuse, and this value is what lets the refusal name the alternative that does exist.
+     * The raw statement format this backend accepts, or null if it accepts none. Used to explain
+     * unsupported calls to [rawQuery], [rawUpdate], or [rawCommand].
      */
     val rawForm: RawForm?
         get() = null
 
     /**
-     * Selects an entity by its unique identifier.
+     * Creates a query for one row identified by its primary key.
      *
-     * @param id The primary key of the entity to select.
-     * @return A SelectById query object.
+     * @param id primary key value
      */
     fun selectById(id: Any): SelectById
 
     /**
-     * Selects a single entity based on a specified condition.
+     * Creates a query for the first row matching [where].
      *
-     * @param where The WHERE clause defining the selection condition.
-     * @return A SelectOne query object.
+     * @param where optional filter
      */
     fun selectOne(where: WhereClause?): SelectOne
 
     /**
-     * Selects multiple entities based on a selection condition.
+     * Creates a query for all rows matching [where].
      *
-     * @param where The WHERE clause defining the selection condition.
-     * @return A SelectMany query object.
+     * @param where optional filter
      */
     fun selectMany(where: WhereClause?): SelectMany
 
     /**
-     * Selects multiple entities, asking the server for at most [limit] rows.
+     * Creates a query that asks the server for at most [limit] matching rows. A caller can request
+     * one row beyond its storage limit to detect an oversized result without fetching the rest.
      *
-     * The ceiling belongs to the server rather than to this side: a caller that would refuse a result larger
-     * than it can store has to learn that the result is larger *before* the rows are on their way, and a
-     * caller that asks for one row more than it accepts can tell the two cases apart by reading [limit] rows.
-     *
-     * @param where The WHERE clause defining the selection condition.
-     * @param limit The most rows to read.
-     * @return A SelectMany query object carrying the ceiling.
+     * @param where optional filter
+     * @param limit maximum rows returned by the server
      */
     fun selectMany(where: WhereClause?, limit: Int): SelectMany
 
     /**
-     * Selects a page of results based on pagination parameters and an optional condition.
+     * Creates a query for one page of matching rows.
      *
-     * @param pageSize The number of items per page
-     * @param pageIndex The index of the page to select (1-based)
-     * @param where The WHERE clause defining the selection condition
-     * @return A SelectPage query object.
+     * @param pageSize rows per page
+     * @param pageIndex one-based page number
+     * @param where optional filter
      */
     fun selectPage(pageSize: Int, pageIndex: Int, where: WhereClause?): SelectPage
 
     /**
-     * Inserts a single record with the specified values.
+     * Creates an insert for one row.
      *
-     * @param values A map of column names to their corresponding values for the new record.
-     * @return An InsertOne query object.
+     * @param values column names and values to insert
      */
     fun insertOne(values: Map<String, Any?>): InsertOne
 
     /**
-     * Inserts multiple records with the specified values.
+     * Creates an insert for multiple rows.
      *
-     * @param valuesList A list of maps, each containing column names and their corresponding values for the new records.
-     * @return An InsertMany query object.
+     * @param valuesList one column-to-value map per row
      */
     fun insertMany(valuesList: List<Map<String, Any?>>): InsertMany
 
     /**
-     * Inserts a record if it does not already exist.
+     * Creates an insert that leaves an existing row with the same key untouched.
      *
-     * @param values A map of column names to their corresponding values for the new record.
-     * @return An InsertIfAbsent query object.
+     * @param values column names and values to insert
      */
     fun insertIfAbsent(values: Map<String, Any?>): InsertIfAbsent
 
     /**
-     * Updates records that match the specified condition.
+     * Creates an update for rows matching [where].
      *
-     * @param values A map of column names to their new values.
-     * @param limit The maximum number of records to be updated.
-     * @param where The WHERE clause to filter records to be updated.
-     * @return An Update query object.
+     * @param values column names and replacement values
+     * @param limit optional maximum number of rows to update
+     * @param where optional filter
      */
     fun update(values: Map<String, Any?>, limit: Int?, where: WhereClause?): Update
 
     /**
-     * Updates a record by its unique identifier.
+     * Creates an update for the row identified by [id].
      *
-     * @param id The primary key of the entity to update.
-     * @param values A map of column names to their new values.
-     * @return An UpdateById query object.
+     * @param id primary key value
+     * @param values column names and replacement values
      */
     fun updateById(id: Any, values: Map<String, Any?>): UpdateById
 
     /**
-     * Inserts or updates a record by its unique identifier.
+     * Creates an insert or update for the row identified by [id].
      *
-     * @param id The primary key of the entity to upsert.
-     * @param values A map of column names to their corresponding values.
-     * @return An UpsertById query object.
+     * @param id primary key value
+     * @param values column names and values to write
      */
     fun upsertById(id: Any, values: Map<String, Any?>): UpsertById
 
     /**
-     * Deletes records that match the specified condition.
+     * Creates a delete for rows matching [where].
      *
-     * @param limit The maximum number of records to be deleted.
-     * @param where The WHERE clause to filter records to be deleted.
-     * @return A Delete query object.
+     * @param limit optional maximum number of rows to delete
+     * @param where optional filter
      */
     fun delete(limit: Int?, where: WhereClause?): Delete
 
     /**
-     * Deletes a record by its primary key.
+     * Creates a delete for the row identified by [id].
      *
-     * @param id The primary key of the entity to delete.
-     * @return A DeleteById query object.
+     * @param id primary key value
      */
     fun deleteById(id: Any): DeleteById
 
     /**
      * Builds a raw SQL statement that returns rows.
      *
-     * The default refuses. An implementation that speaks SQL overrides it; one that does not has no way to
-     * send a statement it cannot construct, and says so by name — a script told "not supported by database
-     * 'MongoDB'" can act on that, while one told nothing at all cannot.
+     * Backends without raw SQL support throw an error naming the selected backend.
      *
      * @param statement the statement text, as the script wrote it
      * @param parameters the values to bind to its `?` placeholders, in order
@@ -170,7 +143,7 @@ interface Queries {
     /**
      * Builds a raw command for a document backend.
      *
-     * The default refuses, for the reason [rawQuery] gives; a document backend overrides it.
+     * Backends without raw command support throw an error naming the selected backend.
      *
      * @param command the command document, written as JSON text
      */
@@ -178,11 +151,7 @@ interface Queries {
         throw UnsupportedOperationException(rawRefusal("commands"))
 
     /**
-     * What a backend that cannot serve this kind of raw statement reports.
-     *
-     * It names the backend and the alternative that backend does take. The alternative comes from
-     * [rawForm], which the implementation declared, so this function knows no backends: it cannot go stale
-     * when one is added, and it never decides what a connection accepts.
+     * Names the backend and its supported raw format when a raw operation is unavailable.
      */
     private fun rawRefusal(kind: String): String {
         val alternative = when (rawForm) {

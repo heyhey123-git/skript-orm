@@ -2,13 +2,11 @@
 
 **简体中文** | [English](getting-started.md)
 
-从建立连接到写入、读取数据，本页会带你完成一份可运行的脚本。其余文档可在需要时查阅。
-
-前提是插件已经装好，见 [环境要求](../README.zh-CN.md#环境要求) 与 [安装](../README.zh-CN.md#安装)。
+本页从建立连接开始，逐步完成写入和读取数据的脚本。请先安装插件，见[环境要求](../README.zh-CN.md#环境要求)与[安装](../README.zh-CN.md#安装)。
 
 ## 1. 建立连接
 
-连接由脚本建立，配置文件里没有这一项：
+在脚本中建立连接：
 
 ```sk
 on load:
@@ -55,7 +53,7 @@ command /adduser <text> <integer>:
 
 写入会等待完成，因此下一行执行时，`last database error` 反映的就是本次操作。数据库返回的错误也会记录在这里，而不只是输出到控制台。无论是否写 `and wait`，每条语句都会等待；见 [错误与等待](errors-and-waiting.zh-CN.md)。
 
-`values` 中省略了 `id`，由数据库分配。如果后续操作需要这个 id，可以自行指定值并使用 `upsert`，见 [菜谱](cookbook.zh-CN.md)。
+`values` 中省略了 `id`，由数据库分配。插件不会返回自动生成的 id；如果脚本需要知道这个值，可以自行指定并使用 `upsert`，见[示例](cookbook.zh-CN.md)。
 
 ## 4. 读回来
 
@@ -106,6 +104,7 @@ on load:
         age: int, nullable
     if last database error is set:
         send "建表失败: %last database error%" to console
+        stop
 
 command /adduser <text> <integer>:
     trigger:
@@ -147,4 +146,4 @@ command /whois <text>:
 | 过滤、分页、按 id 查询 | [读取行](reading.zh-CN.md) |
 | 了解 `last database error` 何时被设置 | [错误与等待](errors-and-waiting.zh-CN.md) |
 | 存储物品、位置、日期、NBT compound | [类型](types.zh-CN.md) |
-| 排查没有报错却未生效的操作 | [排雷](troubleshooting.zh-CN.md) |
+| 排查没有报错却未生效的操作 | [故障排查](troubleshooting.zh-CN.md) |

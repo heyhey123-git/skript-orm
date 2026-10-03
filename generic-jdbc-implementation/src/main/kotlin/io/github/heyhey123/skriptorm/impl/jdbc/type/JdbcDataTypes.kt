@@ -31,8 +31,7 @@ import java.sql.JDBCType
 import java.util.UUID
 
 /**
- * Jdbc data types registry.
- *
+ * JDBC data type registry.
  */
 object JdbcDataTypes : DataTypes() {
 
@@ -110,9 +109,7 @@ open class UuidJdbcDataType : UuidDataType(), JdbcDataType<UUID> {
     override val defaultSize: Int = 16
     override val supportsSize: Boolean = true
 
-    // `BINARY(16)` is a fixed width rather than a capacity, so a wider column is not this storage with room
-    // to spare: the server pads what it returns to the full width, and the converter is handed 32 bytes for a
-    // value that is 16. The inherited exact answer is the right one, and it is deliberately not overridden.
+    // BINARY is fixed-width. A wider column pads the 16-byte UUID, so size matching must stay exact.
 }
 
 open class ItemStackJdbcDataType : ItemStackDataType(), JdbcDataType<ItemStack> {
@@ -129,11 +126,8 @@ open class LocationJdbcDataType : LocationDataType(), JdbcDataType<Location> {
     override val converter: ValueConverter<Location, ByteArray> = LocationJdbcConverter
 
     /**
-     * A serialized location measured 452 bytes for a location without a world, so the previous 255
-     * was smaller than a single value and MySQL rejected every insert with "Data too long for
-     * column"; `JdbcConverterRoundTripTest` now pins that invariant. The default leaves room for a
-     * world name, and a declared `VARBINARY` length costs nothing while it goes unused, so this errs
-     * large.
+     * Bukkit's serialized location can exceed 255 bytes even without a world. Reserve enough
+     * `VARBINARY` space for the location and its world name.
      */
     override val defaultSize: Int = 2048
     override val supportsSize: Boolean = true

@@ -1,43 +1,12 @@
-# What `size of` — and `loop` — answer about a result this plugin just stored, and why both are empty.
+# Checks how Skript counts and loops over a result stored as `{rows::index::column}`.
+# Skript treats each row as a nested list without a scalar value, so `size of {rows::*}` and
+# `loop {rows::*}` both yield zero even when individual row keys are present. The test checks
+# the same shape built directly in Skript, a copied result, and both ordinary and fast storage.
 #
-# The observation this file exists for: a page the plugin stored reported `size of` zero while every row was
-# readable under its index. The cause is in Skript, not in the plugin, and it covers iteration as well as
-# sizing. `Variable.size(Event)` counts the values held directly in the list and then subtracts every
-# sub-entry that is a map holding no scalar of its own:
+# Skript 2.16.2 also rejects `loop 1 to 20`. This test uses supported count and list loops to
+# walk row indices and verifies that a flat list loops normally.
 #
-#     int size = map.size();
-#     if (map.containsKey(null)) size--;                     // the list's own value, not an entry
-#     for (Object value : map.values())
-#         if (value instanceof Map<?, ?> sublist && !sublist.containsKey(null))
-#             size--;                                        // a sub-list is not a value
-#
-# A row is exactly that: `{result::1}` is a map of columns with no scalar of its own, so a result of rows
-# reports zero and iterates zero times, however it was stored — by the plugin, by its fast attach path, or by
-# the script itself. The two-level shape is what the reads document (`{_users::1::name}`), so this is the
-# shape every user has, and the answer to "how many rows did I read" is to walk the indices, which is what
-# this plugin's own benchmark and cookbook do.
-#
-# The second trap, and the one that costs a script its whole loop: **Skript has no `X to Y` range.** Not as a
-# loop and not as an expression. Measured on Skript 2.16.2, all four spellings are refused at load time:
-#
-#     loop 1 to 20:            -> Can't understand this loop: '1 to 20'
-#     loop 1 through 20:       -> Can't understand this loop: '1 through 20'
-#     loop from 1 to 20:       -> Can't understand this loop: 'from 1 to 20'
-#     set {_x::*} to 1 to 20   -> Can't understand this expression: '1 to 20'
-#
-# The last line is why no loop can take it: `1 to 20` is not an expression in this Skript, so what is missing
-# is not a loop pattern but the construct itself. Skript drops the line, loads the rest of the script, and
-# tells the script nothing, so a loop written that way counts zero while every line around it works. The
-# `can't understand` lines are what build.gradle.kts fails this test on, which is how the lead was settled; a
-# user has only the console. What does exist, and what this file asserts row by row: a count (`loop 20
-# times`, which sets `loop-number`), a list (`loop {indices::*}`, which sets `loop-value`), and a comma list
-# (`loop 1, 2, 3`) - so a range is walked by building the list, or by counting.
-#
-# The controls are what make that a measurement rather than a reading of the source, and they cover both
-# halves: a flat list the script built reports 20 and loops 20 times, the same two-level shape built by the
-# script reports 0 and loops 0 times, an index walk over the stored result counts 20, and a copy of the
-# result behaves like the result. The numbers are asserted, so if Skript's rule changes, or the plugin
-# changes the shape it stores, this case says so instead of the documentation quietly going stale.
+# Each result is checked by index as well, so an empty `size of` result cannot hide missing rows.
 
 on load:
     set {skriptorm::selftest::started::result-size} to true
@@ -88,38 +57,28 @@ on load:
         set {_mirror::%loop-number%::id} to loop-number
         set {_mirror::%loop-number%::name} to "row"
 
-    # Both halves of Skript's rule need a positive control each, or an empty answer proves nothing: `size of`
-    # and `loop` both have to work on a list that holds values.
+    # Confirm that ordinary flat lists still report their size and support iteration.
     set {_flatLooped} to 0
     loop {_built::*}:
         add 1 to {_flatLooped}
 
-    # The negative control for iteration: the same shape as a stored result, built by the script.
+    # Compare with the same nested shape built directly in Skript.
     set {_mirrorLooped} to 0
     loop {_mirror::*}:
         add 1 to {_mirrorLooped}
 
-    # Iterating the stored result, which is the same question asked of the plugin's own output.
+    # Iterate a result stored by the addon.
     set {_readLooped} to 0
     loop {rs::small::*}:
         add 1 to {_readLooped}
 
-    # The count the plugin's own scripts take, and the one the reads document: walk the row indices. The
-    # form is the one server-benchmark/skript/10-curve.sk counts with, down to `loop 20 times`, because
-    # `loop 1 to 20` counted nothing here while the same rows read back fine by index.
-    #
-    # The lead this file used to leave as a note is settled above and below: `loop 1 to 20` is not a loop
-    # Skript has, Skript drops the line at load time, and the body never ran once. Two loop forms that do
-    # exist walk the same stored rows here, and each reports three numbers rather than one - how many times
-    # its body ran, what its loop variable held, and how many rows the body found - because a single count
-    # cannot tell a line that was dropped from a body that ran and matched nothing.
+    # Walk the row indices with a supported count loop.
     set {_walked} to 0
     loop 20 times:
         if {rs::small::%loop-number%::id} is set:
             add 1 to {_walked}
 
-    # A control that owes nothing to any loop: the rows are readable at their indices, so whatever the forms
-    # below answer, the storage is the same under all of them.
+    # Check direct row access independently of loop behavior.
     set {_directly} to 0
     if {rs::small::1::id} is set:
         add 1 to {_directly}
@@ -139,11 +98,7 @@ on load:
         if {rs::small::%loop-number%::id} is set:
             add 1 to {_timesHits}
 
-    # Form two: a list the script built, walked as a list. `loop-value` is the iteration value.
-    #
-    # The obvious third form - `loop 1 to 20` with this same body - is deliberately absent, because Skript
-    # refuses it and this test fails the build on any line Skript cannot parse. That refusal is the finding,
-    # and the four spellings it was measured with are quoted in the header.
+    # Walk an explicit index list with `loop-value`.
     loop 20 times:
         set {_indices::%loop-number%} to loop-number
     set {_listRan} to 0
@@ -155,7 +110,7 @@ on load:
         if {rs::small::%loop-value%::id} is set:
             add 1 to {_listHits}
 
-    # And a copy, which is what a script does when it wants a list of its own to work with.
+    # Check whether copying the result changes Skript's list behavior.
     set {_copy::*} to {rs::small::*}
 
     # A result big enough for the fast attach path: 5000 rows of two columns, exactly 10 000 values.
@@ -164,13 +119,9 @@ on load:
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL result size big read: %last database error%"
 
-    # A comma list is a list too, and it is the one way to write a few literal values into a `loop` head
-    # without building a variable first. Measured rather than assumed: it parses, and it runs once per value.
-    # A range worth twenty of them would have to be written out, which is why the built list above is the
-    # shape this plugin's own scripts use.
+    # A short literal list is another supported loop form.
     set {_literalRan} to 0
-    # The conjunction is what keeps Skript quiet: a bare comma list logs "List is missing 'and' or
-    # 'or', defaulting to 'and'" on every run, one warning per job log for no new information.
+    # Include `and` to avoid Skript's warning about an incomplete list.
     loop 1, 2, and 3:
         add 1 to {_literalRan}
 
@@ -200,9 +151,7 @@ on load:
         log "SKRIPTORM_SELFTEST=FAIL result size: a copy of the result reported %size of {_copy::*}% instead of 0"
     if size of {rs::big::*} is not 0:
         log "SKRIPTORM_SELFTEST=FAIL result size: the fast path's result reported %size of {rs::big::*}% instead of 0"
-    # The loop forms, one assertion each, so a form that stops working names itself. The first is the control
-    # that makes the rest a measurement of the loop rather than of the storage: the rows are readable at their
-    # own indices with no loop involved.
+    # Assert direct access and each loop form separately to identify which behavior changed.
     if {_directly} is not 2:
         log "SKRIPTORM_SELFTEST=FAIL result size: the rows were readable at %{_directly}% of their 2 own indices, so the loop forms below are not what is being measured"
     if {_timesRan} is not 20:

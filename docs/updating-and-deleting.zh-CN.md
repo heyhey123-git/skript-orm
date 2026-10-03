@@ -66,7 +66,7 @@ delete entities from table "users" and wait
 
 空的 `where` 块则会在解析脚本时被拒绝，`delete` 和 `update` 都一样。确实要操作所有行时，请省略整个 `where` 块，例如 `delete entities from table "users"`；需要限制操作范围时，可加上 `with limit`。
 
-**但在通用 `"JDBC"` 连接上，这两种写法都不生效。** 无论写不写 `with limit`，`update entities` 与 `delete entities` 都会被拒绝——这是服务端测试实测的（`elements/31-statement-shape.sk`）：不写 `where` 也不写 limit 的 `delete entities from table "..." and wait`、加上 `where all:` 块的同一句、以及加上 `with limit 1` 的同一句，返回的都是 `Limited delete is not supported by this JDBC dialect.`，且都没有声称任何受影响行数；不写 limit 的 `update entities` 返回 `Limited update ...`。所以在这个类型上，“不写 limit”并不是绕法：请改成一次一个主键，用 `delete one entity ... by id` / `update one entity ... by id`，或者换一个方言提供这种写法的类型。见 [“Limited delete is not supported by this JDBC dialect.”](troubleshooting.zh-CN.md#limited-delete-is-not-supported-by-this-jdbc-dialect)。
+在通用 `"JDBC"` 连接上，即使不写 `with limit`，`update entities` 和 `delete entities` 也会被拒绝。操作单行时请改用 `by id`，操作多行时请使用支持这类语句的连接类型。见[故障排查](troubleshooting.zh-CN.md#limited-delete-is-not-supported-by-this-jdbc-dialect)。
 
 ## limit
 
@@ -106,4 +106,4 @@ delete {_user::id}
 update one entity {_user::*} in table "users" by id {_id} and wait
 ```
 
-`update` 只修改变量中包含的列；`upsert` 还会在主键不存在时创建新行。查询结果不能直接传给 `update by id` 或 `upsert by id`，因为结果中包含主键，而这两种写法的 values 都不允许包含主键。请像示例一样，先保存主键值，再从变量中删除该键，最后将值单独传给 `by id`。见 [菜谱](cookbook.zh-CN.md)。
+`update` 只修改变量中包含的列；`upsert` 还会在主键不存在时创建新行。查询结果不能直接传给 `update by id` 或 `upsert by id`，因为结果中包含主键，而这两种写法的 values 都不允许包含主键。请像示例一样，先保存主键值，再从变量中删除该键，最后将值单独传给 `by id`。见[示例](cookbook.zh-CN.md)。

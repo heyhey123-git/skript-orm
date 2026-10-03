@@ -11,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities")
-@Description("Inserts multiple rows. Each nested block under values is one row, or the rows may be taken from a list variable shaped like a select result. A batch too large for one statement is sent as several statements, so every row is written. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts multiple rows. Each block under values describes one row; alternatively, supply a list variable in select-result format. Large batches are split across statements. The next line runs after the insert finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """insert many entities into table "users" and wait:
     values:

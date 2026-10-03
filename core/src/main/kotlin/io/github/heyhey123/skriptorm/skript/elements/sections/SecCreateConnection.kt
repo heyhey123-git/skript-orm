@@ -29,7 +29,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Create Database Connection")
-@Description("Connects to a registered database implementation. Without a name the connection becomes the default one and replaces whatever was the default; with a name it is registered under that name and leaves every other connection alone. The first connection to succeed becomes the default. This section always waits. The url property is required; username and password may be empty strings. Additional literal properties are passed to the implementation. Failures are reported as a runtime error and exposed as the last database error.")
+@Description("Opens a database connection and waits until it is ready. An unnamed connection replaces the default; a named connection leaves existing connections in place. The first successful connection also becomes the default. The url property is required; username and password may be empty. Other literal properties are passed to the database implementation. On failure, check last database error.")
 @Example(
     """create a connection to database "MySQL" with properties:
     url: "jdbc:mysql://localhost:3306/mydb"

@@ -13,7 +13,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Execute Raw Query")
-@Description("Sends a SQL statement of your own to the connected database and stores the rows it returns, keyed by the column label and numbered from one, such as {_rows::1::name}. Values are bound to ? placeholders by the with clause. UNSAFE: the statement is sent as written — it is not checked against any registered table, and the plugin does not translate it for the implementation. It does not accept where, and it fails when the connection takes commands instead of SQL.")
+@Description("Runs a SQL query and stores its rows under one-based indexes and column labels, such as {_rows::1::name}. Use with to bind values to ? placeholders. The SQL is sent as written: registered table definitions are not checked, and no database-specific translation is applied. This form does not accept a where block or work with command-based databases.")
 @Example(
     """execute query "SELECT id, name FROM users WHERE age > ?" with (18) and store the result in {_rows::*}
 loop {_rows::*}:

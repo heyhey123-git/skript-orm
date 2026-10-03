@@ -18,7 +18,7 @@ if {_rows} is 0:
 
 ## 这个子句
 
-`store affected rows in {_rows}` 是可选子句，所有写入语句都支持：`insert one`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete`，无论是否带冒号。它必须用 `and` 连接，放在语句自身的参数之后，让 Skript 能确定前一个参数在哪里结束。后面仍可加 `and wait`，但不会改变等待行为。
+在写入语句的参数后加上 `and store affected rows in {_rows}`，即可保存影响行数。`insert one`、`insert many`、`insert ... if absent`、`update`、`upsert`、`delete` 都支持，带不带正文均可。后面还可以加 `and wait`，但它不再改变等待行为。
 
 ```sk
 delete entities from table "logs" with limit 500 and store affected rows in {_deleted}
@@ -62,12 +62,12 @@ upsert one entity in table "users" by id {_id} and store affected rows in {_rows
 
 ```sk
 if {_rows} is not set:
-    send "没有任何语句报告写入了多少行。" to console
+    send "无法获取影响行数。" to console
 else if {_rows} is 0:
-    send "没有匹配到行。" to console
+    send "本次操作影响了 0 行。" to console
 ```
 
-上例中的零行提示适用于“零表示未匹配”的操作，不能直接套用到所有写入。
+将零行视为“没有匹配”之前，应先确认该语句和后端的计数规则。
 
 先清空变量，可以避免将上一次的数字误当成本次结果。写入会等待完成，因此下一条语句即可读取行数，无需额外等待。见 [错误与等待](errors-and-waiting.zh-CN.md)。
 

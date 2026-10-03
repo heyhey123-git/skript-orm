@@ -2,11 +2,7 @@
 
 [简体中文](cookbook.zh-CN.md) | **English**
 
-These recipes cover common tasks and are ready to copy and adapt. They use only syntax introduced elsewhere in the documentation.
-
-Companion examples live in [`docs/examples/cookbook.sk`](examples/cookbook.sk). They are maintained manually, not extracted from this page, and may differ in wording.
-
-CI checks that they parse on a real server; it does not run the commands or verify their results. The examples use English messages and are wrapped in `command /example-…` blocks. Command names must be unique across all example files because they load on the same test server.
+These examples show common database tasks. Adapt table names and columns to your script. A companion script is available at [`docs/examples/cookbook.sk`](examples/cookbook.sk).
 
 ## Know the id of a row you just created
 
@@ -60,6 +56,9 @@ command /addage <integer>:
         select one entity from table "players" and store the result in {_row::*}:
             where all:
                 uuid = uuid of player
+        if last database error is set:
+            send "Could not read your data: %last database error%" to sender
+            stop
         if {_row::uuid} is not set:
             send "No row for you yet." to sender
             stop
@@ -88,6 +87,11 @@ The read and update are separate operations. If another script changes the age b
 select many entities from table "users" and store the results in {_rows::*}:
     where all:
         active = false
+if last database error is set:
+    send "Could not read rows to archive: %last database error%" to console
+    stop
+if {_rows::1::id} is not set:
+    stop
 
 insert many {_rows::*} into table "archived_users" and wait
 if last database error is set:
@@ -99,7 +103,7 @@ delete entities from table "users" and wait:
         active = false
 ```
 
-A `select many` result can be passed directly to `insert many`, with no restructuring. The insert finishes before the delete runs. In 1.2, all database statements wait for completion; the `and wait` retained in this example has no effect.
+A `select many` result can be passed directly to `insert many`. Check for an empty result first: `insert many` rejects an unset variable. The insert finishes before the delete runs.
 
 These three steps are not a transaction and do not roll back together on failure. Avoid concurrent changes to the affected data: the delete matches `active = false` again, so it can remove rows that became eligible after the read and were never archived. Changes made after the read are not automatically included in the archive either. Use this example during a maintenance window with the relevant writes paused.
 
@@ -126,6 +130,9 @@ while {_page} <= 100:
     select page {_page} with size 50 from table "users" and store the results in {_page-rows::*}:
         where all:
             active = true
+    if last database error is set:
+        send "Could not read page %{_page}%: %last database error%" to console
+        exit loop
     # Walk the row indices and check the primary key to see whether another row exists.
     # Each row is a sub-list. Other columns may be NULL, leaving an unset key that would stop the loop early.
     # If {_row} is still 1 after the loop, the page was empty.

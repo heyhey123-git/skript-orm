@@ -12,7 +12,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Upsert Entity By ID")
-@Description("Updates the row with the given primary-key value or inserts it when absent. The values may be written in the section body, or taken from a list variable shaped like a select result. Support depends on the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Updates the row with the given primary-key value, or inserts it if absent. Supply values in the section body or through a list variable in select-result format. Support varies by database implementation. The next line runs after the operation finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """upsert one entity in table "users" by id {_id} and wait:
     values:

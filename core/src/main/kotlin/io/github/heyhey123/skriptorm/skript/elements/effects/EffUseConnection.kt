@@ -14,7 +14,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Use Database Connection")
-@Description("Makes a named connection the one the rest of the current event uses. Takes effect immediately, without waiting. An unknown or disconnected name changes nothing and is reported as the last database error. Statements inside an 'in connection' section keep using that section's connection.")
+@Description("Uses a named connection for the rest of the current event. The change takes effect immediately. An unknown or disconnected name leaves the current connection unchanged and sets last database error. An in connection section still uses its own connection.")
 @Example(
     """on load:
     create a connection named "logs" to database "MySQL" with properties:

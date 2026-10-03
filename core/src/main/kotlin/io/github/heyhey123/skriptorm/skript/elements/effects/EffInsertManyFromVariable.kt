@@ -17,7 +17,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Many Entities From A Variable Without A Colon")
-@Description("Inserts multiple rows, taken from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. A batch too large for one statement is sent as several statements, so every row is written. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts rows from a list variable in select-result format. Large batches are split across statements. Use this form without a colon when no section body is needed. The next line runs after the insert finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """select many entities from table "users" and store the results in {_rows::*}
 insert many {_rows::*} into table "archived_users" and wait

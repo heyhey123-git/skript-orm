@@ -15,13 +15,9 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Covers the comparison registration makes between the declared table and the one the server holds.
- *
- * The failure this exists for is `CREATE TABLE IF NOT EXISTS` doing nothing to a table that is already
- * there: the declaration moves on, the table does not, and the first statement to name the new column is
- * refused by the server with a message about that statement. Everything here is about that comparison
- * naming the difference instead, and about it staying quiet for the parts the drivers report differently
- * without meaning anything is wrong.
+ * Tests schema verification when registration encounters an existing table. `CREATE TABLE IF NOT
+ * EXISTS` does not update that table, so mismatches need to be reported before a query uses it.
+ * Compatible differences in driver metadata should still be accepted.
  */
 class SchemaVerificationTest {
 
@@ -49,10 +45,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * The two directions are not symmetrical. A declaration asks for the columns it names to be there with the
-     * storage it named, and asks for nothing else, so a table carrying a column the declaration never
-     * mentions still runs every statement the script can write: a table shared with another tool, or one an
-     * older declaration of the same script created. The key is the other way round, and is checked as such.
+     * A table may have extra columns supplied by another tool or an older declaration. The
+     * registered columns must exist, but registration does not require an exact column set.
      */
     @Test
     fun `a column the table has and the declaration does not is accepted`() {
@@ -90,9 +84,7 @@ class SchemaVerificationTest {
     }
 
     /**
-     * The size is the capacity it is rather than a number to match, so a column with more room than the
-     * declaration asks for serves it: everything the declaration can write fits. The integration tests prove
-     * the same on a server, where `TEXT` is 65535 to MySQL and MariaDB and `string` asks for 255.
+     * A variable-length column with more capacity than declared is compatible.
      */
     @Test
     fun `a column wider than the declaration asks for is accepted`() {
@@ -106,9 +98,7 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A `BINARY(16)` is a width and not a capacity, so a wider one is not this storage with room to spare:
-     * the server pads what it returns, and the converter would be handed 32 bytes for a 16-byte value. The
-     * exact answer is the type's own, which is why the comparison asks the type rather than comparing numbers.
+     * `BINARY` is fixed-width: a wider column pads the UUID, so its size must match exactly.
      */
     @Test
     fun `a wider fixed width column is not accepted for a narrower declaration`() {
@@ -124,10 +114,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * Which of two sizes can serve which is the storage's own answer, so it is pinned where it is written
-     * rather than only through a comparison: a variable-length storage takes more, a fixed-width one does not.
-     * The variable-length types are Bukkit ones, whose `servesSize` is proven on a server in the integration
-     * tests instead, where their types are on the classpath.
+     * Checks each type's size rule directly: variable-length storage may be wider, while fixed-width
+     * storage requires an exact match.
      */
     @Test
     fun `a storage answers for its own sizes`() {
@@ -149,8 +137,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A key is not null on every server, whatever the declaration says, and the drivers disagree about how
-     * they report an identity column. Comparing it would refuse a table that is exactly what was asked for.
+     * Primary keys are non-null even when declared nullable. Driver metadata for identity columns
+     * varies, so this difference must not fail verification.
      */
     @Test
     fun `a primary key the server made not null is not a difference`() {
@@ -183,8 +171,7 @@ class SchemaVerificationTest {
     }
 
     /**
-     * The direction that is not safe: a table keyed on a column the declaration leaves out means the declared
-     * key can name several rows, so `update one` would write every one of them.
+     * If the table's key includes undeclared columns, the declared key may match multiple rows.
      */
     @Test
     fun `a table keyed on a column the declaration does not key on is reported`() {
@@ -199,8 +186,7 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A keyless declaration promises nothing about identity, so a key the table carries is not a difference:
-     * the declaration cannot address a row by key, and every statement it allows still runs.
+     * A keyless declaration makes no uniqueness claim, even if the existing table has a key.
      */
     @Test
     fun `a keyless declaration is not compared against the table's key`() {
@@ -217,9 +203,7 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A table the server does not hold reads as one with no columns, so a script meets the missing-column
-     * report rather than a second message shape. The server says nothing about having no columns; the
-     * declaration is what lists them, which is the side the script can act on.
+     * An absent table is represented by empty metadata, which reports all declared columns as missing.
      */
     @Test
     fun `a table that is not there reports every column as missing`() {
@@ -246,11 +230,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A spelling only one server gives a storage is answered only for that server, and the key is the name
-     * the server gives for itself. H2 stores the `FLOAT` this implementation asks for as a `DOUBLE
-     * PRECISION`, so on H2 the two are one storage and everywhere else they are two: the answer follows the
-     * connection rather than the driver a script named, which is what a dialect serving every driver cannot
-     * say. `H2SchemaTest` asks the server what it calls itself and that the table it built is accepted.
+     * H2 reports a declared `FLOAT` as `DOUBLE PRECISION`. This alias applies only when the
+     * connected database identifies itself as H2; `H2SchemaTest` verifies the behavior on a server.
      */
     @Test
     fun `a name one server gives its own storage is answered only for that server`() {
@@ -265,10 +246,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * `LONGVARCHAR` is not the blob storage it was read as: JDBC defines it as long character data, H2 lists
-     * it among the names of its `VARCHAR`, and MySQL's mapping turns a declared `LONG VARCHAR` into a
-     * `MEDIUMTEXT`. It is a text spelling wherever it appears, and only a server that keeps a declared name
-     * — SQLite — reports it, which is why its dialect answers it and the shared list does not.
+     * JDBC defines `LONGVARCHAR` as character data. It belongs to the generic dialect's aliases
+     * because other drivers normalize it before reporting column metadata.
      */
     @Test
     fun `a long text name is text and not the blob storage`() {
@@ -279,11 +258,9 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A name one product's driver reports is that product's dialect's entry rather than a shared one: `int4`
-     * is a four-byte integer to PostgreSQL's driver and nothing in particular to another server, `bit` is the
-     * one-byte boolean to the MySQL family and a bit string to PostgreSQL, and `tinytext` is a MySQL spelling
-     * no other server has. Read without a dialect they are compared as they stand, which is what leaves each
-     * product's answer to be measured against its own server instead of guessed for all of them.
+     * Product-specific names such as PostgreSQL's `int4` and MySQL's `tinytext` remain unchanged
+     * without that product's dialect. `bit` is especially ambiguous: MySQL uses it for boolean
+     * storage, while PostgreSQL has a bit-string type.
      */
     @Test
     fun `a name one product's driver reports is not answered without that dialect`() {
@@ -306,13 +283,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A spelling that belongs to one product is that dialect's to declare, and the comparison is told it. The
-     * one measured so far is the boolean column: MySQL stores `BOOLEAN` as `TINYINT(1)`, and a connection URL
-     * carrying `tinyInt1isBit=false` makes the driver report it as `TINYINT` — the same name and the same size
-     * a column declared `tinyint` has, so nothing in the metadata tells the two apart. H2, where `TINYINT` and
-     * `BOOLEAN` are two different types, must not inherit the answer, which is what passing the mapping in
-     * rather than keeping it beside the comparison gets. What `MysqlJdbcDialect` declares there is what the
-     * JDBC tests read back from a real server.
+     * MySQL may report a declared boolean column as `TINYINT`, depending on `tinyInt1isBit`.
+     * The MySQL dialect accepts that alias; H2 must still distinguish `TINYINT` from `BOOLEAN`.
      */
     @Test
     fun `a spelling the dialect owns is compared through the dialect`() {
@@ -335,10 +307,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * The failure continuous integration found, pinned: MySQL has a `performance_schema` holding a table
-     * for each instrument, and one of them is `USER`. Searching for `users` with no catalog pattern
-     * searches every schema, so that table was taken for the registered one, and every declared column was
-     * reported missing from a table the script had never named.
+     * Restricts metadata lookup to the active catalog. An unrestricted MySQL lookup could mistake
+     * `performance_schema.USER` for the registered `users` table.
      */
     @Test
     fun `a table of another schema is not taken for the registered one`() {
@@ -372,10 +342,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A server that stores the name in another case is still the registered table. The metadata call asks
-     * for the name as written and MySQL on a case-sensitive filesystem compares it as written, so `users`
-     * does not find a table the server hands over as `USERS` — and the answer must still be the one in the
-     * connection's own catalog, not the first match anywhere.
+     * Finds a differently cased table name within the active catalog, even when the driver's
+     * pattern lookup is case-sensitive.
      */
     @Test
     fun `a table the server stores under another case is found in its own catalog`() {
@@ -399,10 +367,8 @@ class SchemaVerificationTest {
     }
 
     /**
-     * A table that is not where the connection can see it ends the registration, and the message names what
-     * is there. Reading *some* table's columns instead would report a column difference in a table nobody
-     * identified: the script would be told its `age` column is missing from a table it had never named,
-     * which is what the first continuous-integration round reported about `performance_schema`.
+     * Reports a missing table with names from the active catalog instead of comparing columns from
+     * an unrelated table.
      */
     @Test
     fun `a table that does not exist where the connection looks is refused, naming what is there`() {

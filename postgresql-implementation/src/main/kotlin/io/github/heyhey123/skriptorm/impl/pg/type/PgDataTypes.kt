@@ -50,14 +50,9 @@ object PgDataTypes : DataTypes() {
 }
 
 /**
- * `tinyint` has no type of its own in PostgreSQL, so it is stored as a `SMALLINT` and carried as a
- * `Short` rather than as the `Byte` MySQL's one-byte column uses.
- *
- * The driver decides this, not taste. Values are read with the typed `getObject`, and pgjdbc's table
- * for that call maps `SMALLINT` to `Short` and to `Integer`, and refuses `Byte` with "conversion to
- * class java.lang.Byte from int2 not supported" — which it throws for a column that is SQL NULL just
- * the same, so one `tinyint` column makes every row of the table unreadable. Narrowing to the domain
- * type happens here instead, where that type is known.
+ * PostgreSQL stores `tinyint` values in `SMALLINT` columns. Its JDBC driver reads `SMALLINT`
+ * as `Short`, not `Byte`, even when the column is NULL. This converter narrows the stored value
+ * to the addon's `Byte` type after it is read.
  */
 private class PgTinyIntJdbcDataType : TinyIntJdbcDataType() {
 

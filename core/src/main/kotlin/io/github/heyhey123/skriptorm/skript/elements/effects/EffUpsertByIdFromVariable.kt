@@ -17,7 +17,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Upsert One Entity By ID From A Variable Without A Colon")
-@Description("Updates the row with the given primary-key value or inserts it when absent, taking the values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support depends on the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Updates the row with the given primary-key value, or inserts it if absent, using a list variable in select-result format. Support varies by database implementation. Use this form without a colon when no section body is needed. The next line runs after the operation finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """set {_user::id} to 1
 set {_user::name} to "Alice"

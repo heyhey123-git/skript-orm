@@ -30,7 +30,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Register Database Table")
-@Description("Registers a table schema in the current database and waits for registration. Types come from the connected database. At least one column and at most one primary key are allowed; auto increment requires primary key. Registering is idempotent: a declaration that matches the table already registered is ignored, and any other existing table is left as it is while the declaration is compared with it, so a declaration that no longer matches the table fails here instead of at the first statement that uses the difference. Failures are exposed as the last database error.")
+@Description("Registers a table definition and waits for the database check to finish. Declare at least one column and at most one primary key; an auto-increment column must be the primary key. Repeating the same definition has no effect. An existing table is checked for compatibility but is never altered. Incompatible definitions fail during registration; check last database error for details.")
 @Example(
     """register a database table "users":
     id: bigint, primary key, auto increment, not null

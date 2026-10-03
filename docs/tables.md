@@ -57,20 +57,18 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 the script, so a script that needs to know it should write its own value and use `upsert`, or find the
 row again by another column; see [Cookbook](cookbook.md).
 
-## What registering does, and what it does not
+## What registration does
 
 On SQL backends, registration runs `CREATE TABLE IF NOT EXISTS`, waits for completion, and then reads the
 table back from the server and compares it with the declaration.
 
-**Existing tables are left unchanged.** Adding a column to the script and reloading updates the plugin's
-definition, not the database schema. Registration produces no warning because it has succeeded, and
-`CREATE TABLE IF NOT EXISTS` is what makes registering the same table on every startup safe.
+**Existing tables are never altered.** Adding a column to the script and reloading does not add it to
+the database. Repeating an unchanged definition succeeds without changing the table; a changed
+definition is checked against the existing schema and may fail.
 
-**A declaration the table cannot serve is refused at registration.** Because the table above is
-never altered, a script that adds `age: int` to a table that already exists without it would otherwise
-fail later, at the first statement that names the column, with the server's
-`Unknown column 'age' in 'INSERT INTO'` — which names the write rather than the registration. Instead,
-`register a database table` fails right there and `last database error` names the difference:
+**Incompatible definitions fail during registration.** If a script declares `age: int` but the
+existing table has no `age` column, `register a database table` fails immediately. The message in
+`last database error` identifies the mismatch:
 
 ```
 Registered table 'users' does not match the table in the database. Registration is 'CREATE TABLE IF
@@ -80,33 +78,22 @@ Column(s) 'age' are declared but missing from the table. The table holds: 'id', 
 Drop the table and register it again, or change the table in the database to match this declaration.
 ```
 
-The comparison asks one question: can this table serve every statement the declaration allows? So it
-requires every declared column to be there, with a storage the declaration's values fit — the type it names,
-and at least the size it names, because a column with more room holds what a narrower declaration writes
-while a narrower one does not; it requires `not null` on declared columns that are not the key; and it
-requires the table to guarantee the declared key. A table keyed on a column the declaration does not mark as
-a key is refused, because a statement that addresses a row by the declared key could then match several
-rows. A declaration with no key asks nothing about identity, so a key the table carries is not a difference
-either. A `uuid` is the exception to the size: its `BINARY(16)` is a width rather than a capacity, and a
-wider column is handed back padded, so the table has to hold exactly that.
+The check requires every declared column to exist with a compatible type and enough space for its
+values. It also checks `not null` on non-key columns and verifies that the database can enforce the
+declared primary key. A declaration without a primary key can still match a table that has one.
+For `uuid`, the `BINARY(16)` width must match exactly: a wider column would return padded values.
 
-What it does not compare is `auto increment`, which the two servers report through different metadata, and
-columns the table carries that the declaration never names. Those are not a difference: a table shared with
-another tool, or one an older declaration of the same script created with columns this one no longer names,
-answers every statement the declaration can make. The one exception is a column of that kind that is
-`not null` with no default — an insert that leaves it out is refused by the server, and its message names
-the column. To change the schema, run `ALTER TABLE` yourself, or drop the table in a development database
+The check does not compare `auto increment`, because database implementations report it differently.
+It also allows extra columns in the database. An extra `not null` column without a default may still
+cause inserts to fail. To change a schema, run `ALTER TABLE` yourself, or drop a development table
 and let the plugin recreate it.
 
-**Registrations belong to a connection.** Registering `"users"` again on a connection that already holds it
-does nothing and succeeds: the declaration is accepted, the registered schema is left as it is, and no error
-is reported. This is what makes a script that declares its tables in `on load` safe to reload — the tables are
-already registered on the connection it reaches, and re-declaring them is the expected result rather than a
-mistake.
+**Registration is per connection.** Repeating the same definition on a connection succeeds without
+another database check, so a script can register its tables again when reloaded.
 
-To change a schema, reconnect so the registration is created afresh, or drop the table and let the plugin
-create it again. Re-declaring a table with different columns does not change the existing one, so a table
-whose declaration was edited keeps the schema it was created with:
+To change a schema, update the database directly, or drop a development table and let the plugin
+recreate it. Reconnecting refreshes the connection's registrations, but does not alter an existing
+database table. For example:
 
 ```sk
 on load:
@@ -120,14 +107,11 @@ on load:
         name: string(64), not null
 ```
 
-`create a connection` always creates a fresh connection with no registered tables. A script that connects
-before registering therefore registers on a connection the plugin just made, and one that only registers —
-reaching a connection that already holds the tables — is a no-op rather than an error. See
-[Connections](connections.md).
+`create a connection` creates a connection with no registered tables. Register tables after connecting;
+otherwise, an existing connection may already hold the same definition. See [Connections](connections.md).
 
-A statement that is not built from a registration is a [raw statement](raw-statements.md). It is sent as
-written, so it is not compared with the table it names — not the columns, not the types, not the table's
-existence. Everything on this page is about the declared form, which is the one that is checked.
+[Raw statements](raw-statements.md) bypass these checks. They are sent as written, without checking
+the named table or its columns against a registration.
 
 ## Failures
 

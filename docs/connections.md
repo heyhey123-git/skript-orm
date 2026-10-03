@@ -2,8 +2,7 @@
 
 [简体中文](connections.zh-CN.md) | **English**
 
-A connection is made by a script and belongs to the whole server. A script can keep several at once,
-and each statement decides which one it uses.
+Scripts create connections that remain available across the server. You can keep several connections open and choose which one each statement uses.
 
 ## Creating one
 
@@ -17,21 +16,15 @@ create a connection to database "MySQL" with properties:
 - `"MySQL"` names the implementation. The jar registers `"MySQL"`, `"MariaDB"`, `"PostgreSQL"`,
   `"MongoDB"` and `"JDBC"`; see [The implementation name](#the-implementation-name) below.
 - `url` is required. `username` and `password` may be empty strings.
-- Other literal properties are passed to the implementation, and **one that the implementation does not
-  read is refused**: the statement fails with
-  `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`
-  and nothing is connected. A misspelling such as `statment timeout` is therefore caught here rather than
-  quietly doing nothing. Supported extra properties are `statement timeout`, `driver` for `"JDBC"`, and
-  MongoDB's `database` and `auth database`. `url`, `username` and `password` are read by every
-  implementation.
-- On `"MySQL"`, `"MariaDB"` and `"PostgreSQL"`, the database **belongs in the url path**
-  (`jdbc:mysql://localhost:3306/mydb`). `database: "mydb"` is a MongoDB property and is refused here,
-  naming what to write instead.
-- The section always waits: when the next line runs, the connection is either live or failed. `and wait`
-  is neither needed nor accepted here.
-- **It is refused inside a `database transaction`.** The section reports
-  `A connection cannot be created inside a database transaction. Roll it back first.` and connects
-  nothing, because replacing the connection would disrupt the active transaction.
+- Unknown properties cause the connection to fail instead of being ignored. For example, MySQL rejects
+  `database: "mydb"` with `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`
+  This also catches misspellings such as `statment timeout`. All types accept `url`, `username`, `password`,
+  and `statement timeout`. `"JDBC"` also accepts `driver`; MongoDB accepts `database` and `auth database`.
+- For `"MySQL"`, `"MariaDB"`, and `"PostgreSQL"`, put the database name in the URL path,
+  as in `jdbc:mysql://localhost:3306/mydb`. The `database` property belongs to MongoDB.
+- The section finishes connecting or reports an error before the next line runs. It does not accept `and wait`.
+- You cannot create a connection inside `database transaction`; doing so reports
+  `A connection cannot be created inside a database transaction. Roll it back first.`
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -48,11 +41,9 @@ specified, so a script with one database usually needs no connection-switching s
 
 ## The implementation name
 
-The quoted value is an implementation **type name**, not an arbitrary database product name.
-It selects the code used to build statements and read results. Matching is exact and case-sensitive.
-The jar registers five types:
+The quoted value selects the database implementation. It must match one of these five names exactly, including case:
 
-| Type name | What it brings |
+| Type name | Implementation |
 | --- | --- |
 | `"MySQL"` | MySQL's dialect: backtick identifiers, `ON DUPLICATE KEY UPDATE` for `upsert`, `LIMIT` on updates and deletes, `AUTO_INCREMENT`, and `LIMIT` paging. The plugin locates the server's MySQL driver (`com.mysql.cj.jdbc.Driver` or the older `com.mysql.jdbc.Driver`). Use this type for MySQL. |
 | `"MariaDB"` | The same dialect as `"MySQL"`, since MariaDB accepts that SQL, with MariaDB Connector/J downloaded on first startup. The url has to be a `jdbc:mariadb://` one: the connector refuses a `jdbc:mysql://` url, and the MySQL driver refuses a `jdbc:mariadb://` one. Use this type for MariaDB. |
@@ -60,9 +51,7 @@ The jar registers five types:
 | `"MongoDB"` | Access through the downloaded blocking MongoDB Java driver, without SQL. Some statements behave differently; see [Compatibility](compatibility.md#mongodb). Connection properties are listed below. |
 | `"JDBC"` | A driver specified through the `driver` property, with portable SQL: `"double quoted"` identifiers, `LIMIT 1` for a single row, and `LIMIT ? OFFSET ?` for paging. This row-limit syntax works in MySQL, MariaDB, SQLite, PostgreSQL and H2. Operations without a portable form are rejected: `insert ... if absent`, `upsert ... by id`, write limits, and `auto increment`. |
 
-The types also differ in how drivers are provided. The MariaDB, PostgreSQL and MongoDB drivers are
-downloaded for the plugin; a `"JDBC"` driver class must already be on the server's classpath.
-Use `"JDBC"` for SQLite, whose driver is included with Paper:
+Use `"JDBC"` for SQLite. Paper includes its driver:
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -70,11 +59,9 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-Only `"JDBC"` requires a driver class name, and no driver is bundled in this jar.
-The MariaDB, PostgreSQL and MongoDB drivers are downloaded on first startup, with no class name needed;
-`"MySQL"` uses the one the server already has.
-See [Compatibility](compatibility.md#what-is-inside-the-jar) for details and options if the server
-cannot reach the download mirror.
+Only `"JDBC"` needs a `driver` property. MySQL uses the server's driver; Paper downloads the MariaDB,
+PostgreSQL, and MongoDB drivers on first startup. See [Compatibility](compatibility.md#what-is-inside-the-jar)
+if the server cannot reach the download mirror.
 
 Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
 
@@ -84,10 +71,8 @@ Paper ships two drivers of its own, MySQL Connector/J and SQLite's:
   generates, so a file connection supports all of the type's operations. Its limitations still apply:
   no auto increment, `insert ... if absent`, `upsert`, or write limits. The script must supply the key.
 
-`"mysql"` is rejected with `Database 'mysql' is not supported.`. `"SQLite"` is also rejected because it
-is not a registered type name. `"MySQL"`, `"MariaDB"` and `"MongoDB"` are both product names and type
-names, but the distinction matters: scripts must use one of the five types above.
-[Compatibility](compatibility.md) lists types and database products separately.
+Names are case-sensitive: `"mysql"` reports `Database 'mysql' is not supported.` `"SQLite"` is not a
+registered name either; use `"JDBC"`. See [Compatibility](compatibility.md) for supported products.
 
 ## MongoDB properties
 
@@ -112,11 +97,8 @@ create a connection to database "MongoDB" with properties:
   `database` wins over the one in the url; with neither, `skript-orm` is used.
 - `auth database` names the database the credentials belong to, for a server whose users live elsewhere.
   It defaults to the database being used.
-- **Transactions are not implemented for MongoDB here.** MongoDB itself has multi-document transactions —
-  on a replica set from 4.0, on a sharded cluster from 4.2, while a standalone server refuses them — but this
-  connection does not open one yet, so a `database transaction` section fails with
-  `This database implementation does not support transactions.`; see
-  [Compatibility](compatibility.md#mongodb).
+- **This addon does not support MongoDB transactions yet.** `database transaction` reports
+  `This database implementation does not support transactions.` See [Compatibility](compatibility.md#mongodb).
 
 ## Naming one
 
@@ -144,7 +126,7 @@ unnamed connection keeps `"logs"` open and merely stops using it for unqualified
 
 Statements select a connection in the following order of precedence:
 
-| Order | Answer | Written as |
+| Priority | Connection | Syntax |
 |---|---|---|
 | 1 | the innermost scope it is inside | `in connection "logs":` |
 | 2 | what this event switched to | `use connection "logs"` |
@@ -207,10 +189,9 @@ make connection "logs" the default
 Unqualified statements then use `"logs"` until something else becomes the default. The connection the
 script is currently in is not affected: a statement that already resolved its connection keeps it.
 
-The previous default **is disconnected if it has no registered name**, since no future statement can
-select it. This releases its resources, including up to ten pooled connections on SQL backends. A **named** connection
-stays open because a scope or `use connection` may still refer to it. The statement waits for closure
-before continuing, so subsequent lines use the new default. It is rejected during a `database transaction`.
+If the previous default has no registered name, it is closed because scripts can no longer select it.
+A named connection remains open. The statement waits for any closure to finish before continuing and
+cannot run during a `database transaction`.
 
 ## Disconnecting
 
@@ -220,10 +201,8 @@ disconnect from connection "logs"           # one named connection
 disconnect from all connections             # every connection
 ```
 
-The first form resolves like every other statement: inside `in connection "logs":` it closes `"logs"`,
-after `use connection "logs"` it closes `"logs"`, and with neither it closes the default. It runs
-asynchronously and the following line waits for it, so a script can disconnect and then do something
-else.
+The first form follows the usual connection priority: it closes the connection selected by `in connection`
+or `use connection`, or the default when neither applies. The next line waits for disconnection to finish.
 
 Disconnecting a connection that a scope still names is not an error. Statements inside that scope fail
 from then on, because the connection they resolve to is closed.
@@ -233,9 +212,8 @@ from then on, because the connection they resolve to is closed.
   [Tables](tables.md).
 - A connection also accepts [raw statements](raw-statements.md) — SQL it sends as written, with none of
   the checks the statements above get. They run as this connection's account, with its privileges.
-- The plugin closes every connection when the server disables the plugin, and `disconnect from all
-  connections` closes every one of them: a connection that lost the default role either has a name and is
-  still registered, or was closed when it lost the role. See [Choosing the default](#choosing-the-default).
+- The plugin closes all remaining connections when it is disabled. `disconnect from all connections`
+  closes every registered connection.
 
 ## Operations without a connection
 
@@ -249,8 +227,7 @@ The properties are written in the script, which means the account and its passwo
 anyone who can read the script file or run `/sk` commands that print syntax. Two habits help:
 
 - Give the database account only the privileges the scripts need.
-- Keep the connections in their own script, so the file that holds the credentials is the file you
-  think about when you set permissions.
+- Keep connection definitions in one script so you can manage access to its credentials in one place.
 
 ## Statement timeout
 

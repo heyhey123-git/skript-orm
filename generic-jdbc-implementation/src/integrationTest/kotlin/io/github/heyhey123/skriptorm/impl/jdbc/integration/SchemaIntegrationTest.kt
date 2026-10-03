@@ -19,13 +19,8 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 /**
- * Verifies that the DDL produced by the dialect is accepted by a real server and creates the
- * declared shape. Mocked tests can only prove which string was sent; only a server proves that the
- * string is valid and means what the implementation intends.
- *
- * This is also where a product the dialect was not written for shows up: registration compares the
- * declaration against the column types the server reports, so a server that names a type differently
- * fails here rather than at the first insert.
+ * Checks that the dialect's DDL creates the declared schema on a real server. Registration also
+ * compares the declaration with the server's reported column types, catching incompatible aliases.
  */
 abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
 
@@ -54,11 +49,8 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
         assertColumnType("uid", "BINARY", columns)
         assertColumnSize("uid", 16, columns)
 
-        // The protocol has no BOOLEAN type: it is an alias for TINYINT(1), and each driver names the
-        // column after the alias it was created with — Connector/J says BIT, MariaDB Connector/J says
-        // BOOLEAN, and a server that does not carry the alias says TINYINT. All three are the same
-        // one-byte column, so the assertion is that it stayed a boolean-shaped integer and not, say, a
-        // string. The boolean value itself round trips, which TypeRoundTripIntegrationTest checks.
+        // BOOLEAN uses TINYINT storage here. Drivers may report the column as BIT, BOOLEAN, or
+        // TINYINT; TypeRoundTripIntegrationTest checks the value itself.
         assertTrue(
             columns.getValue("active").typeName in setOf("BOOLEAN", "TINYINT", "BIT"),
             "active was reported as ${columns.getValue("active")}"
@@ -66,12 +58,8 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     /**
-     * The fact the MySQL family's type aliases are built on, measured against both drivers: with
-     * `tinyInt1isBit=false` in the URL, Connector/J reports the column declared `boolean` — `active` — as
-     * `TINYINT(3)`, which is the same name and the same size the column declared `tinyint` gets. Nothing in
-     * the metadata then tells the two apart, and a script that sets that property, which is a common way to
-     * read these columns as `0` and `1`, would have had its registration refused for a table every statement
-     * can run against. This is the registration path, over a connection that carries the property.
+     * With `tinyInt1isBit=false`, the driver reports a declared boolean column as `TINYINT`.
+     * Registration must accept that metadata name for the same underlying storage.
      */
     @Test
     fun `a boolean column is accepted over a connection that reports it as a tinyint`() = runBlocking<Unit> {
@@ -103,7 +91,7 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
         return null
     }
 
-    /** Fails with the whole column description, so a remote run identifies the column on its own. */
+    /** Includes the full column metadata in assertion failures. */
     private fun assertColumnType(column: String, expected: String, columns: Map<String, ColumnMeta>) =
         assertEquals(expected, columns.getValue(column).typeName, "type of $column: ${columns.getValue(column)}")
 
@@ -170,12 +158,8 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     /**
-     * The reported failure, end to end: a declaration that adds a column to a table that already exists.
-     *
-     * `CREATE TABLE IF NOT EXISTS` leaves the table alone, so without the comparison the registration
-     * succeeds here and the first insert naming `age` is refused by the server with
-     * `Unknown column 'age' in 'INSERT INTO'` — a message about the insert, at the insert's line, for a
-     * mistake made in the registration.
+     * An existing table is not changed by `CREATE TABLE IF NOT EXISTS`. Registration must report
+     * the missing `age` column before an insert tries to use it.
      */
     @Test
     fun `a declaration the existing table does not match is refused at registration`() = runBlocking<Unit> {
@@ -197,12 +181,8 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     /**
-     * The other direction of the same comparison: a column with more room than the declaration asks for holds
-     * everything the declaration can write, so it serves it. `TEXT` is 65535 to these servers and a `string`
-     * is declared at 255, and refusing that refused a table every statement in the script runs against.
-     *
-     * A `VARCHAR(255)` written by the declaration itself would match either way, so the column here is made by
-     * hand at a size the declaration never asked for.
+     * An existing `TEXT` column can hold the values declared for a 255-character `string` column,
+     * so registration should accept it.
      */
     @Test
     fun `a column wider than the declaration asks for is registered`() = runBlocking<Unit> {
@@ -223,9 +203,8 @@ abstract class SchemaIntegrationTest : MysqlIntegrationTestBase() {
     }
 
     /**
-     * The same rule for the other variable-length storage: a `location` is declared as a `VARBINARY`, and a
-     * column with more bytes than that holds every location the declaration can write. Registration is the
-     * whole test — it is the comparison that asks the type, and its answer is what is being checked here.
+     * A wider `VARBINARY` column can hold the serialized `location` value and should pass
+     * schema verification.
      */
     @Test
     fun `a wider byte column is registered for a location`() = runBlocking<Unit> {

@@ -2,7 +2,7 @@
 
 **简体中文** | [English](connections.md)
 
-连接由脚本建立，供整个服务端使用。一个脚本可以同时管理多条连接，并指定每条语句使用哪一条。
+脚本建立的连接可供整个服务端使用。你可以同时保持多条连接，并为每条语句选择要使用的连接。
 
 ## 建立连接
 
@@ -15,10 +15,10 @@ create a connection to database "MySQL" with properties:
 
 - `"MySQL"` 是实现名称。jar 注册了五种实现：`"MySQL"`、`"MariaDB"`、`"PostgreSQL"`、`"MongoDB"` 与 `"JDBC"`，见下面的“实现名称”。
 - `url` 必填，`username` 与 `password` 可以是空字符串。
-- 块中的其他字面量属性会传给实现，**实现不读取的属性会被当场拒绝**：语句会失败并报 `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`，不会建立任何连接。因此把 `statement timeout` 误写为 `statment timeout` 会在这里被拦下，而不是默默无效。各实现读取的额外属性包括 `statement timeout`、`"JDBC"` 的 `driver`，以及 MongoDB 的 `database` 与 `auth database`；`url`、`username`、`password` 三种实现都读。
-- 在 `"MySQL"`、`"MariaDB"` 与 `"PostgreSQL"` 上，**库名写在 url 路径里**（`jdbc:mysql://localhost:3306/mydb`）。`database: "mydb"` 是 MongoDB 的属性，在这里会被拒绝，并提示应该怎么写。
-- 这个 section 始终等待完成：下一行执行时，连接要么可用，要么已报告失败。这里既不需要 `and wait`，也不接受它。
-- **不能在 `database transaction` 中创建连接。** 此时 section 会报 `A connection cannot be created inside a database transaction. Roll it back first.`，不会建立连接，以免替换连接破坏正在运行的事务。
+- 未识别的属性会导致连接失败，不会被悄悄忽略。例如，MySQL 不接受 `database: "mydb"`，会报 `Connection property 'database' is not read by database 'MySQL'. It reads: password, statement timeout, url, username.`。`statment timeout` 之类的拼写错误也会被发现。所有类型都接受 `url`、`username`、`password` 和 `statement timeout`；`"JDBC"` 还接受 `driver`，MongoDB 还接受 `database` 和 `auth database`。
+- 连接 `"MySQL"`、`"MariaDB"` 或 `"PostgreSQL"` 时，把库名写在 URL 路径中，例如 `jdbc:mysql://localhost:3306/mydb`。`database` 属性只供 MongoDB 使用。
+- 连接成功或失败后才会执行下一行。此处不接受 `and wait`。
+- 不能在 `database transaction` 中创建连接，否则会报 `A connection cannot be created inside a database transaction. Roll it back first.`。
 
 ```sk
 create a connection to database "MySQL" with properties:
@@ -34,9 +34,9 @@ if last database error is set:
 
 ## 实现名称
 
-引号中的名称是实现的**类型名**，不一定与数据库产品名相同。它决定插件如何生成语句、读取结果，必须**精确匹配，且区分大小写**。jar 注册了五种类型：
+引号中的名称用于选择数据库实现，必须与以下五种名称之一完全一致，并区分大小写：
 
-| 类型名 | 它带来什么 |
+| 类型名 | 实现方式 |
 | --- | --- |
 | `"MySQL"` | MySQL 方言：反引号标识符、用于 `upsert` 的 `ON DUPLICATE KEY UPDATE`、更新与删除中的 `LIMIT`、`AUTO_INCREMENT` 及 `LIMIT` 分页。插件会自动查找服务端的 MySQL 驱动（`com.mysql.cj.jdbc.Driver` 或旧版 `com.mysql.jdbc.Driver`）。连接 MySQL 时应选用此类型。 |
 | `"MariaDB"` | 与 `"MySQL"` 相同的方言（MariaDB 同样接受这些写法），驱动 MariaDB Connector/J 在首次启动时下载。url 必须写成 `jdbc:mariadb://`：该驱动会拒绝 `jdbc:mysql://`，MySQL 驱动也会拒绝 `jdbc:mariadb://`。连接 MariaDB 时应选用此类型。 |
@@ -44,7 +44,7 @@ if last database error is set:
 | `"MongoDB"` | 通过插件下载的阻塞式 MongoDB Java 驱动访问 MongoDB，不使用 SQL。部分语句的行为因此不同，详见 [兼容性](compatibility.zh-CN.md#mongodb)；连接属性见下一节。 |
 | `"JDBC"` | 由你在 `driver` 属性中指定驱动，使用通用 SQL 方言：`"双引号"` 标识符、单行查询的 `LIMIT 1`、分页的 `LIMIT ? OFFSET ?`。这种行数限制写法可用于 MySQL、MariaDB、SQLite、PostgreSQL 和 H2。不具备通用写法的操作不受支持，包括 `insert ... if absent`、`upsert ... by id`、写操作的 limit 及 `auto increment`。 |
 
-这些类型的区别还包括驱动来源。`"MariaDB"`、`"PostgreSQL"` 与 `"MongoDB"` 的驱动由插件下载；`"JDBC"` 指定的驱动类则必须已在服务端 classpath 中。SQLite 使用后者，因为 Paper 自带 SQLite 驱动：
+连接 SQLite 时使用 `"JDBC"`。Paper 已提供 SQLite 驱动：
 
 ```sk
 create a connection to database "JDBC" with properties:
@@ -52,14 +52,14 @@ create a connection to database "JDBC" with properties:
     url: "jdbc:sqlite:plugins/myplugin/data.db"
 ```
 
-只有 `"JDBC"` 需要指定驱动类名，任何驱动都不打包在本插件 jar 中。`"MariaDB"`、`"PostgreSQL"` 与 `"MongoDB"` 无需指定类名，驱动都会在首次启动时下载；`"MySQL"` 则使用服务端已有的驱动。[兼容性](compatibility.zh-CN.md#jar-里有什么) 说明了下载方式，以及无法访问镜像时的处理办法。
+只有 `"JDBC"` 需要填写 `driver`。MySQL 使用服务端已有的驱动；Paper 会在首次启动时下载 MariaDB、PostgreSQL 和 MongoDB 驱动。服务端无法访问下载镜像时，见[兼容性](compatibility.zh-CN.md#jar-里有什么)。
 
 Paper 自带 MySQL Connector/J 和 SQLite 驱动：
 
-- **MySQL。** `"JDBC"` 方言使用 `"双引号"` 标识符，而 MySQL 未启用 `ANSI_QUOTES` 时会将其视为字符串字面量，导致语句失败。连接 MySQL 请使用 `"MySQL"`。
-- **SQLite。** 使用 `"JDBC"`，无需另装驱动。SQLite 接受该方言生成的 SQL，连接到数据库文件后即可使用此类型支持的操作。不过，`auto increment`、`insert ... if absent`、`upsert` 和写操作的 limit 仍不受支持，表的主键需要由脚本提供。
+- **MySQL：** `"JDBC"` 使用双引号包围标识符；MySQL 未启用 `ANSI_QUOTES` 时会将双引号内容视为字符串，导致语句失败。请使用 `"MySQL"`。
+- **SQLite：** 使用 `"JDBC"`，无需另装驱动。此类型支持的读写操作均可用于 SQLite，但不支持 `auto increment`、`insert ... if absent`、`upsert` 或写操作的行数限制。主键值需要由脚本提供。
 
-`"mysql"` 会报 `Database 'mysql' is not supported.`；`"SQLite"` 也不是已注册的类型名。`"MySQL"`、`"MariaDB"` 与 `"MongoDB"` 则既是产品名，也是类型名。连接所访问的产品与脚本中填写的实现类型需要区分，[兼容性](compatibility.zh-CN.md) 分别列出了两者。
+名称区分大小写：`"mysql"` 会报 `Database 'mysql' is not supported.`。`"SQLite"` 也不是已注册的名称；请使用 `"JDBC"`。支持的数据库产品见[兼容性](compatibility.zh-CN.md)。
 
 ## MongoDB 属性
 
@@ -78,7 +78,7 @@ create a connection to database "MongoDB" with properties:
 - `username` 与 `password` 和 SQL 实现一样，分别以字符串传给驱动，不会拼入 URL。因此，密码中的 `@`、`:`、`/`、`%` 无需转义。
 - `database` 指定要使用的数据库，优先于 `mongodb://host:27017/mydb` 这类 URL 中的数据库名。两处都未指定时使用 `skript-orm`。
 - `auth database` 指定凭据所属的数据库，用于账号不在目标数据库中的情况。默认值为当前使用的数据库。
-- **本实现尚不支持 MongoDB 事务。** MongoDB 本身从 4.0 起支持副本集上的多文档事务，从 4.2 起支持分片集群上的多文档事务，独立部署的服务端则不支持。但本连接实现尚未提供事务，因此 `database transaction` section 会报 `This database implementation does not support transactions.`。见 [兼容性](compatibility.zh-CN.md#mongodb)。
+- **本插件尚不支持 MongoDB 事务。** 执行 `database transaction` 会报 `This database implementation does not support transactions.`。见[兼容性](compatibility.zh-CN.md#mongodb)。
 
 ## 给连接起名
 
@@ -102,7 +102,7 @@ create a connection named "logs" to database "MySQL" with properties:
 
 语句按以下优先级选择连接：
 
-| 顺序 | 答案 | 写法 |
+| 优先级 | 使用的连接 | 写法 |
 |---|---|---|
 | 1 | 所在的最内层连接作用域 | `in connection "logs":` |
 | 2 | 当前事件切换到的连接 | `use connection "logs"` |
@@ -158,7 +158,7 @@ make connection "logs" the default
 
 此后，未指定连接的语句会使用 `"logs"`，直到默认连接再次改变。当前作用域中的连接不受影响，已经确定连接的语句也会继续使用原连接。
 
-原默认连接**若没有注册名称，会被断开**，以免保留无法再访问的连接资源；对 SQL 连接而言，这包括最多十条数据库连接。**具名连接**则保持打开，只是不再作为默认连接，因为作用域或 `use connection` 仍可能使用它。这条语句会等待关闭完成，后续语句即可使用新的默认连接；事务运行期间不能执行此操作。
+如果原默认连接没有注册名称，插件会将其关闭，因为脚本已无法再选用它。具名连接仍保持打开。语句会等待关闭完成，再执行下一行；事务运行期间不能更换默认连接。
 
 ## 断开连接
 
@@ -168,17 +168,17 @@ disconnect from connection "logs"           # 指定的具名连接
 disconnect from all connections             # 全部连接
 ```
 
-第一种写法按前述优先级选择连接：在 `in connection "logs":` 内，或执行 `use connection "logs"` 后，断开的都是 `"logs"`；两者都没有时，断开默认连接。关闭操作异步执行，脚本会等待完成后再执行下一行。
+第一种写法按前述优先级选择连接：先看 `in connection`，再看 `use connection`，否则断开默认连接。关闭完成后才会执行下一行。
 
 断开仍被作用域引用的连接本身不会报错，但该作用域中的后续语句会失败，因为它们使用的连接已经关闭。
 
 - 表的注册信息属于连接。新连接最初没有已注册的表，因此同一个表名可以分别在两条连接上注册。见 [表](tables.zh-CN.md)。
 - 连接也接受[原始语句](raw-statements.zh-CN.md)——按原文发出的 SQL，不经过上述任何检查。它以该连接的账号身份、用该账号的权限运行。
-- 插件被服务端禁用时会关闭所有连接，`disconnect from all connections` 也会关闭全部连接。原默认连接要么仍以名称注册，要么已在被替换时关闭，不会遗漏。见[选择默认连接](#选择默认连接)。
+- 插件被禁用时会关闭所有剩余连接；`disconnect from all connections` 会关闭所有已注册连接。
 
 ## 没有连接时的操作
 
-每个 section 都会先检查连接。如果没有可用连接，操作不会执行，并在 `last database error` 中记录 `No database connected.`。如果已有具名连接但没有默认连接，错误信息会说明这一点并列出名称。见 [错误与等待](errors-and-waiting.zh-CN.md)。
+数据库操作会先检查连接。没有可用连接时，操作不会执行，`last database error` 会记录 `No database connected.`。如果已有具名连接但没有默认连接，错误信息会列出可用名称。见[错误与等待](errors-and-waiting.zh-CN.md)。
 
 ## 账号凭据
 
@@ -213,6 +213,6 @@ create a connection to database "MySQL" with properties:
 
 每条 SQL 连接内部维护一个最多包含**十条**数据库连接的 Hikari 连接池，允许多个操作并发执行。第十一个并发操作需要等待，最多等待上述 30 秒。连接池大小不能通过脚本属性调整。
 
-不同操作可能使用不同的池内连接。由于每条语句都会等待完成，同一 trigger 中的后续读取会等前一次写入结束后再执行；并发操作之间的数据可见性则取决于事务隔离。
+不同操作可能使用连接池中的不同连接。同一个触发器中，前一条写入完成后才会执行后续读取；并发操作之间的数据可见性取决于事务隔离级别。
 
 每条 SQL 连接都有独立的连接池，三条连接最多可占用三十条数据库连接。配置时请一并考虑数据库的 `max_connections` 限制。

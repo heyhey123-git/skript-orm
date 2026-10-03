@@ -11,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Select Page")
-@Description("Selects a one-based page with positive size. Results use page-local row-index and column-name keys, even for one result. Pagination requires a registered primary key. A page holds at most 5000 rows, and a larger page is refused before it is sent. Selects always wait and expose failures as the last database error.")
+@Description("Selects a page by its one-based page number and positive page size. Results are numbered from 1 within each page, such as {_users::1::name}. The table must have a registered primary key. Pages larger than 5000 rows are rejected before the query runs. Check last database error for failures.")
 @Example(
     """select page 2 with size 20 from table "users" and store the results in {_page::*}:
     where all:

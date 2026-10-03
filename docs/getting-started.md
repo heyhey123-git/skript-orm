@@ -2,15 +2,11 @@
 
 [简体中文](getting-started.zh-CN.md) | **English**
 
-Build a working script that connects to a database, stores a row, and reads it back.
-The other pages provide reference material when you need more detail.
-
-Assumes the plugin is installed: see [Requirements](../README.md#requirements) and
-[Install](../README.md#install).
+This guide builds a script that connects to a database, stores a row, and reads it back. Install the plugin first; see [Requirements](../README.md#requirements) and [Install](../README.md#install).
 
 ## 1. Connect
 
-A connection is made by a script, not by a config file:
+Create the connection in your script:
 
 ```sk
 on load:
@@ -64,8 +60,7 @@ The write waits for completion, so `last database error` reflects this operation
 runs. Database errors are available there, not just in the console. Every statement waits, with or
 without `and wait`; see [Errors and waiting](errors-and-waiting.md).
 
-`id` is not in the values because the database assigns it. If you need it afterwards, write your own
-value for it and use `upsert` instead; see [Cookbook](cookbook.md).
+The database assigns `id` because it is omitted from `values`. The plugin does not return generated ids. To know the id in your script, assign it yourself and use `upsert`; see [Cookbook](cookbook.md).
 
 ## 4. Read it back
 
@@ -121,6 +116,7 @@ on load:
         age: int, nullable
     if last database error is set:
         send "Table registration failed: %last database error%" to console
+        stop
 
 command /adduser <text> <integer>:
     trigger:
@@ -160,9 +156,9 @@ Other scripts should reuse the connection or create their own with `named`. See
 
 | If you want to | Read |
 | --- | --- |
-| Know what a column may say, and what registering does not do | [Tables](tables.md) |
+| Define columns and understand table registration | [Tables](tables.md) |
 | Store many rows at once, or update-or-insert | [Writing rows](writing.md) |
 | Filter, page, or read by id | [Reading rows](reading.md) |
 | Understand exactly when `last database error` is set | [Errors and waiting](errors-and-waiting.md) |
 | Store an item stack, a location, a date, an NBT compound | [Types](types.md) |
-| Find out why something silently did nothing | [Troubleshooting](troubleshooting.md) |
+| Diagnose an operation that had no effect | [Troubleshooting](troubleshooting.md) |

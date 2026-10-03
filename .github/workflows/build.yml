@@ -1,15 +1,12 @@
 name: Build
 
-# Every push produces a downloadable plugin jar, so testers can pick up the current state of the code
-# without waiting for a release. Correctness is ci.yml's business; this workflow only packages, and
-# its artifact is a snapshot rather than a promise.
+# Package a downloadable snapshot jar on each code push. Tests run in ci.yml.
 on:
   push:
-    # Branch pushes only: a release tag is the same commit, already built and verified by release.yml,
-    # so building it again would only produce a second artifact nobody asks for.
+    # Release tags are already built by release.yml.
     branches:
       - '**'
-    # The same inert changes ci.yml ignores: neither can change what gets built.
+    # Ignore documentation and IDE-only changes as ci.yml does.
     paths-ignore:
       - '**.md'
       - '.gitignore'
@@ -48,8 +45,7 @@ jobs:
       - name: Make the wrapper executable
         run: chmod +x ./gradlew
 
-      # The version comes from the same file the build reads, so the artifact name and the jar name
-      # cannot disagree with what the build actually produced.
+      # Use the committed version in both the jar and artifact names.
       - name: Read the version
         id: version
         run: |
@@ -69,7 +65,7 @@ jobs:
         with:
           name: skriptorm-${{ steps.version.outputs.version }}-${{ steps.version.outputs.short_sha }}
           path: build/dist/*.jar
-          # A build that produced no jar is a failure, not an empty artifact.
+          # Fail the job if the jar is missing.
           if-no-files-found: error
 
       - name: Summarize

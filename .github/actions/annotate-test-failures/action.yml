@@ -1,8 +1,7 @@
 name: Annotate failing tests
 description: >-
-  Turns JUnit XML failures into check annotations. Reading a job log through the API needs admin
-  rights while annotations are public, so this keeps a failure diagnosable without downloading
-  anything. GitHub shows at most ten annotations per step, which is enough to identify a regression.
+  Reports JUnit XML failures as check annotations so failures are visible without downloading
+  the full job log.
 
 runs:
   using: composite

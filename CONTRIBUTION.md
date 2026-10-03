@@ -2,12 +2,11 @@
 
 [中文版](CONTRIBUTION.zh-CN.md)
 
-Skript ORM is a Skript addon that exposes database operations as Skript elements. It is in early
-development: both the public API and the internal structure may still change. Unit tests and opt-in
-integration suites for MySQL, PostgreSQL and MongoDB cover the current behaviour (see §8).
+Skript ORM adds database operations to Skript. Its public API and internals may still change.
+Unit tests and optional MySQL, PostgreSQL, and MongoDB integration tests cover the current
+behavior (see section 8).
 
-The guiding principles are **moderate abstraction**, **readability over cleverness**, and **a small
-surface that is pleasant to use**. When a change and a principle disagree, the principle wins.
+Keep abstractions modest, code readable, and the Skript API small and easy to use.
 
 ---
 
@@ -20,16 +19,13 @@ surface that is pleasant to use**. When a change and a principle disagree, the p
 | `postgresql-implementation`   | PostgreSQL-specific JDBC behaviour                       |
 | `mongodb-implementation`      | MongoDB behaviour                                        |
 
-The root project builds the shaded plugin jar. It bundles every implementation module — the generic JDBC
-one, the PostgreSQL one, and the MongoDB one — and **no database driver**: the `libraries` entry in
-`plugin.yml` is generated from the modules the jar bundles, so a module that needs a driver names it
-there, and Paper downloads that driver on the first start into the server's `libraries/` directory. In
-the default build the list is `org.postgresql:postgresql:42.7.11` and
-`org.mongodb:mongodb-driver-sync:5.6.1`, while a combination of modules that need no driver writes
-`libraries: []`. That keeps the jar the size of the plugin and the driver the library its authors
-published, at the cost of a server that must be able to reach the server's mirror of Maven Central once.
-`-PbundleModules=a,b` builds a jar for another combination, which is how a module that is not released
-yet is tried:
+The root project builds the shaded plugin jar with the generic JDBC, PostgreSQL, and MongoDB
+implementations. Database drivers are not bundled. The build generates the `libraries` entry
+in `plugin.yml` from the selected modules; Paper downloads required drivers into the server's
+`libraries/` directory on first startup. By default, this includes
+`org.postgresql:postgresql:42.7.11` and `org.mongodb:mongodb-driver-sync:5.6.1`.
+The server must be able to reach its configured Maven mirror for this download.
+Use `-PbundleModules=a,b` to build a different combination:
 
 ```bash
 ./gradlew build                                  # shadow jar into build/dist
@@ -221,9 +217,9 @@ registering a `SyntaxInfo` with the addon's `SyntaxRegistry`, which is what `skr
 wraps. Adding an element to that list is part of adding the element: the server test drives every
 element it expects, so one that is never registered fails there instead of quietly not existing.
 
-A section is only recognised when its line ends with a colon, so an element whose body is optional is
-written with a trailing colon and nothing under it. Skript notes that with `Empty configuration
-section!` in the log and runs the section anyway. Those notes are expected, not a defect.
+A section needs a trailing colon and a body. Elements that also work without a body have
+separate effect forms without a colon. Use those forms for standalone statements; an empty
+section produces Skript's `Empty configuration section!` warning.
 
 - `SecSelectBase` and `SecWriteBase` hold the shared parsing and dispatch logic.
   `SecCreateConnection` and `SecRegisterTable` are standalone because they do not fit either shape.

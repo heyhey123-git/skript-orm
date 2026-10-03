@@ -43,24 +43,13 @@ abstract class SecSelectBase : Section() {
      */
     protected open val supportsWhere: Boolean = true
 
-    /**
-     * The index of table name expression in expressions array.
-     *
-     * @return
-     */
+    /** Index of the table name in the parsed expressions. */
     protected abstract val tableNameIndex: Int
 
-    /**
-     * The index of result variable expression in expressions array.
-     */
+    /** Index of the result variable in the parsed expressions. */
     protected abstract val resultVarIndex: Int
 
-    /**
-     * Extract extra parameters from expressions array for subclasses,
-     * automatically invoke when init.
-     *
-     * @param expressions
-     */
+    /** Reads any additional expressions needed by a select section during [init]. */
     protected open fun extractExtraParams(expressions: Array<out Expression<*>?>) {}
 
     @Suppress("UNCHECKED_CAST")
@@ -118,17 +107,13 @@ abstract class SecSelectBase : Section() {
     protected open fun resolveExtraArguments(event: Event?): Any? = Unit
 
     /**
-     * A refusal for arguments that are already known to be too large, or null when they are acceptable.
-     *
-     * Called on the server thread once [resolveExtraArguments] has run and before anything is sent, so a
-     * section whose size is known without asking the server refuses it without parking the trigger. A section
-     * whose size is only known from the result refuses from [executeQuery] instead.
+     * Returns an error for arguments known to exceed a limit before the query runs, or null if they
+     * are acceptable. Called on the server thread after [resolveExtraArguments].
      */
     protected open fun argumentsRefusal(arguments: Any?): String? = null
 
     /**
-     * Reports a refusal and clears the result variable, because a read that did not run must not leave
-     * the previous result behind. [DatabaseWork.refuseRead] owns the rule and the reasoning.
+     * Reports a refusal and clears the result variable to avoid leaving a stale result.
      */
     private fun refuse(event: Event, message: String) {
         DatabaseWork.refuseRead(event, this, message, resultVar)
@@ -193,8 +178,7 @@ abstract class SecSelectBase : Section() {
         val transaction = ConnectionScope.transaction(actualEvent)
 
         val continuation = next
-        // Store the continuation in order to resume after the query is complete
-        // Continuation means the rest of the script after this section, which will be executed after the query is done
+        // Resume the script after the query completes.
         val localVariables = SkriptLocalVariables.remove(actualEvent)
         Delay.addDelayedEvent(actualEvent)
 

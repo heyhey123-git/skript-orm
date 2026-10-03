@@ -1,11 +1,9 @@
 name: Wiki
 
-# Publish both languages to the separate wiki repository, with Chinese first.
-# Chinese pages keep their existing names; English pages add `-EN`. Edit the source files here,
-# not the generated wiki pages.
+# Publish both languages to the wiki repository. Chinese pages retain their names; English
+# pages use an `-EN` suffix. Edit the source documentation in this repository.
 #
-# Watch documentation and publishing files explicitly. Publish only from master or a manual run,
-# never from pull requests.
+# Publish on documentation changes to master or on manual dispatch.
 on:
   push:
     branches:
@@ -24,7 +22,7 @@ on:
 permissions:
   contents: write
 
-# Run one publication at a time to avoid conflicting pushes. Let an active run finish.
+# Serialize publication to avoid conflicting wiki pushes.
 concurrency:
   group: wiki
   cancel-in-progress: false
@@ -39,8 +37,7 @@ jobs:
       - name: Check out the repository
         uses: actions/checkout@v6
 
-      # Create an initial page in GitHub's wiki interface before the first run.
-      # This initializes the wiki repository; the generated pages replace it on publication.
+      # GitHub requires an initial wiki page before its repository can be checked out.
       - name: Check out the wiki
         uses: actions/checkout@v6
         with:

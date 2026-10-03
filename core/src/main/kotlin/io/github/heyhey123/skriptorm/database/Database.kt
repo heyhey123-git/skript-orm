@@ -19,7 +19,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * Represents a generic database connection and operations.
+ * A database connection and its operations, independent of the storage backend.
  */
 abstract class Database {
 
@@ -28,41 +28,33 @@ abstract class Database {
         /**
          * How long a transaction may stay open before the watchdog rolls it back.
          *
-         * Long enough that no honest transaction meets it, short enough that a script which errored
-         * inside one does not pin a pooled connection for the life of the server. A script that needs
-         * longer says so on its own `database transaction` section.
+         * This prevents a script that fails mid-transaction from holding a pooled connection
+         * indefinitely. Scripts that need more time can set a timeout on the `database transaction`
+         * section.
          */
         val DEFAULT_TRANSACTION_TIMEOUT: Duration = Duration.ofSeconds(30)
 
         /**
-         * Scope the transaction watchdogs run on.
-         *
-         * It belongs to the database layer rather than to the plugin, so that a transaction opened
-         * through this API is protected even when no plugin is driving it, and so that the classes here
-         * stay free of Bukkit.
+         * Coroutine scope for transaction watchdogs. Keeping it in the database layer protects
+         * transactions opened through this API without introducing a Bukkit dependency.
          */
         private val watchdogScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
         /**
          * How long a disconnect waits for operations that already hold a lease before closing anyway.
          *
-         * The wait is what keeps the pool from being closed under a statement that is still running, but
-         * it is a wait on someone else's code: a statement whose timeout the driver ignores, a `commit`
-         * waiting on a lock, or a `CREATE TABLE` waiting on a metadata lock, which MySQL bounds by
-         * `lock_wait_timeout` and whose default is a year. Without a bound of our own, one such operation
-         * hangs `disconnect`, and with it server shutdown, because the plugin's own disable runs
-         * `shutdown` while the main thread waits for it.
+         * Waiting lets in-flight statements finish before the pool closes. The wait needs a limit:
+         * drivers may ignore statement timeouts, and `commit` or `CREATE TABLE` may wait on locks.
+         * MySQL's default `lock_wait_timeout`, for example, is one year. Without a separate limit,
+         * one blocked operation could hold up `disconnect` and server shutdown.
          *
-         * An implementation that knows its own limits overrides [Database.closeWaitTimeout] rather than
-         * leaving this value to cover operations it knows can run longer.
+         * Implementations with different operation timeouts should override [Database.closeWaitTimeout].
          */
         val DEFAULT_CLOSE_WAIT_TIMEOUT: Duration = Duration.ofSeconds(30)
 
         /**
-         * Where the lifecycle says what it had to do to finish, installed by the plugin when it enables.
-         *
-         * The classes here stay free of Bukkit, so they cannot reach a plugin logger; a no-op default
-         * keeps them usable, and in tests, silent.
+         * Receives lifecycle warnings. The plugin installs a logger on enable; the no-op default
+         * keeps this layer independent of Bukkit and quiet in tests.
          */
         internal var warn: (String) -> Unit = {}
 
@@ -73,35 +65,23 @@ abstract class Database {
         private val lifecycleMutex = Mutex()
 
         /**
-         * Mutex that serializes every transition: connecting, replacing, and disconnecting.
-         *
-         * [publish] performs the whole connect while holding this lock, so a connect can never
-         * overlap another transition. Nothing has to track a connection attempt that is still in
-         * flight, because by the time a transition acquires this lock the previous one has either
-         * published its database or cleaned up after failing. The same invariant is why
-         * [Database.State.CONNECTING] is only visible to observers outside the lifecycle, and why an
-         * implementation must never call back into the lifecycle from [doConnect].
+         * Serializes connects, replacements, and disconnects. [publish] holds this lock through
+         * connection setup, so each transition finishes or cleans up before the next begins.
+         * [Database.State.CONNECTING] is therefore visible only outside the lifecycle. Implementations
+         * must not call back into the lifecycle from [doConnect] while this lock is held.
          */
         private val transitionMutex = Mutex()
 
         /**
-         * Connections a script registered under a name.
-         *
-         * The map is concurrent because statements resolve a connection on the server thread while
-         * the lifecycle updates registrations from whatever thread performs the transition. The rules
-         * about who may be added, replaced and removed still run under [lifecycleMutex].
+         * Named connections. Statements read this map on the server thread while lifecycle
+         * transitions update it on other threads. Registration changes still use [lifecycleMutex].
          */
         private val connections: MutableMap<String, Database> = ConcurrentHashMap()
 
         /**
-         * Names that named a connection and no longer do, oldest first, so a script that asks for one
-         * can be told the difference between a name nobody ever created and a name that was closed
-         * under it. Both leave the registry empty, and the two want opposite next steps: one is a
-         * typo, the other is a connection that went away while the script was still using it.
-         *
-         * Bounded on purpose. This is a diagnostic, not a history the plugin owes anyone: a server
-         * that opens thousands of short-lived connections must not grow a record of every one of
-         * them, and the oldest name is the least likely to be asked for.
+         * Recently closed connection names, oldest first. This lets errors distinguish an unknown
+         * name from a connection that closed while a script was using it. The set is bounded to avoid
+         * retaining every name on servers that create many short-lived connections.
          */
         private val closedNames: MutableSet<String> = Collections.synchronizedSet(
             object : LinkedHashSet<String>() {
@@ -143,7 +123,7 @@ abstract class Database {
         val current: Database?
             get() = defaultConnection
 
-        /** The registered names, sorted so that a message reads the same way twice. */
+        /** Registered connection names in a stable order for diagnostics. */
         val connectionNames: List<String>
             get() = connections.keys.sorted()
 
@@ -153,12 +133,8 @@ abstract class Database {
         /**
          * Makes a registered connection the default one.
          *
-         * The connection that had the role is disconnected when no name keeps it reachable, which is the
-         * rule [publish] applies when an unnamed connection replaces the default: an unnamed connection
-         * that is no longer the default can be resolved by no statement at all, so leaving it running
-         * would leave a pool, and the server connections in it, that nothing can close. A named one keeps
-         * running and merely stops being the default, because a scope or a `use connection` may still be
-         * using it.
+         * An unnamed previous default is disconnected because scripts can no longer reach it.
+         * A named connection remains available through its name.
          *
          * @return false when no connected database carries that name.
          */
@@ -346,8 +322,7 @@ abstract class Database {
     }
 
     /**
-     * Rolls back every transaction still open here, so that whatever is closing the connection does not
-     * have to wait for a script that may never resume.
+     * Rolls back open transactions before disconnect, including scripts suspended at a `wait`.
      */
     private suspend fun abortOpenTransactions() {
         for (transaction in openTransactions) {
@@ -364,8 +339,7 @@ abstract class Database {
     /**
      * The name this connection is registered under, or null when it was created without one.
      *
-     * A script can only reach a connection through its name or by it being the default, so this is
-     * also what tells a statement whether the instance in front of it is still reachable.
+     * Statements can reach this connection only by name or as the default.
      */
     @Volatile
     var connectionName: String? = null
@@ -383,10 +357,8 @@ abstract class Database {
     abstract val dataTypes: DataTypes
 
     /**
-     * How long this database's disconnect waits for operations that hold a lease before closing anyway.
-     *
-     * Longer than the slowest operation it can legitimately be running, so that work which is about to
-     * finish is not killed by a shutdown. An implementation with its own statement timeout says so here.
+     * Maximum time disconnect waits for active operations before closing the connection.
+     * Implementations may override this to account for their statement timeouts.
      */
     open val closeWaitTimeout: Duration
         get() = DEFAULT_CLOSE_WAIT_TIMEOUT
@@ -427,7 +399,7 @@ abstract class Database {
                 connectionName = name
                 if (name != null) {
                     connections[name] = this
-                    // A name that is live again is not a name that was closed, whatever it was before.
+                    // Clear any stale "closed connection" diagnostic for this name.
                     closedNames.remove(name)
                 }
                 if (name == null || defaultConnection == null) defaultConnection = this
@@ -450,13 +422,11 @@ abstract class Database {
     }
 
     /**
-     * Takes this instance out of the registry. Called while holding [lifecycleMutex], where the
-     * lifecycle's own bookkeeping about what is published lives.
+     * Removes this instance from the registry. The caller holds [lifecycleMutex].
      */
     private fun unpublish() {
         val name = connectionName
-        // Only a name that really was in the registry counts as closed: a connect that failed never
-        // got as far as publishing, and telling a script that name was closed would be a lie.
+        // Failed connection attempts were never published and must not be recorded as closed.
         if (name != null && connections.remove(name, this)) noteClosed(name)
         if (defaultConnection === this@Database) defaultConnection = null
         connectionName = null
@@ -487,12 +457,10 @@ abstract class Database {
     }
 
     /**
-     * Acquires a lease for a database operation,
-     * preventing disconnect until the operation is complete.
-     * It is used to ensure that the database remains connected while operations are in progress.
-     * Otherwise, the resources could be released while an operation is still using them, leading to undefined behavior.
-     * @throws IllegalStateException if the database is not connected or is shutting down
-     * @return the queries object for the current database connection
+     * Acquires an operation lease so disconnect waits for the operation to finish.
+     *
+     * @return queries for this connection
+     * @throws IllegalStateException if the database is disconnected or shutting down
      */
     private suspend fun acquireOperation(): Queries = lifecycleMutex.withLock {
         check(!isShuttingDown) { "Database lifecycle is shutting down." }
@@ -503,9 +471,9 @@ abstract class Database {
     }
 
     /**
-     * Releases a lease for a database operation,
-     * allowing disconnect to proceed if no other operations are active.
-     * @throws IllegalStateException if no operation is currently active
+     * Releases an operation lease and wakes disconnect if no operations remain.
+     *
+     * @throws IllegalStateException if no operation holds a lease
      */
     private suspend fun releaseOperation() {
         var drained: CompletableDeferred<Unit>? = null
@@ -529,10 +497,8 @@ abstract class Database {
     }
 
     private suspend fun disconnectInternal() {
-        // Three answers this method gets under the lifecycle lock and acts on outside it. None of them can
-        // be a field: a second caller arriving mid-disconnect reads the field, while these carry what this
-        // call found. None of the waiting may happen while the lock is held either, because the code that
-        // completes a deferred takes that same lock.
+        // Capture this call's waiters under the lifecycle lock, then wait outside it. A concurrent
+        // disconnect may observe different state, and completing a waiter also needs this lock.
 
         /** Another disconnect is already running, so this caller waits for it instead of closing twice. */
         var existingDisconnect: CompletableDeferred<Unit>? = null
@@ -540,16 +506,14 @@ abstract class Database {
         /** Non-null when operations held a lease as this disconnect began; completed when the last ends. */
         var operationWaiter: CompletableDeferred<Unit>? = null
 
-        /** Completed when this disconnect has finished, whichever way it went, to release the waiters. */
+        /** Completed when this disconnect finishes, including after a failure. */
         var completion: CompletableDeferred<Unit>? = null
 
         lifecycleMutex.withLock {
             when (state) {
                 State.DISCONNECTED -> return
 
-                // Unreachable as long as connectInternal only runs inside publish, which holds
-                // the transition lock every caller of this method also takes. Kept as a guard
-                // because falling through would close a database that is still initializing.
+                // The transition lock normally prevents this state; fail explicitly if that changes.
                 State.CONNECTING -> error("Cannot disconnect a database while it is still connecting.")
 
                 State.DISCONNECTING -> existingDisconnect = disconnectCompletion
@@ -573,9 +537,8 @@ abstract class Database {
 
         var failure: Throwable? = null
         withContext(NonCancellable) {
-            // Transactions hold a lease for their whole life, and one of them may be parked at a
-            // script's `wait`, so waiting for them to finish on their own would wait forever. They are
-            // ended first, which is what lets the rest of this method mean "no work is left".
+            // An open transaction holds a lease and may be suspended at a script's `wait`.
+            // End transactions before waiting for other operations to drain.
             abortOpenTransactions()
             awaitOperations(operationWaiter)
             try {
@@ -598,10 +561,8 @@ abstract class Database {
     /**
      * Waits for the operations that already hold a lease, but not forever.
      *
-     * A lease is released by the operation's own code finishing, and that code is a blocking JDBC call
-     * nothing here can interrupt. Waiting without a bound for it is waiting for something that may never
-     * come, and the cost of that is a server that cannot be stopped; closing the pool under a statement
-     * that never finishes costs one failed operation, and says so in the log.
+     * A blocking JDBC call may never return, so shutdown cannot wait indefinitely. On timeout,
+     * disconnect closes the connection and logs that in-flight operations may fail.
      */
     private suspend fun awaitOperations(waiter: CompletableDeferred<Unit>?) {
         if (waiter == null) return
@@ -611,8 +572,7 @@ abstract class Database {
                 waiter.await()
             }
         } catch (_: TimeoutCancellationException) {
-            // The next disconnect starts from a clean latch: this one belongs to the operations that
-            // are still running, and the state is going to DISCONNECTED either way.
+            // Discard this waiter's latch; the connection will be marked disconnected either way.
             lifecycleMutex.withLock {
                 operationsDrained = null
             }

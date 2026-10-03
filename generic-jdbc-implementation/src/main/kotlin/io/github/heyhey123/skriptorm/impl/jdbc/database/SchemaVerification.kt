@@ -7,54 +7,36 @@ import java.sql.Connection
 import java.sql.DatabaseMetaData
 
 /**
- * Compares a registered table against the table the server actually holds, and says what differs.
+ * Checks whether an existing database table supports its registered declaration.
  *
- * Registration is `CREATE TABLE IF NOT EXISTS`, which is deliberately a no-op when the table is already
- * there: registering the same table on every startup has to be safe, and the row-keeping integration test
- * depends on it. What that statement cannot do is notice that the declaration moved on. A column added to
- * a script never reaches a table that already exists, and the first statement to mention it is refused by
- * the server — `Unknown column 'age' in 'INSERT INTO'` — which names the insert rather than the
- * registration, so the script reads as if the write were wrong.
+ * Registration uses `CREATE TABLE IF NOT EXISTS`, which leaves an existing table unchanged.
+ * If a script adds a column later, registration succeeds but writes to that column fail.
+ * Verifying the schema immediately after registration reports the mismatch at its source.
  *
- * The check therefore runs straight after the DDL, while the table is known to exist, and reports the
- * declaration and the reality side by side. It reads [DatabaseMetaData] rather than asking each server for
- * its own `information_schema`, so one path covers MySQL, MariaDB, PostgreSQL, SQLite and H2. What that path
- * needs from a server is only the names it reports for the storages this implementation writes, and none of
- * those are guessed: a name that means one storage on every server is in [TYPE_ALIASES], a name one product
- * decided on its own is in that product's dialect, and a name a dialect cannot speak for — because the
- * generic dialect serves whatever driver a script names — is in [PRODUCT_ALIASES], under the name the server
- * gives for itself.
+ * [DatabaseMetaData] provides a common path across MySQL, MariaDB, PostgreSQL, SQLite, and H2.
+ * Type names shared across servers are normalized through [TYPE_ALIASES]. Server-specific names
+ * belong in the dialect or, for the generic dialect, [PRODUCT_ALIASES].
  *
- * What it requires is that the table can serve every statement the declaration allows: every declared column
- * is there, with the storage the declaration asked for, and the declared key names one row. What it does not
- * require is that the table holds nothing else. A table this plugin shares with another tool, or one an
- * older declaration of the same script created with columns this one no longer names, still answers every
- * statement the declaration can make, so that direction is not a difference. The key is the one part checked
- * the other way round, because there a wider declaration is not the safe side: see [compare].
+ * Every declared column must exist with compatible storage, and a declared key must identify a
+ * single row. Extra columns are allowed, including those left by an older declaration or another
+ * tool. Primary keys need a separate comparison; see [compare].
  *
- * What it does not check is auto-increment, and any size a server reports in units other than the one the
- * declaration used. The drivers disagree about both in ways that are not about the script at all: MySQL
- * reports an identity column through `IS_AUTOINCREMENT` while PostgreSQL reports the underlying sequence,
- * and MySQL's `COLUMN_SIZE` for a large-object column is a byte count rather than the declared size. A
- * comparison that failed on those would refuse correct tables, which is worse than the silence it replaces.
+ * Auto-increment and sizes reported in incompatible units are excluded. Drivers report identity
+ * columns differently, and MySQL reports large-object `COLUMN_SIZE` in bytes; comparing either
+ * directly would reject valid tables.
  *
- * A size is compared as the capacity it is, not as a number: a column with more room than the declaration
- * asks for holds everything the declaration can write, so it serves it, and a column with less does not.
- * Whether more room is more room is the storage's own answer rather than the comparison's, because a
- * fixed-width column returns what it padded: see [JdbcDataType.servesSize].
+ * A larger column can satisfy a smaller declared size. [JdbcDataType.servesSize] decides what
+ * counts as sufficient capacity for each storage type, including fixed-width columns.
  */
 internal object SchemaVerification {
 
     /**
-     * How many table names a "this table does not exist" message may name.
-     *
-     * Enough to recognise a mistaken name or a mistaken database, few enough that a script's mistake does
-     * not print a catalogue into the console.
+     * Maximum number of table names suggested when a registered table cannot be found.
      */
     private const val CANDIDATE_LIMIT = 20
 
     /**
-     * What the server reports for one column, in the terms this comparison needs.
+     * Column metadata used by the schema comparison.
      */
     data class ActualColumn(
         val name: String,
@@ -64,7 +46,7 @@ internal object SchemaVerification {
     )
 
     /**
-     * A table as the server holds it: its columns in declaration order, and the columns of its primary key.
+     * The server's columns in declaration order, plus its primary key columns.
      */
     data class ActualTable(
         val columns: List<ActualColumn>,
@@ -74,12 +56,10 @@ internal object SchemaVerification {
     /**
      * Throws unless the table the server holds matches [declared].
      *
-     * @param connection a connection with the schema in effect, which is the one the DDL just ran on
+     * @param connection the connection used to register the table
      * @param declared the table the script registered
-     * @param typeAliases the spellings the connection's own dialect reports for a storage, from
-     *   [JdbcDialect.typeAliases]. They have to come from the dialect because the same spelling can be two
-     *   different storages on two servers, so the comparison cannot carry them itself.
-     * @throws IllegalArgumentException naming every difference, or doing nothing when there is none
+     * @param typeAliases dialect-specific type names from [JdbcDialect.typeAliases]
+     * @throws IllegalArgumentException if the existing table does not support [declared]
      */
     fun requireMatches(
         connection: Connection,
@@ -99,20 +79,13 @@ internal object SchemaVerification {
     }
 
     /**
-     * Every difference that would stop the table from serving the declaration, in the order a reader wants
-     * them: a column that is missing altogether first, then the per-column differences, then the key.
+     * Returns missing columns first, then column mismatches, then primary key mismatches.
+     * Extra columns do not prevent the table from serving the declaration.
      *
-     * A column the table has and the declaration does not is not one of them. What a declaration asks for is
-     * that the columns it names are there with the storage it asked for; it asks for nothing else, and a
-     * table that carries more than that still runs every statement the script can write.
+     * Names must match exactly because this implementation always quotes identifiers.
      *
-     * The comparison is exact for names. A server that folds unquoted identifiers to lower case does not
-     * hide a difference, because this implementation always quotes them: what a script writes is the name
-     * the server holds, or the table is not the one it registered.
-     *
-     * [typeAliases] comes from the connection's dialect and names the spellings that dialect's driver
-     * reports for a storage this implementation writes; see [JdbcDialect.typeAliases]. [productName] is the
-     * server's own name for itself, for the spellings a dialect cannot speak for: see [PRODUCT_ALIASES].
+     * [typeAliases] supplies dialect-specific names; [productName] selects server-specific aliases
+     * for the generic dialect.
      */
     fun compare(
         declared: Table,
@@ -149,22 +122,15 @@ internal object SchemaVerification {
                 mismatches += "Column '$name' is declared with a size of $expectedSize but the table holds " +
                     "${stored.size}. A column of that size cannot serve the declaration."
             }
-            // A primary key is not null on every server this runs on, whatever the declaration says, and
-            // the drivers disagree about which of the two they report for an identity column. Only a
-            // non-key column is compared, where "not null" is what the script asked for and nothing else.
+            // Primary keys are non-null on every supported server. Drivers report identity columns
+            // differently, so only compare nullability on non-key columns.
             if (!column.isPrimaryKey && !column.isNullable && stored.nullable) {
                 mismatches += "Column '$name' is declared 'not null' but the table allows null."
             }
         }
 
-        // A declaration says that its key names one row, so the table has to be able to guarantee it: a
-        // primary key whose columns are all key columns of the declaration does, because a superset of a
-        // unique set is still unique. A table keyed on a column the declaration leaves out does not, because
-        // a statement addressing a row by the declared key would match every row of that other key, and
-        // `update one` would write all of them. The check is written as containment because that is the
-        // requirement, even though a declaration carries at most one key column — `Table` refuses a second,
-        // so the accepted direction cannot arise yet. A keyless declaration promises nothing about identity
-        // and is not compared, which is the case this relaxation is about.
+        // The declared key must uniquely identify rows in the existing table. An actual key using
+        // undeclared columns cannot guarantee that. A keyless declaration makes no uniqueness claim.
         val declaredKey = declared.columns.filterValues { it.isPrimaryKey }.keys
         if (declaredKey.isNotEmpty()) {
             if (actual.primaryKey.isEmpty()) {
@@ -183,21 +149,15 @@ internal object SchemaVerification {
     /**
      * Reads the table the server holds.
      *
-     * The table is looked up before its columns are, because a table lives in a catalog on MySQL and in a
-     * schema on PostgreSQL, and the same call has to find it on both. A table the lookup cannot find is not
-     * read: a comparison against a location nobody confirmed would report whatever that location happens to
-     * hold, which is a wrong answer rather than a missing one.
+     * First locate the table in the active catalog or schema. MySQL and PostgreSQL use different
+     * locations; reading columns without confirming the table could inspect the wrong one.
      */
     fun read(connection: Connection, table: String): ActualTable =
         readWith(connection.metaData, table)
 
     /**
-     * [read], taking the metadata rather than a connection.
-     *
-     * The two are separate so that the part a server can get wrong — where the table is, and which one was
-     * found — is unit-testable. That part has been wrong once: the catalogue search ran with no catalogue
-     * pattern, which on MySQL searches every schema it can see, so `performance_schema.USER` was taken for
-     * the registered `users`.
+     * Metadata-based form of [read], separated so table lookup can be unit tested. An unrestricted
+     * MySQL catalog search once mistook `performance_schema.USER` for a registered `users` table.
      */
     fun readWith(metadata: DatabaseMetaData, table: String): ActualTable {
         val location = locate(metadata, metadata.connection.catalog, table)
@@ -226,23 +186,13 @@ internal object SchemaVerification {
     }
 
     /**
-     * Where [table] lives, as the catalog and schema a metadata read has to be given.
+     * Finds [table] in the connection's catalog or schema and returns the location needed for metadata
+     * queries. Restricting the catalog prevents a similarly named table in MySQL's
+     * `performance_schema` from being mistaken for the registered table.
      *
-     * Every lookup stays inside the connection's own catalog. [DatabaseMetaData.getTables] with a null
-     * catalog searches every schema the account can see, and MySQL installs one called `performance_schema`
-     * that holds a table for each instrument; a declared `users` matched its `USER`, and the comparison then
-     * reported every declared column missing from a table the script had never named. A registration only
-     * ever concerns the table the connection is already using, so a table found anywhere else is not the one
-     * that was registered and must not be compared with it.
-     *
-     * Within that catalog the name is matched as the server reports it, and only then without case: MySQL on
-     * a case-sensitive filesystem compares the pattern as written and stores what the DDL wrote, so asking
-     * for `users` can miss a table the same server hands over as `USERS`.
-     *
-     * A table that cannot be found ends the registration here. There is deliberately no fallback to the
-     * connection's own catalog and schema: that is a guess, and a guess that then reads *some* table's
-     * columns makes a refusal look like a column difference in a table that was never identified. What the
-     * server does hold is named instead, so the reason is not left to be discovered.
+     * Matches the reported name exactly first, then without regard to case. Some MySQL setups store
+     * table names in a different case from the lookup pattern. If no table matches, registration fails
+     * with a list of candidate names from the active catalog.
      *
      * @throws IllegalArgumentException when no table with that name exists where the connection can see it
      */
@@ -259,9 +209,8 @@ internal object SchemaVerification {
             .firstOrNull { it.key.equals(table, ignoreCase = true) }
             ?.let { return it.value }
 
-        // Asked for by catalogue instead of by name, which is what finds a table the driver will not match
-        // a differently-cased pattern against. The result is capped: a script's mistake must not print a
-        // catalogue's contents into the console.
+        // List names in the active catalog to handle drivers whose lookup pattern is case-sensitive.
+        // Cap the list to keep an error from dumping the entire catalog.
         val elsewhere = mutableListOf<String>()
         if (catalog != null) {
             metadata.getTables(catalog, null, null, null).use { rows ->
@@ -293,17 +242,13 @@ internal object SchemaVerification {
     }
 
     /**
-     * Where a table is: the catalog and schema a metadata read has to be given.
-     *
-     * Both are nullable because no server has both: MySQL has a catalog and no schema, PostgreSQL the other
-     * way round, and SQLite neither.
+     * Catalog and schema used to look up a table through JDBC metadata. Either may be absent,
+     * depending on the database.
      */
     data class Location(val catalog: String?, val schema: String?)
 
     /**
-     * The type name the dialect writes for [column], or null when it is not a type this implementation
-     * renders. A declaration reached this far has one, so null means only that the comparison has nothing
-     * to say about that column.
+     * Returns the JDBC storage type declared for [column], or null if it has no JDBC type.
      */
     private fun typeNameOf(column: Column<*>): String? {
         val type = column.type as? JdbcDataType<*> ?: return null
@@ -317,19 +262,9 @@ internal object SchemaVerification {
     }
 
     /**
-     * The comparable form of a type name: upper case, without a `(size)`, through the aliases.
-     *
-     * The servers spell the same storage differently — `CHARACTER VARYING` against `VARCHAR`, `INT` against
-     * `INTEGER` — and between the shared table, the dialects' own and the product table below, every spelling
-     * of a type this implementation renders is covered. A name that is in none of them is compared as it
-     * stands, so a genuinely different type still differs.
-     *
-     * [typeAliases] is the connection's dialect, which knows the spellings that are its own: the names its
-     * driver reports, and the names its server's SQL has; see [JdbcDialect.typeAliases]. [productName] is
-     * what the server calls itself, which is the only key a spelling of one product can be filed under when
-     * the dialect serves every product. It is consulted in that order, most particular first: a dialect that
-     * maps a name is saying something about its own server, and a product that maps one is saying something
-     * only about itself.
+     * Normalizes a type name for comparison: removes its size, converts it to uppercase, then checks
+     * dialect-specific, product-specific, and shared aliases in that order. Unknown names remain
+     * unchanged so different storage types still produce a mismatch.
      */
     fun normalizeTypeName(
         name: String,
@@ -342,30 +277,12 @@ internal object SchemaVerification {
     }
 
     /**
-     * The spellings of the storages this implementation writes that belong to no product: the standard SQL
-     * names, the ones JDBC itself defines, and the few every server here spells the same way.
+     * Type names with the same meaning across supported databases, including standard SQL spellings
+     * such as `CHARACTER VARYING`, `BINARY VARYING`, and `DOUBLE PRECISION`.
      *
-     * A name stays here only while no server this implementation can be pointed at gives it another meaning.
-     * That is what keeps an entry from loosening a comparison it was never measured against: `INT8` is a big
-     * integer to one driver and nothing in particular to another, so it belongs to the dialects whose servers
-     * report it, while `CHARACTER VARYING` is simply what the standard calls the `VARCHAR` this implementation
-     * writes. What one product decides on its own — the names its driver reports, the names its own SQL has —
-     * goes in that product's dialect, which is also the only place a test against that server can pin it:
-     * [GenericJdbcDialect] and [MysqlJdbcDialect] in this module, PostgreSQL's in its own.
-     *
-     * `LONGVARCHAR` used to be here, mapped to `BLOB`, and it is not a name that means one storage
-     * everywhere: JDBC defines it as long character data whose binary counterpart is `LONGVARBINARY`, H2
-     * lists it among the names of its `VARCHAR`, and MySQL's own mapping turns a declared `LONG VARCHAR`
-     * into a `MEDIUMTEXT`. It is a text name on every server that has it, so a table declaring one is
-     * compared as text now.
-     *
-     * `BINARY VARYING` is the standard spelling of the `VARBINARY` this implementation writes, exactly as
-     * `CHARACTER VARYING` is of the `VARCHAR` beside it — the two are the names H2 leads with in its own
-     * lists of those types.
-     *
-     * `DOUBLE PRECISION` is the standard spelling of the `DOUBLE` this implementation writes. It is here for
-     * the same reason as the two above: H2 reports it for a column declared `double`, and no server that
-     * reports it means anything else by it.
+     * Names whose meaning depends on the database belong in its dialect or in [PRODUCT_ALIASES].
+     * For example, `INT8` is not a portable spelling for a big integer, and `LONGVARCHAR` has
+     * driver-specific handling.
      */
     private val TYPE_ALIASES: Map<String, String> = mapOf(
         "INT" to "INTEGER",
@@ -378,21 +295,10 @@ internal object SchemaVerification {
     )
 
     /**
-     * The spellings a server reports that mean one of this implementation's storages only on that server,
-     * keyed by the name the server gives for itself in [DatabaseMetaData.getDatabaseProductName].
-     *
-     * A dialect's map cannot hold these. The generic dialect serves whatever driver a script names, so a
-     * spelling filed there would have to mean that storage on every server it serves; here it is answered
-     * only for the server it was measured on.
-     *
-     * `H2` lists `FLOAT` among the names of its `DOUBLE PRECISION` — it has no four-byte float under that
-     * name — so a column a `float` declaration writes is read back as a `DOUBLE`. Both sides of the
-     * comparison have to land on one storage, or a table H2 built from the declaration would be refused from
-     * the second start on: this implementation asks for a `FLOAT`, H2 gives it a `DOUBLE PRECISION`, and only
-     * an entry here says that the two are the same column. A hand-made `REAL` column is the four-byte float
-     * H2 does have, and a declaration of `float` cannot be compared against it as well, because one name maps
-     * to one storage: the case this keeps working is the table the plugin itself asked H2 to build. Measured
-     * against H2 2.3.232 by `H2SchemaTest`, which is also what keeps the entry honest.
+     * Aliases that apply only to a named database product when using the generic JDBC dialect.
+     * H2 reports a declared `FLOAT` column as `DOUBLE PRECISION`; mapping `FLOAT` to `DOUBLE`
+     * lets schema verification recognize the table the addon created. H2's `REAL` remains a
+     * distinct four-byte floating-point type.
      */
     private val PRODUCT_ALIASES: Map<String, Map<String, String>> = mapOf(
         "H2" to mapOf("FLOAT" to "DOUBLE")

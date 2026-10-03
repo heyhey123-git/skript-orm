@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Insert Entity If Absent From A Variable Without A Colon")
-@Description("Inserts one row only when the database implementation considers it absent, taking its values from a list variable shaped like a select result. Written without a colon, because a section with no body is what Skript warns about. Support and conflict rules depend on the implementation. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Inserts a row from a list variable in select-result format if it does not already exist. Conflict rules vary by database implementation. Use this form without a colon when no section body is needed. The next line runs after the insert finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """insert entity {_user::*} if absent into table "users" and wait
 """

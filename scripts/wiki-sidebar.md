@@ -18,8 +18,8 @@
 
 **实用指南**
 
-- [排雷](Troubleshooting)
-- [菜谱](Cookbook)
+- [故障排查](Troubleshooting)
+- [示例](Cookbook)
 - [兼容性](Compatibility)
 - [基准与压力测试](Benchmarking)
 

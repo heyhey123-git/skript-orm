@@ -14,7 +14,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Make Database Connection The Default")
-@Description("Makes a named connection the one statements use when neither a scope nor a 'use connection' effect names one. The first connection created is already the default, so this is only needed to choose a different one. The connection that loses the role is disconnected when it has no name of its own, because nothing can reach it afterwards; a named one keeps running. An unknown or disconnected name changes nothing and is reported as the last database error, and the statement is refused while a database transaction is open.")
+@Description("Sets a named connection as the default when no connection is selected by a section or use connection effect. The first successful connection is already the default. Replacing an unnamed default disconnects it; named connections remain open. An unknown or disconnected name leaves the default unchanged and sets last database error. You cannot change the default during a transaction.")
 @Example(
     """make connection "logs" the default
 """

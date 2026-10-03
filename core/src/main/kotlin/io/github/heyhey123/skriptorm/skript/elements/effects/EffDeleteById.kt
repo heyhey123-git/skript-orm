@@ -16,7 +16,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Delete One Entity By ID Without A Colon")
-@Description("Deletes one row by its registered primary-key value. Written without a colon, because a section with no body is what Skript warns about. The statement waits: the lines after it run once the database has taken the change, and a failure is available as the last database error. The store affected rows clause keeps the number of rows the statement affected.")
+@Description("Deletes the row with the given primary-key value. Use this form without a colon when no section body is needed. The next line runs after the delete finishes. Check last database error for failures or store affected rows for the reported count.")
 @Example(
     """delete one entity from table "users" by id {_id} and wait
 """

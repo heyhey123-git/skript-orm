@@ -11,7 +11,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Last Database Error")
-@Description("Returns the most recent database error for the current event. A statement that touches the database waits for its work, so a failure is in here once the lines after it run.")
+@Description("Returns the most recent database error in the current event. Database statements finish before the next line runs, so you can check this expression immediately after a statement.")
 @Example(
     """delete one entity from table "users" by id {_id} and wait
 if last database error is set:

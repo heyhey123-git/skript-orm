@@ -9,7 +9,7 @@ import org.bukkit.event.Event
 import org.skriptlang.skript.addon.SkriptAddon
 
 @Name("Execute Raw Update")
-@Description("Sends a SQL statement of your own to the connected database, such as ALTER TABLE or UPDATE. Values are bound to ? placeholders by the with clause. The number of affected rows may be stored, which is what the server reports and is 0 for statements it does not count. The statement waits and exposes failures as the last database error. UNSAFE: the statement is sent as written — it is not checked against any registered table, and the plugin does not translate it for the implementation. It fails when the connection takes commands instead of SQL.")
+@Description("Runs a SQL statement such as ALTER TABLE or UPDATE. Use with to bind values to ? placeholders. You can store the affected-row count reported by the database; statements without a count report 0. The SQL is sent as written, without checking registered tables or translating it for the database. It does not work with command-based databases. Check last database error for failures.")
 @Example(
     """execute update "ALTER TABLE users ADD COLUMN age INT NULL"
 set {_values::*} to 30, "Alice"

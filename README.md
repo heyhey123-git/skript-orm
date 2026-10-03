@@ -45,18 +45,18 @@ command /adduser <text> <integer>:
             send "Insert failed: %last database error%" to console
 ```
 
-There is no SQL in either block. The plugin builds the statements, runs them off the server thread,
-and hands results back as ordinary Skript variables and values.
+The plugin generates and runs the database statements off the server thread. Results are available
+through ordinary Skript variables.
 
 ## Requirements
 
 | | |
 | --- | --- |
-| **Paper** | 26.2 or newer, the server line this build compiles against. |
-| **Skript** | 2.16.2 or newer. On anything older the plugin disables itself and says why in the console. |
-| **MySQL** | The shipped implementation, tested against MySQL 8. Paper already ships the driver, so there is nothing to install for it. |
-| **PostgreSQL** | Also shipped, and tested in CI. Its driver is downloaded on the first start into the server's `libraries/`; see [Compatibility](docs/compatibility.md#what-is-inside-the-jar). |
-| **MongoDB** | Also shipped, and tested in CI against MongoDB 8. Its driver is downloaded on the first start, the same way PostgreSQL's is. |
+| **Paper** | 26.2 or newer. This build targets the 26.2 release series. |
+| **Skript** | 2.16.2 or newer. With an older version, the addon disables itself and explains why in the console. |
+| **MySQL** | Support is included and tested with MySQL 8. Paper includes the driver. |
+| **PostgreSQL** | Support is included and tested in CI. The driver is downloaded to the server's `libraries/` directory on first startup; see [Compatibility](docs/compatibility.md#what-is-inside-the-jar). |
+| **MongoDB** | Support is included and tested with MongoDB 8 in CI. Its driver is also downloaded on first startup. |
 | **SkBee** | Optional; required only for `nbtcompound` columns. SkBee also provides the NBT compound objects used in scripts. |
 
 ## Install
@@ -83,54 +83,41 @@ and hands results back as ordinary Skript variables and values.
 
 ## Performance and limits
 
-Plainly: ordinary reads and writes do not lag a server, and a request too large to store is refused rather
-than run. Refusing is protection, not a defect of the addon — players notice a stutter, not an error message.
-
-Every number below was measured on the machine named beside it, one server at a time, and where it is written
-as a range the spread was real. A number without its machine is not a number: two runs of the same test on the
-same CI label can land on different processors.
+Reads of up to 5000 rows did not lengthen a tick in the measurements below. Large writes did, so avoid
+running them during busy periods. Reads above the limit fail without storing a partial result; large
+writes are split into smaller statements. These measurements describe the listed machines, not a
+guaranteed result on every server. CI jobs with the same label may run on different processors.
 
 | What was measured | Result | Machine |
 | --- | --- | --- |
-| Writing 5000 rows, the size both limits land on | 70 to 90 ms past a tick cold; warm, about 30 ms in one run and no overhang at all in another | disposable Paper 26.2 server, AMD Ryzen 5 5600X, JDK 25 |
+| Writing 5000 rows | The longest tick exceeded 50 ms by 70 to 90 ms on the first run; later runs varied from no overrun to about 30 ms | disposable Paper 26.2 server, AMD Ryzen 5 5600X, JDK 25 |
 | Writing 100 rows, and 10 000 rows | about 10 ms, and 100 to 110 ms, past a tick | the same server |
 | Reading 100 to 5000 rows | no read lengthened a tick, and every row asked for was stored | the same server |
 | Reading 10 000 rows | refused: the result variable is cleared and `last database error` names the ceiling | the same server |
 | A 5000-row `insert many` through the generic JDBC path | 9.960 ± 0.384 ms, and 6.1 to 10.0 ms across three CI hosts | Ryzen 5 5600X; AMD EPYC 9V74; Intel Xeon Platinum 8573C |
-| What a real server received for those 5000 rows | MySQL 5038 statements, one per row; MariaDB 2, one multi-row insert; PostgreSQL cannot count them | one CI run, Intel Xeon Platinum 8370C for MySQL and MariaDB, AMD EPYC 7763 for PostgreSQL |
+| Statements received by the database for 5000 inserted rows | MySQL: 5038, including 5000 inserts; MariaDB: 2, including one multi-row insert; PostgreSQL: unavailable | one CI run, Intel Xeon Platinum 8370C for MySQL and MariaDB, AMD EPYC 7763 for PostgreSQL |
 
-The last row is the driver's doing rather than the plugin's, on the same SQL and the same server. What the
-plugin sends and what the server receives are different questions, which is why this project counts both and
-trusts the count: wall clock moves by ten to twenty percent between identical runs on a shared machine, and a
-count does not. [Benchmarking and stress testing](docs/benchmarking.md) records how each number was taken and
-that policy — **counts and allocations are findings that may gate a build, while timing is reported and never
-gates it**. Nothing here is a promise about your machine.
+The plugin submits a batch to the driver, but the driver decides how many statements the server
+receives. That explains the difference between MySQL and MariaDB in the last row. Statement counts
+are repeatable; timings on shared CI machines fluctuate. [Benchmarking and stress testing](docs/benchmarking.md)
+explains the measurements and which metrics can fail a build. Timings are reported but do not fail builds.
 
-**The limits, in the same plain terms.** A read stores at most 5000 rows; past that nothing is stored and
-`last database error` says so. A write binds at most 30 000 values, which is 5000 rows of six columns, and a
-batch past that is not refused: it is sent as several statements and every row is written. Absurdly large
-requests are refused rather than run, and that is deliberate — a server that stutters is what players notice.
+**Limits.** A read stores at most 5000 rows. If the result exceeds that limit, nothing is stored and
+`last database error` explains why. A write statement binds at most 30 000 values (for example,
+5000 rows of six columns); larger batches are split across statements. Other resource limits may
+still reject excessively large requests.
 
 ### What is deliberately not here
 
-- **No tick percentiles.** The observer is script-side: it can report the tick a statement ran on and the
-  longest tick in that window, but its clock resolves to 10 milliseconds, it is quantized by the tick a
-  parked trigger resumes on, and its floor is one tick. Percentiles over tick durations need an observer
-  inside the tick loop, which is a plugin in the server rather than a script, so MSPT percentiles are absent
-  rather than invented.
-- **No PostgreSQL statement counts.** Where a database itself counts the statements it received is where the
-  difference between drivers lives. The MySQL family reports them, and does so in the rows above; PostgreSQL's
-  own views count rows and transactions and cannot attribute either to statements, so that half is
-  unavailable rather than guessed.
+- **No tick percentiles.** The script records the longest tick during each operation, with a 10 ms clock
+  resolution. Measuring MSPT percentiles requires sampling the server's tick loop directly.
+- **No PostgreSQL statement counts.** The available PostgreSQL statistics count rows and transactions,
+  but cannot attribute them to individual statements.
 
-**One trap worth meeting here instead of in production.** With Connector/J's default settings a batched
-insert leaves as one statement per row, so the same insert is much slower there than on PostgreSQL or MariaDB
-with the same SQL. The `insert many` benchmark — 5000 rows of two columns, twenty times, the same script and
-table definition on every backend — measured 17.04 seconds against MySQL and 1.99 seconds against PostgreSQL
-and MariaDB, and the 5000 statements per batch came from the driver rather than from this plugin. The option
-that rewrites the batch is not free either: it makes the insert faster and takes the affected-row count away.
-[Troubleshooting](docs/troubleshooting.md#insert-many-got-faster-and-affected-rows-stopped-storing) has the
-details.
+**MySQL batch inserts need attention.** With the tested Connector/J defaults, the driver sent one
+insert per row. In a benchmark of twenty 5000-row inserts, MySQL took 17.04 seconds, compared with
+1.99 seconds for PostgreSQL and MariaDB. Enabling batch rewriting can improve throughput, but the
+driver then stops reporting a usable affected-row count. See [Troubleshooting](docs/troubleshooting.md#insert-many-got-faster-and-affected-rows-stopped-storing).
 
 ## Documentation
 
@@ -160,4 +147,3 @@ server and runs the plugin against it. Both are described in [CONTRIBUTION.md](C
 ## License
 
 MIT. See [LICENSE](LICENSE).
-

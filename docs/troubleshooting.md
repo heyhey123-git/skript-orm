@@ -45,13 +45,11 @@ See [Types](types.md).
 
 `select many` results start with a one-based row index, as in `{_users::1::name}`. Even a single matching row needs that index. There is no row-count expression for these results: `size of {_users::*}` counts first-layer values, but each row is a sub-list. Walk the row indices or keep your own counter. See [Reading rows](reading.md).
 
-This is Skript's rule rather than the plugin's storage, and it applies to any list of sub-lists however it was written. `size of` reads the list through `Variable#size(Event)`, which takes the number of entries and then subtracts every entry whose value is a map with no scalar of its own — a row is exactly that, so a result of rows reports zero, and so does the same shape built by a script. The case that pins this is `elements/34-result-size.sk` in the server test: it asserts 20 for a flat list the script built, 0 for the stored result, 0 for the same shape built by hand, and 20 for a count taken by iterating the result. To count rows, iterate them — the plugin's own benchmark and cookbook do that too.
+This is how Skript handles nested lists, including ones built by a script. Count rows by walking their indices, as shown in the [cookbook](cookbook.md#walk-every-page).
 
 ## A `loop 1 to 20` counts nothing
 
-Skript has no `X to Y` range, and writing one does not fail loudly: Skript reports `Can't understand this loop: '1 to 20'` once at load time, drops that line, and loads the rest of the script — so the loop body never runs once, and nothing inside it can report the problem. Everything around it works, which is what makes this hard to see. Measured on Skript 2.16.2, every spelling of a range is refused: `loop 1 to 20`, `loop 1 through 20`, `loop from 1 to 20`, and the expression form `set {_x::*} to 1 to 20` (which answers `Can't understand this expression: '1 to 20'`, and that is why no loop can take it).
-
-Walk a range by counting, or by building the list and looping that:
+Skript does not support `loop 1 to 20`. It reports a parse error when the script loads and skips the loop, so the loop body never runs. Use `loop 20 times` and its `loop-number` instead:
 
 ```sk
 loop 20 times:
@@ -65,7 +63,7 @@ loop {_indices::*}:
     # loop-value is the row index for this iteration
 ```
 
-A comma list such as `loop 1, 2, 3` is a list, and it does work. The case that pins all of this is `elements/34-result-size.sk` in the server test, which asserts a count loop and a list loop each run 20 times and find 20 rows while a control reads the rows with no loop at all — and the server test fails the build on any `can't understand` line, so a range spelling cannot creep back in unnoticed.
+If you already have the indices in a list, you can loop that list instead. A comma-separated list such as `loop 1, 2, 3` also works.
 
 ## A delete or update touched every row
 
@@ -106,6 +104,9 @@ loop 100 times:
     select page loop-number with size 1000 from table "users" and store the results in {_rows::*}:
         where all:
             active = true
+    if last database error is set:
+        send "Read failed: %last database error%" to console
+        stop loop
     if {_rows::1::id} is not set:
         stop loop
     # ... use this page ...
@@ -117,15 +118,11 @@ Pagination sorts by the registered primary key and rejects tables without one. P
 
 ## A quick query, and the server still hitched
 
-Reading has two halves, and only one of them leaves the server thread: the query runs elsewhere, while the answer is written into the variable on the server thread, one value at a time. That costs about 1.4 microseconds per value, measured, so a 5000-row result of a six-column table is about 47 milliseconds — most of a tick. Values cost, not rows: the same 5000 rows of a two-column table cost about 15 milliseconds.
-
-The 5000-row ceiling holds that cost where it is, and results above 10 000 values are stored more cheaply (about a quarter less of that server-thread time, not of the tick — a cost that fits inside a tick's 50 ms does not lengthen one; the numbers are under [what storing a result costs](reading.md#what-storing-a-result-costs)), but no mode makes storing a large result free. To keep a read short, narrow the result — a stricter filter, fewer columns in the table, or one page at a time. See [How many rows one read may store](reading.md#how-many-rows-one-read-may-store).
+The query runs in the background, but Skript stores its results on the server thread. The number of column values matters: in one benchmark, storing 5000 six-column rows took about 47 ms, while 5000 two-column rows took about 15 ms. Use a stricter filter or read one page at a time. See [What storing a result costs](reading.md#what-storing-a-result-costs).
 
 ## "insert many" of a large list pauses the server
 
-Reading the batch out of the variable happens on the server thread, at about 0.33 microseconds per value, measured, and it cannot move: a variable name may contain an expression, which Skript resolves only there. A batch of 30 000 values is about 10 milliseconds of pause before the first statement is sent, and a batch past the budget becomes several statements, each pausing about that much. `insert many` writes every row rather than refusing, so the total pause follows the size of the whole batch rather than the budget.
-
-Keep one write to one page: walk the source with `select page` and insert each page, which also gives a failure a natural boundary. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+The plugin reads the list variable on the server thread before sending it to the database. In one benchmark, reading 30,000 values took about 10 ms. Larger lists take longer even though the plugin splits the database writes. For large jobs, use `select page` and insert one page at a time. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
 
 ## A refused read is not a free read
 
@@ -133,21 +130,15 @@ The ceiling is enforced after the database answers. The statement asks for one r
 
 ## "insert many" got faster, and affected rows stopped storing
 
-You read that the MySQL driver can rewrite a batch, added `rewriteBatchedStatements=true` to the url, and the insert really did get several times faster — but `and store affected rows` now stores nothing.
-
-Connector/J 9.5.0 merges the batch into fewer statements before sending it. The count that comes back then describes the merged statement rather than the rows you sent, and the driver does not split it back up: the `numBatchedArgs > 1` branch of `ClientPreparedStatement` fills every entry of the batch update count with `SUCCESS_NO_INFO` and discards the row count the server reported. The plugin reads `SUCCESS_NO_INFO` as “no number” rather than guessing, so the variable is cleared and stays empty. A count that is quietly wrong would be worse than no count.
-
-Remove the option from the url. It is not a portable setting but a property of one driver, and its name is not one the other drivers know: `"MariaDB"` reaches the server's bulk execute without any option and still counts every row, and the PostgreSQL driver spells its equivalent `reWriteBatchedInserts`. A url is also the wrong place to fix this, because one batch is sent by the same code on every backend; a real fix has to be made in the plugin. See [Affected rows](affected-rows.md) and [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+If you set `rewriteBatchedStatements=true` in a MySQL URL, Connector/J may report `SUCCESS_NO_INFO` for each row in a rewritten batch. The plugin then leaves the affected-row variable unset because the exact count is unavailable. Remove that URL option if your script needs the count. See [Affected rows](affected-rows.md).
 
 ## The generic JDBC type refuses "auto increment"
 
-Nearly every database spells a self-filling column differently, so each dialect answers for itself: `JdbcDialect.autoIncrementClause()` refuses with `Auto increment` unless a dialect overrides it, and only some do — the MySQL dialect answers `AUTO_INCREMENT`, the PostgreSQL one answers `GENERATED BY DEFAULT AS IDENTITY`. A database reached through the generic JDBC type, H2 or SQLite for instance, gets the refusal, and the create statement is rejected before it reaches the database.
-
-Give the column an explicit value in the declaration and leave `auto increment` out of it. If the database has a spelling of its own, the dialect is the place to add it: one override, and every table declaration through that type can use it.
+The generic `"JDBC"` type does not know how to declare an auto-increment column, so registration fails before sending a `CREATE TABLE` statement. Remove `auto increment` from the column declaration and supply its value when inserting rows. Support for a database-specific syntax requires an implementation for that dialect.
 
 ## Skript says "Empty configuration section!"
 
-Skript warns when a section has no indented content beneath its colon, regardless of which plugin provides it. The message comes from Skript's parser, and its control flag is internal; neither a config file nor a script can disable it.
+Skript shows this warning when a section has a colon but no indented body.
 
 Forms that take values from a variable or operate by id need no body, so they use no colon. A line in this form is an effect, not a section, and does not trigger the empty-section warning:
 
@@ -157,47 +148,17 @@ delete one entity from table "users" by id {_id} and wait
 select entity from table "users" by id {_id} and store the result in {_user::*}
 ```
 
-Use a colon only when the statement has an indented body. To read a single row, you can supply a filter that covers the rows you want; this example suits a table whose ids start at 1:
-
-```sk
-select one entity from table "users" and store the result in {_user::*}:
-    where all:
-        id >= 1
-```
-
-Sections with a `where` block, `values` block, or other body need no changes. Older scripts with empty sections still run but still warn. For the one-line forms above, removing the colon resolves the warning.
+Use a colon only when the statement has an indented `where`, `values`, or other body. Removing the colon from a one-line statement resolves the warning.
 
 ## "Limited delete is not supported by this JDBC dialect."
 
-The generic `"JDBC"` type has no portable way to write a delete bounded by a row limit. MySQL and MariaDB append `... LIMIT n`, PostgreSQL picks the rows with a `ctid` subquery first, and MongoDB picks their ids first; the portable dialect has none of those, so `JdbcDialect.applyDeleteLimit()` answers with `Limited delete` and the statement is rejected before it reaches the database. Nothing is deleted — not even in part — and the message is in `last database error`.
+On a generic `"JDBC"` connection, `delete entities` reports this error whether or not you wrote `with limit` or `where`. `update entities` behaves the same way and reports `Limited update is not supported by this JDBC dialect.` No rows are changed.
 
-**The limit is not the only thing that triggers it.** On the generic type `delete entities` is refused whether or not the script wrote a limit. Measured on this plugin's own server, over SQLite through a generic connection, by `elements/31-statement-shape.sk`:
-
-| statement | what came back |
-| --- | --- |
-| `delete entities from table "..." and wait` | `Limited delete is not supported by this JDBC dialect.`, no affected-row count |
-| the same with a `where all:` block | the same message, no affected-row count |
-| the same with `with limit 1` | the same message |
-
-So a filtered delete without a limit is not the workaround it looks like, and it is not only deletes: an `update entities` written the same way comes back `Limited update is not supported by this JDBC dialect.`, which the same file measures. The dialect on its own is not the whole story either: `JdbcDialect.delete()` runs a plain `DELETE FROM t` when it is handed no limit, so what reaches it from these elements is not nothing. Which value is handed over, and where it comes from, is not identified here; what is measured is that the message is the dialect's rather than the `Delete limit must be positive.` one a zero limit produces, and that no rows are reported as affected.
-
-No property or driver setting gives the dialect the form it lacks, so this is a real gap rather than a configuration mistake. To act on all rows, use a type whose dialect answers: `"MySQL"`, `"MariaDB"`, `"PostgreSQL"` and `"MongoDB"` all do. On the generic type, delete by key instead: read the keys you mean to remove — `select page` over the table, or a walk of the key range — and run `delete one entity ... by id {_key}` for each one. `by id` takes no limit, and the batch size is yours to choose.
+Use `delete one entity ... by id` or `update one entity ... by id` for individual keys. To update or delete multiple rows with one statement, use a supported connection type such as `"MySQL"`, `"MariaDB"`, `"PostgreSQL"`, or `"MongoDB"`.
 
 ## A nested loop's values need the loop's own suffix
 
-The plain spelling of a loop expression is ambiguous inside a nested loop, and Skript refuses the **line that reads it** while parsing — not the loop. Measured on Skript 2.16.2, the build this plugin compiles against:
-
-```
-[Skript] Line 21: (elements/32-loop-value.sk)
-    There are multiple loops that match loop-number. Use loop-number-1/2/3/etc. to specify which loop's value you want.
-    Line: set {_plain} to "%loop-number% of %loop-number-2%"
-```
-
-The line is dropped, so the body around it looks as if it never ran and a batch filled there comes out empty — which is how this was first seen in a benchmark script, and why the six sizes in `server-benchmark/skript/10-curve.sk` are written out one after another instead of looped over. The loops themselves are fine, and the suffixes work. They count from the **outermost** loop inward: in `loop 2 times:` around `loop 3 times:` the outer loop's last number is `loop-number-1` (2) and the inner loop's is `loop-number-2` (3); in `loop 3 times:` around `loop 2 times:` the values are `loop-value-1` = 3 for the outer loop and `loop-value-2` = 2 for the inner one. Both directions are asserted by `elements/32-loop-value.sk`.
-
-## Setup inside an `if`
-
-An earlier version of this page said that `create a connection` and `register a database table` written inside an `if` block do nothing. That did not reproduce when it was measured: with the connection made inside `if <condition>:` and a statement written through it **outside** the block, the statement ran and reported one affected row, and an `insert` written inside an `if` reported one row too. `elements/31-statement-shape.sk` asserts both counts, so the shape is covered by a run rather than by a note. A statement inside an `if` is not skipped, so the guard each element's `walk` opens with is not the cause of what was seen. What the old observation ran is not recorded, so there is nothing left to reproduce from.
+Inside nested loops, Skript needs a suffix to identify which loop you mean. An unsuffixed `loop-number` or `loop-value` is ambiguous and the line using it fails to parse. Number the loops from the outside in: `loop-number-1` refers to the outer loop and `loop-number-2` to the inner one. The same applies to `loop-value-1` and `loop-value-2`.
 
 ## The table name works on one server and not another
 

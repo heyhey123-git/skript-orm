@@ -6,13 +6,8 @@ import javax.sql.DataSource
 import kotlin.math.ceil
 
 /**
- * Where a JDBC statement gets the connection it runs on, and how long it may take.
- *
- * Every statement borrows a connection and gives it back. Who owns it differs by how the work is
- * running: outside a transaction it comes from the pool and goes straight back, while inside one it is
- * the connection the transaction pinned, and giving that one back would end the transaction. The two
- * implementations differ in nothing else, which is why the choice lives here instead of in each of the
- * ten query classes.
+ * Supplies JDBC statements with either pooled connections or a connection pinned to a transaction.
+ * The caller releases each borrowed connection through the source that supplied it.
  */
 interface JdbcConnectionSource {
 
@@ -23,12 +18,8 @@ interface JdbcConnectionSource {
     fun release(connection: Connection)
 
     /**
-     * How long a statement run through this source may take, in seconds. Zero leaves the driver's
-     * default, which is no limit at all.
-     *
-     * Asked once per statement rather than fixed when the source is made, because a source that knows a
-     * deadline answers with what is left of it: a transaction's last statement must not be allowed to
-     * outlive the transaction by a whole timeout.
+     * Timeout in seconds for the next statement. Zero keeps the driver's default. A transaction
+     * source calculates this from its remaining time each time a statement starts.
      */
     fun statementTimeoutSeconds(): Int = 0
 }
@@ -49,16 +40,9 @@ class PooledConnectionSource(
 }
 
 /**
- * One connection for as long as the source lives, which is what a transaction is.
- *
- * [release] does nothing on purpose: closing this connection is the transaction's decision, not a
- * statement's. A cursor that ends inside a transaction therefore releases its result set and its
- * statement and leaves the connection alone.
- *
- * The timeout is what is left until [deadlineNanos], rounded up to a whole second and never below one.
- * Rounding up matters at the end of a transaction: half a second left is still time a statement may
- * spend, and a statement that starts with nothing left gets one second to give up in, which is what
- * lets the watchdog's rollback proceed instead of waiting on a statement with no bound at all.
+ * Supplies the connection held by a transaction. [release] leaves it open for the transaction to
+ * close. Statement timeouts use the remaining time until [deadlineNanos], rounded up to at least
+ * one second.
  */
 class PinnedConnectionSource(
     private val connection: Connection,
@@ -71,9 +55,8 @@ class PinnedConnectionSource(
     private var borrowedAtOrAfterDeadline = false
 
     override fun borrow(): Connection {
-        // Recorded rather than refused: a statement that starts with nothing left still gets the one
-        // second [statementTimeoutSeconds] promises to give it, and this is what tells the transaction
-        // afterwards that the connection carried a statement issued outside its deadline.
+        // Keep track of statements started after the deadline so the transaction discards the
+        // connection even if that statement finishes before rollback.
         if (System.nanoTime() >= deadlineNanos) borrowedAtOrAfterDeadline = true
         inFlight.incrementAndGet()
         return connection
@@ -84,11 +67,8 @@ class PinnedConnectionSource(
     }
 
     /**
-     * Whether this connection may still be running a statement, or took one on after the deadline.
-     *
-     * Either way the transaction's rollback cannot be shown to have covered everything the connection saw,
-     * so the connection must not go back to the pool in a state the pool can reuse: a statement landing
-     * after the rollback would be committed by restoring automatic commits on the way out.
+     * True if a statement may still be running or started after the deadline. In either case,
+     * rollback may not cover all its work, so the transaction must discard the connection.
      */
     val mustNotBeReused: Boolean
         get() = inFlight.get() > 0 || borrowedAtOrAfterDeadline

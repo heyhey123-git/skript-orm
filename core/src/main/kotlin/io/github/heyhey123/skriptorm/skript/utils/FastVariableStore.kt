@@ -14,29 +14,18 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReadWriteLock
 
 /**
- * Stores a large read result into a global Skript list variable without making the server thread walk
- * Skript's variable tree one value at a time.
+ * Prepares a large result's list-variable tree on the database thread, then attaches it to Skript's
+ * global variable store on the server thread. This avoids building the tree one index at a time
+ * while holding Skript's variable lock.
  *
- * Skript builds the list tree value by value while holding its variable lock: every value costs a
- * lowercased full name, a split, a descent and two map writes, all on the server thread. The tree depends
- * on nothing but the values, so it can be built on the database thread and attached in one step.
- *
- * Only results of at least [MIN_VALUES] values take this path, and only when the probe below found a Skript
- * whose variable store looks exactly as expected; the probe runs when the first such result arrives, so that
- * one result is still stored the ordinary way. Measured on Paper with Skript 2.16.2, storing 30000
- * values costs about 47ms on the server thread the ordinary way and about 36ms this way; at 600 values the
- * two are even. What remains on the server thread either way is the part that cannot move: the per-value
- * save to Skript's variable storage, and the root hash map that answers reads of single indexes.
- *
- * Everything Skript does not expose publicly is reached through [MethodHandle]s, resolved once and then
- * validated by doing the work for real on a throwaway variable. If anything about the shape differs, the
- * path stays off and [VariableModifier] stores the result the ordinary way, which is always correct.
+ * The path applies only to results with at least [MIN_VALUES] entries and only after a probe has
+ * checked the expected Skript internals. It uses linked [MethodHandle]s for those internal fields
+ * and methods. [VariableModifier] uses Skript's regular API when the fast path is unavailable.
  */
 internal object FastVariableStore {
 
     /**
-     * Below this many values the graft costs about as much as it saves, so small results never touch any of
-     * this. At 600 values the two paths measured even, and the gain grows with the size of the result.
+     * Minimum result size for building and attaching a tree through this path.
      */
     const val MIN_VALUES = 10_000
 
@@ -117,8 +106,7 @@ internal object FastVariableStore {
             @Suppress("UNCHECKED_CAST")
             rootHash = hashGetter.invoke(map) as MutableMap<Any?, Any?>
 
-            // Ask Skript itself what a list node looks like: write a throwaway variable, take the node it
-            // built, and reuse that node's own class and comparator for everything built afterwards.
+            // Build a scratch list with Skript, then reuse its node class and comparator.
             Variables.setVariable("$SCRATCH::node::leaf", 1, null, false)
             val sample = rootTree[SCRATCH]
             val nodeClass = Class.forName(NODE_CLASS)
@@ -146,8 +134,7 @@ internal object FastVariableStore {
     private fun newNode(): MutableMap<Any?, Any?> = nodeConstructor.invoke(nodeComparator) as MutableMap<Any?, Any?>
 
     /**
-     * Builds the result tree on the database thread, ready for [take]. Does nothing when the fast path is
-     * off or the result is too small, and nothing but a wasted build when the caller then finds it unusable.
+     * Builds a result tree for [take] when the fast path is available and the result is large enough.
      */
     @Suppress("UNCHECKED_CAST")
     fun publish(rows: Map<String, Any?>) {
@@ -157,7 +144,7 @@ internal object FastVariableStore {
         val values = ArrayList<Any?>(rows.size)
         val subtree = newNode()
         for ((key, raw) in rows) {
-            // In Skript's eyes a missing column is a delete; leave that decision to Skript.
+            // Let the regular Skript path handle null values, which represent absent keys.
             if (raw == null) return
             val name = if (lower) key.lowercase(Locale.ENGLISH) else key
             val segments = name.split("::")
@@ -186,8 +173,8 @@ internal object FastVariableStore {
     }
 
     /**
-     * Attaches [prepared] to [variable], replacing whatever it held. Answers false when the fast path
-     * cannot finish, in which case the caller stores the result the ordinary way.
+     * Attaches [prepared] to the global [variable]. Returns false when the variable or store shape
+     * cannot use this path, allowing the caller to use Skript's regular API.
      */
     @Suppress("UNCHECKED_CAST")
     fun attach(variable: Variable<*>, event: Event?, prepared: Prepared): Boolean {
@@ -218,8 +205,7 @@ internal object FastVariableStore {
             val leaf = segments.last()
             val existing = parent[leaf]
             if (existing is MutableMap<*, *>) {
-                // Skript keeps a value stored directly under a list: deleting the list restores it, so such
-                // a value's own entry in the root map is left exactly where it is.
+                // Preserve any scalar value stored directly under the list name.
                 removeNames(base, existing)
             } else if (existing != null) {
                 return false
@@ -241,7 +227,7 @@ internal object FastVariableStore {
     /** Drops every full name under [prefix] from Skript's root hash map. */
     private fun removeNames(prefix: String, node: Map<*, *>) {
         for ((key, value) in node) {
-            // A value stored directly under the list belongs to the list's own name, which stays.
+            // Preserve the scalar value at the list root.
             if (key == null) continue
             val name = "$prefix::$key"
             rootHash.remove(name)

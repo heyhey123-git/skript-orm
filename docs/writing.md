@@ -2,7 +2,7 @@
 
 [简体中文](writing.zh-CN.md) | **English**
 
-Five statements write rows: `insert one`, `insert many`, `insert entity if absent`, `upsert one entity`, and `update` for existing rows. They all use the same format for row values.
+Use `insert one` or `insert many` to add rows. Use `insert entity if absent` to preserve an existing row, `upsert one entity` to insert or update by primary key, and `update` to change existing rows. These statements use the same format for column values.
 
 ## The values block
 
@@ -45,7 +45,7 @@ insert one {_user::*} into table "archived_users"
 
 The variable must contain exactly one row. Multiple rows are rejected; use `insert many` for those.
 
-The last statement has no body, so it has no colon. Skript parses this form as an effect; adding a colon without a body produces an empty-section warning. Both forms perform the same operation: use a colon when there is a body, and omit it otherwise. The examples in [reading](reading.md) and [updating and deleting](updating-and-deleting.md) follow the same rule.
+The last statement has no indented body, so it needs no colon. Adding one produces an empty-section warning. Use a colon only when the statement has a body; the same rule applies to [reads](reading.md) and [updates and deletes](updating-and-deleting.md).
 
 ## Insert many
 
@@ -77,20 +77,14 @@ An unset or empty variable fails with `{_rows::*} is not set.` rather than succe
 
 ### How many rows one write may send
 
-One write statement binds at most **30 000 values**, which is the batch a `select` is also held to: 5000 rows of a six-column table. A larger batch is not refused and nothing is dropped: it is sent as several statements, and every row is written. A wider table carries fewer rows per statement, a narrower one more, and a table wider than the budget itself still moves, one row per statement.
+One write statement binds at most **30,000 values**. For a six-column table, that is 5000 rows. A larger batch is split into multiple statements; no rows are silently dropped. Wider rows mean fewer rows per statement. Even a row wider than the limit is sent on its own.
 
-Crossing the budget is not a performance boundary, and the measurement is what says so. On the benchmark server (the generic JDBC connection, SQLite there) a batch of 30 000 values was written in one call with the count it reported matching what the table gained, and so was a batch of 60 000 values — 10 000 rows of a six-column table — with no step between the two in the curve: taken against the tick, the first run of each overran it by 70 to 90 milliseconds for 5000 rows and 100 to 110 for 10 000, which is 2.3 to 3.0 microseconds per value and 1.7 to 1.8. Repeating the 30 000-value write with the JVM warm is a range rather than a figure: one run overran by about 30 milliseconds, and another kept the whole write inside a tick and so reported no overhang at all — a cost under a tick's 50 milliseconds has nothing to lengthen, which is the floor [What storing a result costs](reading.md#what-storing-a-result-costs) works out. The per-value reading follows from that range and is not a stable constant. An oversized batch pays for becoming two statements; the work either side of that is the same. The budget is therefore a line about **splitting and protection** — how many values one statement binds, and how much of the server thread one of them may hold — rather than the size past which writing gets expensive.
+`and store affected rows in {_rows}` reports the total across the split statements, when the backend can provide an exact count. If a later statement fails, earlier statements remain applied unless the batch runs inside a `begin transaction` block.
 
-The count in `and store affected rows in {_rows}` is the total across those statements, so a batch of 8000 rows reports 8000.
-
-The boundary is a value count rather than a row count because that is what both halves of a write are measured in. A driver binds a fixed number of values to a statement and refuses a statement that asks for more, and turning a batch into rows costs the server thread in proportion to its values, not to its rows. This is the same budget [a read is held to](reading.md#how-many-rows-one-read-may-store), and a read states it in rows because a row is what an author counts and what `select page` has to be able to refuse before anything is sent.
-
-Reading the batch out of a variable still costs the server thread in proportion to its size, and that part cannot move off the thread: a variable name may contain expressions, which Skript only resolves there. Measured, that is about 0.33 microseconds per value, so a batch of 30 000 values is about 10 milliseconds of pause before the first statement is sent — and a batch past the budget pauses for roughly that much per statement it becomes, because the budget bounds one statement rather than one trigger. A very large batch is therefore a hitch, and splitting it yourself over several statements, one page of a `select page` walk at a time, is still the way to keep one write short.
-
-One consequence is worth knowing when a batch is split: a failure part way through leaves the statements before it applied unless you are inside a `begin transaction` block, exactly as any other sequence of statements would.
+The limit counts column values because reading them from Skript variables takes time on the server thread. In one benchmark, reading 30,000 values took about 10 ms. The plugin splits larger database writes, but a very large batch can still pause the server while its values are read. For large jobs, write smaller batches, such as one `select page` result at a time. See [Reading rows](reading.md#how-many-rows-one-read-may-store).
 
 
-## In-or-out: upsert and if absent
+## Upsert or insert if absent
 
 ```sk
 upsert one entity in table "users" by id {_id} and wait:
