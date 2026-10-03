@@ -825,10 +825,8 @@ abstract class VerifySkriptServerTest : DefaultTask() {
 // cannot hold. Booting the server is not a second way of doing it — same task type, same properties file,
 // same plugin jars — only the scripts and the reader differ.
 //
-// What this layer can and cannot see is in the benchmark scripts, where the measurement is made. In short:
-// the wall clock is the script's own and is quantized by the tick a parked trigger resumes on, so the tick
-// count and the longest tick inside the statement are what carry the cost; a percentile of tick durations
-// over a server's life would need an observer that is not a script.
+// The scripts use skript-reflect's System.nanoTime() for elapsed time and tick-start gaps.
+// A tick-start gap shows an overrun, but does not measure CPU time within a normal tick.
 // ---------------------------------------------------------------------------------------------
 
 val serverBenchmarkDirectory = layout.buildDirectory.dir("server-benchmark")
@@ -837,6 +835,23 @@ val serverBenchmarkSource = layout.projectDirectory.dir("server-benchmark")
 // beside the JMH numbers. The root task writes to the root build directory; the JMH module's report lives
 // in `benchmarks/build/benchmarks/` because it belongs to that module.
 val serverBenchmarkResults = layout.buildDirectory.file("benchmarks/tick-results.json")
+val skriptReflectVersion = "2.6.3"
+val skriptReflectJar = layout.buildDirectory.file("server-benchmark/plugins/skript-reflect-$skriptReflectVersion.jar")
+
+val benchmarkDatabaseType = providers.gradleProperty("skriptorm.benchmark.server.type").orElse("JDBC")
+val benchmarkTypes = setOf("JDBC", "MySQL", "MariaDB", "PostgreSQL", "MongoDB")
+require(benchmarkDatabaseType.get() in benchmarkTypes) {
+    "skriptorm.benchmark.server.type must be one of $benchmarkTypes."
+}
+val benchmarkDatabaseUrl = providers.gradleProperty("skriptorm.benchmark.url").orElse(
+    if (benchmarkDatabaseType.get() == "JDBC") {
+        "jdbc:sqlite:plugins/Skript/bench-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    } else {
+        ""
+    }
+)
+val benchmarkDatabaseUsername = providers.gradleProperty("skriptorm.benchmark.username").orElse("")
+val benchmarkDatabasePassword = providers.gradleProperty("skriptorm.benchmark.password").orElse("")
 
 val prepareServerBenchmark by tasks.registering {
     description = "Writes the run directory the Skript benchmark starts from."
@@ -855,6 +870,21 @@ val prepareServerBenchmark by tasks.registering {
         val scripts = run.resolve("plugins/Skript/scripts")
         scripts.mkdirs()
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
+        require(benchmarkDatabaseUrl.get().isNotBlank()) { "Set skriptorm.benchmark.url for this backend." }
+        val settings = mapOf(
+            "__BENCH_TYPE__" to benchmarkDatabaseType.get(),
+            "__BENCH_URL__" to benchmarkDatabaseUrl.get(),
+            "__BENCH_USERNAME__" to benchmarkDatabaseUsername.get(),
+            "__BENCH_PASSWORD__" to benchmarkDatabasePassword.get()
+        )
+        scripts.walkTopDown().filter { it.extension == "sk" }.forEach { script ->
+            var text = script.readText()
+            for ((placeholder, value) in settings) {
+                require('\n' !in value && '\r' !in value) { "Benchmark settings must fit on one line." }
+                text = text.replace(placeholder, value.replace("\"", "\"\"").replace("%", "%%"))
+            }
+            script.writeText(text)
+        }
         propertiesFile.asFile.copyTo(run.resolve("server.properties"), overwrite = true)
         // Paper refuses to start without this. Writing it records acceptance of the Minecraft EULA
         // (https://aka.ms/MinecraftEULA) for this disposable benchmark server.
@@ -867,12 +897,13 @@ val runServerBenchmark by tasks.registering(RunServer::class) {
     group = "verification"
 
     dependsOn(prepareServerBenchmark)
+    dependsOn("downloadSkriptReflectForBenchmark")
     minecraftVersion(paperMinecraftVersion)
     build(paperBuild)
     runDirectory.set(serverBenchmarkDirectory)
+    // skript-reflect is downloaded into plugins/ and discovered there by Paper.
     pluginJars(tasks.shadowJar, serverTestPlugins)
-    // SkBee is deliberately absent. The self-test installs it so the NBT interop is exercised; the
-    // benchmark drives `insert many` and `select many` against SQLite, which never reaches it.
+    // These cases use numeric columns, so SkBee's NBT support is unnecessary.
 }
 
 /**
@@ -894,6 +925,9 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
     @get:Internal
     abstract val resultsFile: RegularFileProperty
 
+    @get:Input
+    abstract val backend: Property<String>
+
     @TaskAction
     fun report() {
         val log = serverLog.get().asFile
@@ -903,6 +937,9 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         val lines = log.readLines()
 
         val failures = lines.filter { "SKRIPTORM_BENCH=FAIL" in it }
+        if (lines.none { "SKRIPTORM_BENCH=DONE" in it }) {
+            throw GradleException("The benchmark did not report completion.")
+        }
         if (failures.isNotEmpty()) {
             throw GradleException(
                 buildString {
@@ -918,7 +955,9 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                     "anything about this plugin. Its log is at ${log.absolutePath}."
             )
 
-        val measurements = lines.mapNotNull { parse(it) }
+        val allMeasurements = lines.mapNotNull { parse(it) }
+        val measurements = allMeasurements.filter { it.kind in setOf("write", "read", "warmwrite", "warmread") }
+        val comparisons = allMeasurements - measurements.toSet()
         if (measurements.none { it.kind == "write" }) {
             throw GradleException(
                 buildString {
@@ -936,6 +975,30 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                 }
             )
         }
+        val unreadable = allMeasurements.filter { it.wall == null || it.gap == null }
+        if (unreadable.isNotEmpty()) {
+            throw GradleException("The benchmark logged unreadable wallNs or gapNs values: ${unreadable.joinToString { "${it.kind} ${it.rows}" }}")
+        }
+        for (measurement in allMeasurements) {
+            if (measurement.kind.endsWith("write")) {
+                require(measurement.affected == measurement.rows) {
+                    "${measurement.kind} ${measurement.rows}: affected row count was ${measurement.affected}."
+                }
+            } else {
+                val refused = measurement.rows > 5000
+                val expected = if (refused) 0 else measurement.rows
+                require(measurement.stored == expected) {
+                    "${measurement.kind} ${measurement.rows}: stored ${measurement.stored}, expected $expected."
+                }
+                if (refused) {
+                    require(measurement.error?.startsWith("select many read more than 5000 rows") == true)
+                } else {
+                    require(measurement.error == null) {
+                        "${measurement.kind} failed: ${measurement.error}"
+                    }
+                }
+            }
+        }
 
         // The scripts count the whole table, because nothing in the benchmark deletes: the rows a
         // measurement added are the difference from the line before it. That difference is also what says
@@ -945,7 +1008,7 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         // The count is cumulative, so a measurement's own rows are the difference from the line before it.
         // The accumulator is the previous count rather than the previous difference, which an earlier
         // version of this got wrong in a way that made every difference null and the check below vacuous.
-        var counted: Int? = null
+        var counted: Int? = 0
         val added = measurements.map { measurement ->
             val delta = if (counted == null || measurement.total == null) null else measurement.total - counted
             counted = measurement.total ?: counted
@@ -971,13 +1034,9 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
             Regex("""Done \(([0-9.]+)s\)!""").find(line)?.groupValues?.get(1)
         }
         logger.lifecycle("The benchmark server enabled {}, and booted in {}s.", loaded.trim(), bootSeconds ?: "?")
+        logger.lifecycle("Database backend: {}", backend.get())
 
-        // The controls the scripts run before their warm pass. A read whose longest tick is a tick's own
-        // length is only evidence if the observer can see a lengthened tick at all, so the scripts time a
-        // counted loop of their own choosing and report both what it took and what the observer made of it.
-        // The 5000-row read in the table below is what those controls are for: six columns of 5000 rows is
-        // 30 000 values, the size the pages describe and one above the threshold at which a result is
-        // attached as a tree rather than written value by value.
+        // An idle window and counted spin loops check the tick observer.
         val calibrations = lines.mapNotNull { parseCalibration(it) }
         if (calibrations.isNotEmpty()) {
             logger.lifecycle("")
@@ -996,30 +1055,20 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                     )
                 )
             }
-            logger.lifecycle(
-                "  A spin is a counted loop with no statement and no wait inside it, so it holds the server " +
-                    "thread for as long as `spin` says, and `spun` is how many times it ran: a loop the " +
-                    "parser dropped reports `spun=0` instead of passing for a fast block. `idle6s` is the " +
-                    "floor — six seconds of waiting with nothing else watched — and it has to read one tick " +
-                    "exactly, or the observer is adding something of its own. An overrun the size of the " +
-                    "spin is the observer seeing that block, which is what makes the floor of this " +
-                    "measurement a tick: a spin smaller than one has nothing to lengthen and reports none " +
-                    "whatever it cost. The reads at 5000 rows in the table below are of that size, so their " +
-                    "zero overrun says they do not lengthen a tick, not that they are free."
-            )
+            logger.lifecycle("The tick gap includes observer overhead and other server work. A zero overrun does not mean zero main-thread cost.")
         }
 
         logger.lifecycle("")
         logger.lifecycle("One Skript statement, as the script that issued it saw it:")
         logger.lifecycle(
-            "  kind      rows  ticks   wall clock  longest tick   overrun    wall us/v  overrun us/v          " +
+            "  kind      rows  ticks   wall clock  longest tick   overrun  wall us/row  overrun us/row          " +
                 "plugin        total   added  stored"
         )
         measurements.zip(added).forEach { (measurement, delta) -> logger.lifecycle(format(measurement, delta)) }
 
         logger.lifecycle("")
         logger.lifecycle("Per size, taken as the middle of what this run measured:")
-        measurements
+        allMeasurements
             .groupBy { it.kind to it.rows }
             .toSortedMap(compareBy({ it.first }, { it.second }))
             .forEach { (size, group) -> logger.lifecycle(formatMedian(size.first, size.second, group)) }
@@ -1031,45 +1080,32 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
         // what gets recorded; a run that reports zero overhang keeps its zero.
         val results = resultsFile.get().asFile
         results.parentFile.mkdirs()
-        fun medianValue(group: List<Measurement>, select: (Measurement) -> Double?): Double? {
-            val values = group.mapNotNull(select).sorted()
+        fun medianValue(group: List<Measurement>, select: (Measurement) -> String?): Long? {
+            val values = group.mapNotNull { nanoseconds(select(it)) }.sorted()
             return if (values.isEmpty()) null else values[values.size / 2]
         }
         val tickEntries = mutableListOf<String>()
-        measurements
+        allMeasurements
             .groupBy { it.kind to it.rows }
             .toSortedMap(compareBy({ it.first }, { it.second }))
             .forEach { (size, group) ->
                 val (kind, rows) = size
-                medianValue(group) { it.wall }?.let { wall ->
-                    tickEntries += """{"name":"$kind ${rows}rows wall","unit":"ms","value":$wall}"""
+                medianValue(group) { it.wallRaw }?.let { wall ->
+                    tickEntries += """{"name":"$kind ${rows}rows wall","unit":"ns","value":$wall}"""
                 }
-                medianValue(group) { it.gap }?.let { gap ->
-                    val overrun = (gap - TICK_MILLIS).coerceAtLeast(0.0)
-                    tickEntries += """{"name":"$kind ${rows}rows overrun","unit":"ms","value":$overrun}"""
+                medianValue(group) { it.gapRaw }?.let { gap ->
+                    val overrun = (gap - 50_000_000L).coerceAtLeast(0L)
+                    tickEntries += """{"name":"$kind ${rows}rows gap","unit":"ns","value":$gap}"""
+                    tickEntries += """{"name":"$kind ${rows}rows overrun","unit":"ns","value":$overrun}"""
                 }
             }
         results.writeText("[${tickEntries.joinToString(",")}]\n")
         logger.lifecycle("Recorded {} tick points to {}.", tickEntries.size, results.absolutePath)
+        comparisons.forEach { logger.lifecycle(format(it, null)) }
+        lines.filter { "SKRIPTORM_BENCH=SKIP" in it }.forEach { logger.lifecycle(it) }
 
         logger.lifecycle("")
-        logger.lifecycle(
-            "The wall clock is the script's own, read around one statement, and it cannot go below the tick " +
-                "a parked trigger resumes on. Work shorter than a tick therefore shows in the longest-tick " +
-                "column rather than in the wall clock, and the guard variables and fill loops around each " +
-                "statement are outside it. A tick is 50 ms by the server's contract, and `overrun` is the " +
-                "longest tick minus that: the part of a tick above a tick's own length, which is the " +
-                "statement showing up on the server thread. The per-value figure beside it divides that " +
-                "overrun by the statement's values, which attributes the whole overrun to the statement and " +
-                "includes whatever this observer costs while it watches: it is a derivation from the measured " +
-                "tick, not a measurement of its own, so a read that never stretched a tick reads as zero " +
-                "there rather than as free. Skript writes a timespan to two decimals of a second, so the " +
-                "clock, every gap and everything derived from them resolve to 10 ms: a tick's worth of work " +
-                "under that is not visible here, and nothing in this report claims it is. `added` is the " +
-                "difference in the table's own count between this measurement and the one before it, which " +
-                "is the only number here that came from the database rather than from the script or the " +
-                "plugin."
-        )
+        logger.lifecycle("Wall time includes asynchronous database work and the wait to resume the trigger. Tick overrun is the longest tick-start gap minus 50 ms; it cannot measure work inside a normal tick.")
 
         val disagreed = measurements.zip(added)
             .filter { (measurement, delta) -> measurement.affected != null && delta != null && measurement.affected != delta }
@@ -1091,21 +1127,21 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                 "SKRIPTORM_BENCH warmwrite:" in it || "SKRIPTORM_BENCH warmread:" in it ||
                 "SKRIPTORM_BENCH calibrate:" in it
         }
-            .forEach { line -> logger.lifecycle("  {}", line.substringAfter("SKRIPTORM_BENCH ").trim()) }
+            .forEach { line -> logger.lifecycle("  {}", line.substringAfter("SKRIPTORM_BENCH").trim()) }
     }
 
     private fun format(measurement: Measurement, added: Int?): String {
-        val values = measurement.rows * COLUMNS
+        val values = measurement.rows
         val overrun = measurement.gap?.let { (it - TICK_MILLIS).coerceAtLeast(0.0) }
         return "  " + listOf(
             measurement.kind,
             "%6d rows".format(measurement.rows),
             "%4d ticks".format(measurement.ticks),
-            measurement.wall?.let { "%9.2f ms".format(it) } ?: "%9s".format(describe(measurement.wallRaw)),
-            measurement.gap?.let { "%9.2f ms".format(it) } ?: "%9s".format(describe(measurement.gapRaw)),
-            overrun?.let { "%8.2f ms".format(it) } ?: "",
-            measurement.wall?.let { "%11.1f".format(it * 1000.0 / values) } ?: "",
-            overrun?.let { "%13.1f".format(it * 1000.0 / values) } ?: "",
+            measurement.wall?.let { "%9.6f ms".format(it) } ?: "%9s".format(describe(measurement.wallRaw)),
+            measurement.gap?.let { "%9.6f ms".format(it) } ?: "%9s".format(describe(measurement.gapRaw)),
+            overrun?.let { "%8.6f ms".format(it) } ?: "",
+            measurement.wall?.let { "%11.3f".format(it * 1000.0 / values) } ?: "",
+            overrun?.let { "%13.3f".format(it * 1000.0 / values) } ?: "",
             measurement.affected?.let { "affected %6d".format(it) } ?: "",
             measurement.total?.let { "%8d".format(it) } ?: "",
             added?.let { "%+7d".format(it) } ?: "",
@@ -1117,12 +1153,12 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
     private fun formatMedian(kind: String, rows: Int, group: List<Measurement>): String {
         fun median(select: (Measurement) -> Double?): String {
             val values = group.mapNotNull(select).sorted()
-            return if (values.isEmpty()) "unparsed" else "%9.2f".format(values[values.size / 2])
+            return if (values.isEmpty()) "unparsed" else "%9.6f".format(values[values.size / 2])
         }
         val ticks = group.map { it.ticks }.sorted()
         val affected = group.mapNotNull { it.affected }.sorted()
-        val values = rows * COLUMNS
-        return "  %-9s %6d rows  wall %s ms  longest tick %s ms  ticks %3d  wall %8.1f us/value  overrun %8.1f us/value  %s".format(
+        val values = rows
+        return "  %-9s %6d rows  wall %s ms  longest tick %s ms  ticks %3d  wall %8.3f us/row  overrun %8.3f us/row  %s".format(
             kind,
             rows,
             median { it.wall },
@@ -1138,21 +1174,24 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
 
     private fun parseCalibration(line: String): Calibration? {
         if ("SKRIPTORM_BENCH calibrate:" !in line) return null
-        val spin = field(line, "spin")
-        val gap = field(line, "gap")
+        val spin = field(line, "spinNs")
+        val gap = field(line, "gapNs")
         return Calibration(
             label = field(line, "label") ?: return null,
             spun = field(line, "spun")?.toIntOrNull(),
-            spin = toMilliseconds(spin),
+            spin = nanosecondsToMilliseconds(spin),
             spinRaw = spin,
-            window = toMilliseconds(field(line, "window")),
-            gap = toMilliseconds(gap),
+            window = nanosecondsToMilliseconds(field(line, "windowNs")),
+            gap = nanosecondsToMilliseconds(gap),
             gapRaw = gap
         )
     }
 
     private fun parse(line: String): Measurement? {
         val kind = when {
+            "SKRIPTORM_BENCH=COMPARE" in line ->
+                Regex("SKRIPTORM_BENCH=COMPARE (pluginwrite|pluginread|rawwrite|rawread):")
+                    .find(line)?.groupValues?.get(1) ?: return null
             "SKRIPTORM_BENCH write:" in line -> "write"
             "SKRIPTORM_BENCH read:" in line -> "read"
             "SKRIPTORM_BENCH warmwrite:" in line -> "warmwrite"
@@ -1160,15 +1199,15 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
             else -> return null
         }
         val rows = field(line, "rows")?.toIntOrNull() ?: return null
-        val wall = field(line, "ms")
-        val gap = field(line, "gap")
+        val wall = field(line, "wallNs")
+        val gap = field(line, "gapNs")
         return Measurement(
             kind = kind,
             rows = rows,
             ticks = field(line, "ticks")?.toIntOrNull() ?: -1,
-            wall = toMilliseconds(wall),
+            wall = nanosecondsToMilliseconds(wall),
             wallRaw = wall,
-            gap = toMilliseconds(gap),
+            gap = nanosecondsToMilliseconds(gap),
             gapRaw = gap,
             affected = field(line, "affected")?.toIntOrNull(),
             stored = field(line, "stored")?.toIntOrNull(),
@@ -1181,61 +1220,25 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
     private fun field(line: String, name: String): String? =
         Regex("""\b${Regex.escape(name)}=(\[[^]]*]|\S+)""").find(line)?.groupValues?.get(1)
 
-    /** A timespan as a number with its unit, or the script's own wording when the unit is unknown. */
+    /** Shows a nanosecond reading as milliseconds, or marks it unreadable. */
     private fun milliseconds(value: Double?, raw: String?): String =
-        value?.let { "%.2f ms".format(it) } ?: describe(raw)
+        value?.let { "%.6f ms".format(it) } ?: describe(raw)
 
-    /** A timespan as the script wrote it, for a column whose number could not be read. */
+    /** Describes a value that could not be parsed. */
     private fun describe(raw: String?): String = when (raw?.trim()) {
         null -> "-"
         "<none>" -> "none"
         else -> "unparsed"
     }
 
-    /**
-     * A timespan as Skript writes it — `0.05 seconds`, `240 milliseconds` — turned into milliseconds, or
-     * null when the wording is one this does not know, so an unreadable unit is reported rather than
-     * guessed at. A tick is 50 ms by the server's contract, so converting ticks is arithmetic, not a
-     * measurement of this machine.
-     */
-    private fun toMilliseconds(raw: String?): Double? {
-        val text = raw?.trim()?.removeSurrounding("[", "]")?.trim() ?: return null
-        val match = Regex("""^([0-9]+(?:[.,][0-9]+)?)\s*(\S+)$""").find(text) ?: return null
-        val value = match.groupValues[1].replace(',', '.').toDoubleOrNull() ?: return null
-        return when (match.groupValues[2].lowercase()) {
-            "millisecond", "milliseconds", "ms" -> value
-            "tick", "ticks" -> value * 50.0
-            "second", "seconds" -> value * 1000.0
-            "minute", "minutes" -> value * 60_000.0
-            "hour", "hours" -> value * 3_600_000.0
-            "day", "days" -> value * 86_400_000.0
-            else -> null
-        }
-    }
+    /** Converts a logged nanoTime difference to milliseconds for the console report. */
+    private fun nanosecondsToMilliseconds(raw: String?): Double? =
+        nanoseconds(raw)?.div(1_000_000.0)
 
-    /**
-     * One measurement the scripts reported.
-     *
-     * @property wall what the script's own clock said, in milliseconds, and [wallRaw] the same timespan in
-     * Skript's own wording so an unreadable one is visible rather than lost.
-     * @property gap the longest tick inside the statement's window, and [gapRaw] its wording as well.
-     * @property affected the row count the plugin itself reported, which is compared with what the table
-     * grew by rather than trusted: they are the same number only when the backend's count was exact.
-     * @property stored what a read left in the variable it was told to store into, counted by index. A read
-     * past the ceiling stores nothing, so this is where that refusal is visible.
-     * @property total the rows in the whole table after the statement, which the reader differences.
-     */
-    /**
-     * One control the scripts ran: a block of work whose size the script chose, and what the observer saw.
-     *
-     * @property spun how many times the loop ran, which is what keeps a loop the parser dropped from being
-     * read as a block that was fast.
-     * @property spin the loop's own duration as the script's clock read it. Nothing waits inside the loop,
-     * so this is the one duration in the report that is not quantized by a parked trigger resuming.
-     * @property window the whole watched window, which is the spin plus the wait that follows it, so the
-     * observer has a tick boundary to report the spin's tick at.
-     * @property gap the longest tick the observer saw inside that window, and [gapRaw] its own wording.
-     */
+    private fun nanoseconds(raw: String?): Long? =
+        raw?.trim()?.removeSurrounding("[", "]")?.replace(",", "")?.toLongOrNull()
+
+    /** A calibration window and the longest tick-start gap observed within it. */
     private data class Calibration(
         val label: String,
         val spun: Int?,
@@ -1261,9 +1264,6 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
     )
 
     private companion object {
-        /** The benchmark table's width, which is what makes 5000 rows one 30000-value statement. */
-        const val COLUMNS = 6
-
         /** A tick's own length, so an overrun can be told from a tick that did its normal work. */
         const val TICK_MILLIS = 50.0
     }
@@ -1276,6 +1276,7 @@ val serverBenchmark by tasks.registering(ReportSkriptServerBenchmark::class) {
     dependsOn(runServerBenchmark)
     serverLog.set(serverBenchmarkDirectory.map { it.file("logs/latest.log") })
     resultsFile.set(serverBenchmarkResults)
+    backend.set(benchmarkDatabaseType.map { if (it == "JDBC") "SQLite" else it })
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1411,6 +1412,13 @@ abstract class DownloadFile : DefaultTask() {
         const val ATTEMPTS = 4
         const val PAUSE_MILLIS = 2_000L
     }
+}
+
+val downloadSkriptReflectForBenchmark by tasks.registering(DownloadFile::class) {
+    description = "Downloads skript-reflect for nanosecond benchmark timing."
+    group = "verification"
+    url.set("https://github.com/SkriptLang/skript-reflect/releases/download/v$skriptReflectVersion/skript-reflect-$skriptReflectVersion.jar")
+    target.set(skriptReflectJar)
 }
 
 /**
@@ -1652,4 +1660,3 @@ val gendocs by tasks.registering(CollectGendocs::class) {
     destination.set(layout.buildDirectory.file("skripthub/skript-orm.json"))
     expectedVersion.set(version.toString())
 }
-

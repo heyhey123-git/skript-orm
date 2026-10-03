@@ -128,6 +128,7 @@ jobs:
             | sed -E 's/-+$//')
           [ -n "$slug" ] || slug=unknown
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "slug=$slug" >> benchmarks/build/benchmarks/environment.txt
 
       - name: Run the benchmarks
         run: |
@@ -170,7 +171,7 @@ jobs:
       # `tool: jmh` reads JMH's own JSON and nothing else, which is the reason the benchmark task writes
       # that format instead of a table of its own.
       - name: Record the numbers
-        if: hashFiles('benchmarks/build/benchmarks/results.json') != ''
+        if: github.event_name == 'pull_request' && hashFiles('benchmarks/build/benchmarks/results.json') != ''
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'jmh'
@@ -184,7 +185,7 @@ jobs:
           benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}'
           # A pull request is compared against the history but never writes to it: the numbers a branch
           # produces are not the numbers the next branch should be measured against.
-          auto-push: ${{ github.event_name != 'pull_request' }}
+          auto-push: false
           # Commenting needs a token that may write to the pull request, which a pull request from a
           # fork does not get. Comparing still happens there; only the comment is skipped.
           comment-on-alert: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
@@ -198,19 +199,46 @@ jobs:
           # file for the numbers and for what turning it on would take.
           fail-on-alert: false
 
-  # The tick benchmark: what one Skript statement costs a real server thread, as the script that issued
-  # it saw it. It runs beside JMH rather than beside the tests for the same reason JMH does — it takes
-  # minutes where a test takes seconds — and it is recorded per CPU into the same gh-pages history.
-  #
-  # The tick numbers are recorded but never gated, on purpose, and no alert-threshold is set at all.
-  # Two reasons, both already written in this repository: shared-host wall-clock drifts ten to twenty
-  # percent between identical runs, and the tick observer resolves to 10 ms and cannot see work under
-  # half a tick, so a run can honestly report zero overhang where the work was real but sub-tick. A
-  # threshold on a number that noisy would only misfire, so the record below is the whole of the job.
+  # Paper measures wall time and tick gaps on each database. Shared runners make these
+  # readings useful as trends, not as a pass/fail gate.
   tick:
-    name: Tick benchmark
+    name: Tick benchmark (${{ matrix.backend }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - backend: SQLite
+            type: JDBC
+            image: none
+            url: ''
+            username: ''
+            password: ''
+          - backend: MySQL
+            type: MySQL
+            image: mysql:8.4
+            url: jdbc:mysql://127.0.0.1:3306/skriptorm_bench
+            username: benchmark
+            password: benchmark
+          - backend: MariaDB
+            type: MariaDB
+            image: mariadb:11.4
+            url: jdbc:mariadb://127.0.0.1:3307/skriptorm_bench
+            username: benchmark
+            password: benchmark
+          - backend: PostgreSQL
+            type: PostgreSQL
+            image: postgres:17
+            url: jdbc:postgresql://127.0.0.1:5432/skriptorm_bench
+            username: benchmark
+            password: benchmark
+          - backend: MongoDB
+            type: MongoDB
+            image: mongo:8
+            url: 127.0.0.1:27017
+            username: ''
+            password: ''
     steps:
       - name: Check out
         uses: actions/checkout@v6
@@ -219,10 +247,61 @@ jobs:
         with:
           gradle-cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      # The same environment step as the JMH job: the CPU model decides where the numbers are filed,
-      # because a tick number without its machine is no more comparable than a JMH number without its
-      # machine. Most of this is only knowable on the runner, so it is written here rather than by the
-      # task, and it is uploaded beside the report.
+      - name: Start the database
+        if: matrix.backend != 'SQLite'
+        run: |
+          case '${{ matrix.backend }}' in
+            MySQL)
+              docker run -d --name benchmark-db -p 3306:3306 \
+                -e MYSQL_DATABASE=skriptorm_bench -e MYSQL_USER=benchmark \
+                -e MYSQL_PASSWORD=benchmark -e MYSQL_ROOT_PASSWORD=benchmark_root \
+                '${{ matrix.image }}'
+              ;;
+            MariaDB)
+              docker run -d --name benchmark-db -p 3307:3306 \
+                -e MARIADB_DATABASE=skriptorm_bench -e MARIADB_USER=benchmark \
+                -e MARIADB_PASSWORD=benchmark -e MARIADB_ROOT_PASSWORD=benchmark_root \
+                '${{ matrix.image }}'
+              ;;
+            PostgreSQL)
+              docker run -d --name benchmark-db -p 5432:5432 \
+                -e POSTGRES_DB=skriptorm_bench -e POSTGRES_USER=benchmark \
+                -e POSTGRES_PASSWORD=benchmark '${{ matrix.image }}'
+              ;;
+            MongoDB)
+              docker run -d --name benchmark-db -p 27017:27017 '${{ matrix.image }}'
+              ;;
+          esac
+
+          for attempt in {1..60}; do
+            case '${{ matrix.backend }}' in
+              MySQL)
+                docker exec benchmark-db mysql -ubenchmark -pbenchmark skriptorm_bench \
+                  -e 'SELECT 1' >/dev/null 2>&1 && break
+                ;;
+              MariaDB)
+                docker exec benchmark-db mariadb -ubenchmark -pbenchmark skriptorm_bench \
+                  -e 'SELECT 1' >/dev/null 2>&1 && break
+                ;;
+              PostgreSQL)
+                docker exec benchmark-db psql -U benchmark -d skriptorm_bench \
+                  -Atqc 'SELECT 1' >/dev/null 2>&1 && break
+                ;;
+              MongoDB)
+                docker exec benchmark-db mongosh --quiet \
+                  --eval 'if (db.adminCommand({ ping: 1 }).ok !== 1) quit(1)' \
+                  >/dev/null 2>&1 && break
+                ;;
+            esac
+            if [ "$attempt" -eq 60 ]; then
+              docker logs benchmark-db
+              echo '${{ matrix.backend }} did not become ready within 60 seconds.' >&2
+              exit 1
+            fi
+            sleep 1
+          done
+
+      # Keep each result with the machine and database that produced it.
       - name: Record the environment
         id: environment
         run: |
@@ -236,6 +315,8 @@ jobs:
             echo "cores=$(nproc)"
             echo "memory=$(free -h | awk '/^Mem:/ {print $2}')"
             echo "java=$(java -version 2>&1 | head -n1)"
+            echo "backend=${{ matrix.backend }}"
+            echo "database_image=${{ matrix.image }}"
           } | tee build/benchmarks/environment.txt
           slug=$(printf '%s' "$cpu" \
             | sed -E 's/\((R|TM|C)\)//g' \
@@ -245,13 +326,23 @@ jobs:
             | sed -E 's/-+$//')
           [ -n "$slug" ] || slug=unknown
           echo "slug=$slug" >> "$GITHUB_OUTPUT"
+          echo "slug=$slug" >> build/benchmarks/environment.txt
 
       - name: Run the tick benchmark
         run: |
-          ./gradlew serverBenchmark --stacktrace
+          args=("-Pskriptorm.benchmark.server.type=${{ matrix.type }}")
+          if [ -n '${{ matrix.url }}' ]; then
+            args+=('-Pskriptorm.benchmark.url=${{ matrix.url }}')
+          fi
+          if [ -n '${{ matrix.username }}' ]; then
+            args+=(
+              '-Pskriptorm.benchmark.username=${{ matrix.username }}'
+              '-Pskriptorm.benchmark.password=${{ matrix.password }}'
+            )
+          fi
+          ./gradlew serverBenchmark --stacktrace "${args[@]}"
 
-      # The task prints the full tables; these lines are the numbers and their machine on one line each,
-      # the shape the server-side measurement lines established and the one a later reader greps for.
+      # Print each reading with its runner and database for log searches.
       - name: Print the numbers with their machine
         if: always()
         run: |
@@ -260,15 +351,15 @@ jobs:
           cores=$(nproc)
           java=$(java -version 2>&1 | head -n1)
           commit=$(git rev-parse HEAD)
-          echo "[tick] measurement: os=$os cpu=$cpu cores=$cores java=$java commit=$commit"
+          echo "[tick] measurement: backend=${{ matrix.backend }} image=${{ matrix.image }} os=$os cpu=$cpu cores=$cores java=$java commit=$commit"
           if [ -f build/benchmarks/tick-results.json ]; then
             jq -r --arg os "$os" --arg cpu "$cpu" --arg cores "$cores" --arg java "$java" --arg commit "$commit" \
-              '.[] | "[tick] \(.name)=\(.value)\(.unit) os=\($os) cpu=\($cpu) cores=\($cores) java=\($java) commit=\($commit)"' \
+              --arg backend '${{ matrix.backend }}' --arg image '${{ matrix.image }}' \
+              '.[] | "[tick] \(.name)=\(.value)\(.unit) backend=\($backend) image=\($image) os=\($os) cpu=\($cpu) cores=\($cores) java=\($java) commit=\($commit)"' \
               build/benchmarks/tick-results.json
           fi
 
-      # A run's log scrolls away; the run's summary does not. The table is the same numbers the action
-      # reads, written where a person deciding whether to look further will see them.
+      # Put the report in the run summary for quick inspection.
       - name: Summarise the report
         if: always()
         run: |
@@ -278,7 +369,7 @@ jobs:
             exit 0
           fi
           {
-            echo '### Tick'
+            echo '### Tick: ${{ matrix.backend }}'
             echo
             echo '| measurement | value | unit |'
             echo '| --- | --- | --- |'
@@ -289,25 +380,132 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v6
         with:
-          name: tick-report
+          name: tick-report-${{ matrix.backend }}
           path: |
             build/benchmarks/tick-results.json
             build/benchmarks/environment.txt
           if-no-files-found: ignore
 
-      # Recorded beside the JMH history in a `tick` subfolder of the same per-CPU directory, so the two
-      # `data.js` files never collide and each CPU keeps its own curve. `customSmallerIsBetter` because a
-      # shorter tick cost is better. Report only — see the note on the `tick` job above for why there is
-      # no alert-threshold and no gate.
+      # Separate trends by CPU and database; shorter tick costs are better.
       - name: Record the numbers
-        if: hashFiles('build/benchmarks/tick-results.json') != ''
+        if: github.event_name == 'pull_request' && hashFiles('build/benchmarks/tick-results.json') != ''
         uses: benchmark-action/github-action-benchmark@v1
         with:
           tool: 'customSmallerIsBetter'
           output-file-path: build/benchmarks/tick-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gh-pages-branch: gh-pages
-          benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}/tick'
-          auto-push: ${{ github.event_name != 'pull_request' }}
+          benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}/tick-ns/${{ matrix.backend }}'
+          auto-push: false
+          comment-on-alert: false
+          fail-on-alert: false
+
+  publish:
+    name: Publish benchmark history
+    if: github.event_name != 'pull_request'
+    needs: [jmh, tick]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v6
+
+      - name: Download the reports
+        uses: actions/download-artifact@v6
+        with:
+          pattern: '*-report*'
+          path: build/published-benchmarks
+
+      - name: Read CPU slugs
+        id: slugs
+        run: |
+          for entry in \
+            'jmh:jmh-report' \
+            'sqlite:tick-report-SQLite' \
+            'mysql:tick-report-MySQL' \
+            'mariadb:tick-report-MariaDB' \
+            'postgresql:tick-report-PostgreSQL' \
+            'mongodb:tick-report-MongoDB'; do
+            key=${entry%%:*}
+            artifact=${entry#*:}
+            environment="build/published-benchmarks/$artifact/environment.txt"
+            slug=$(sed -n 's/^slug=//p' "$environment" | tail -n1)
+            if [ -z "$slug" ]; then
+              echo "Missing CPU slug in $environment" >&2
+              exit 1
+            fi
+            echo "$key=$slug" >> "$GITHUB_OUTPUT"
+          done
+
+      # Publish sequentially so matrix jobs cannot push over each other's history.
+      - name: Publish JMH history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'jmh'
+          output-file-path: build/published-benchmarks/jmh-report/results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.jmh }}'
+          auto-push: true
+          comment-on-alert: false
+          alert-threshold: '150%'
+          fail-on-alert: false
+
+      - name: Publish SQLite tick history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/published-benchmarks/tick-report-SQLite/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.sqlite }}/tick-ns/SQLite'
+          auto-push: true
+          comment-on-alert: false
+          fail-on-alert: false
+
+      - name: Publish MySQL tick history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/published-benchmarks/tick-report-MySQL/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.mysql }}/tick-ns/MySQL'
+          auto-push: true
+          comment-on-alert: false
+          fail-on-alert: false
+
+      - name: Publish MariaDB tick history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/published-benchmarks/tick-report-MariaDB/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.mariadb }}/tick-ns/MariaDB'
+          auto-push: true
+          comment-on-alert: false
+          fail-on-alert: false
+
+      - name: Publish PostgreSQL tick history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/published-benchmarks/tick-report-PostgreSQL/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.postgresql }}/tick-ns/PostgreSQL'
+          auto-push: true
+          comment-on-alert: false
+          fail-on-alert: false
+
+      - name: Publish MongoDB tick history
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: 'customSmallerIsBetter'
+          output-file-path: build/published-benchmarks/tick-report-MongoDB/tick-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          gh-pages-branch: gh-pages
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.mongodb }}/tick-ns/MongoDB'
+          auto-push: true
           comment-on-alert: false
           fail-on-alert: false
