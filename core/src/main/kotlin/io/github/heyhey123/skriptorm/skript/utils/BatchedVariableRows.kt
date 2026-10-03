@@ -4,7 +4,8 @@ import java.util.ConcurrentModificationException
 
 /**
  * Reads one Skript variable tree in bounded main-thread steps. The caller must not change the source
- * until reading finishes; structural changes are detected, but replacing an existing value is not.
+ * until reading finishes. Mutation checks catch some structural changes, but cannot detect every
+ * edit, especially changes to rows already read or values replaced at existing keys.
  */
 internal class BatchedVariableRows(
     private val source: Map<*, *>,

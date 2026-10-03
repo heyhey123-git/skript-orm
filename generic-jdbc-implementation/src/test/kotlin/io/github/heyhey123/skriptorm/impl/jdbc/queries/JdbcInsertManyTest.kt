@@ -5,6 +5,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.database.MysqlServerJdbcDialect
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
+import io.github.heyhey123.skriptorm.impl.jdbc.type.UuidJdbcDataType
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
@@ -16,7 +17,9 @@ import kotlinx.coroutines.runBlocking
 import java.sql.Connection
 import java.sql.JDBCType
 import java.sql.PreparedStatement
+import java.sql.ResultSet
 import java.sql.Statement
+import java.util.UUID
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -85,6 +88,7 @@ class JdbcInsertManyTest {
         val source = mockk<JdbcConnectionSource>(relaxed = true)
         every { source.borrow() } returns connection
         every { source.statementTimeoutSeconds() } returns 3
+        val (packetStatement, packetResult) = packetProbe(connection)
         every {
             connection.prepareStatement("INSERT INTO `items` (`name`, `id`, `age`) VALUES (?, ?, ?), (?, ?, ?)")
         } returns statement
@@ -110,6 +114,9 @@ class JdbcInsertManyTest {
             statement.executeLargeUpdate()
         }
         verify { statement.queryTimeout = 3 }
+        verify { packetStatement.queryTimeout = 3 }
+        verify { packetResult.close() }
+        verify { packetStatement.close() }
         verify(exactly = 0) { statement.addBatch() }
         verify(exactly = 0) { statement.executeLargeBatch() }
         verify { statement.close() }
@@ -123,7 +130,11 @@ class JdbcInsertManyTest {
         val source = mockk<JdbcConnectionSource>(relaxed = true)
         val statements = mutableListOf<String>()
         every { source.borrow() } returns connection
-        every { connection.prepareStatement(capture(statements)) } returns statement
+        packetProbe(connection)
+        every { connection.prepareStatement(match { it.startsWith("INSERT") }) } answers {
+            statements += firstArg<String>()
+            statement
+        }
         every { statement.executeLargeUpdate() } returnsMany listOf(30_000L, 1L)
 
         val result = JdbcInsertMany(
@@ -139,6 +150,80 @@ class JdbcInsertManyTest {
         verify(exactly = 2) { statement.executeLargeUpdate() }
         verify(exactly = 1) { source.borrow() }
         verify(exactly = 1) { source.release(connection) }
+    }
+
+    @Test
+    fun `MySQL splits strings to stay within the packet budget`() = runBlocking {
+        val textTable = Table("items", listOf(Column("name", StringJdbcDataType())))
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        val insertSql = mutableListOf<String>()
+        val baseSql = MysqlServerJdbcDialect.insertMany("items", listOf("name"), 1)
+        val twoRowBudget = baseSql.length.toLong() * 4L + 1024L + 2L * (16L + 16L + 88L)
+        every { source.borrow() } returns connection
+        packetProbe(connection, twoRowBudget)
+        every { connection.prepareStatement(match { it.startsWith("INSERT") }) } answers {
+            insertSql += firstArg<String>()
+            statement
+        }
+        every { statement.executeLargeUpdate() } returnsMany listOf(2L, 1L)
+
+        val result = JdbcInsertMany(
+            List(3) { mapOf("name" to "abcdefghij") },
+            source,
+            MysqlServerJdbcDialect
+        ).execute(textTable)
+
+        assertEquals(WriteResult(3), result)
+        assertEquals(MysqlServerJdbcDialect.insertMany("items", listOf("name"), 2), insertSql[0])
+        assertEquals(baseSql, insertSql[1])
+        verify(exactly = 1) { source.borrow() }
+        verify(exactly = 1) { source.release(connection) }
+    }
+
+    @Test
+    fun `MySQL sends custom-converter rows separately`() = runBlocking {
+        val uuidTable = Table("items", listOf(Column("uid", UuidJdbcDataType())))
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        val insertSql = mutableListOf<String>()
+        every { source.borrow() } returns connection
+        packetProbe(connection)
+        every { connection.prepareStatement(match { it.startsWith("INSERT") }) } answers {
+            insertSql += firstArg<String>()
+            statement
+        }
+        every { statement.executeLargeUpdate() } returns 1L
+
+        val result = JdbcInsertMany(
+            List(2) { mapOf("uid" to UUID.randomUUID()) },
+            source,
+            MysqlServerJdbcDialect
+        ).execute(uuidTable)
+
+        assertEquals(WriteResult(2), result)
+        assertEquals(List(2) { MysqlServerJdbcDialect.insertMany("items", listOf("uid"), 1) }, insertSql)
+        verify(exactly = 2) { statement.executeLargeUpdate() }
+    }
+
+    @Test
+    fun `invalid MySQL packet limit closes the probe and releases the connection`() {
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } returns connection
+        val (packetStatement, packetResult) = packetProbe(connection, 0L)
+
+        val failure = assertFailsWith<IllegalStateException> {
+            runBlocking { JdbcInsertMany(listOf(mapOf("id" to 1)), source, MysqlServerJdbcDialect).execute(table) }
+        }
+
+        assertEquals("MySQL returned an invalid max_allowed_packet: 0.", failure.message)
+        verify { packetResult.close() }
+        verify { packetStatement.close() }
+        verify { source.release(connection) }
+        verify(exactly = 1) { connection.prepareStatement(any()) }
     }
 
     @Test
@@ -204,5 +289,18 @@ class JdbcInsertManyTest {
         every { connection.prepareStatement(any()) } returns statement
         every { statement.executeLargeBatch() } returns counts
         return JdbcInsertMany(listOf(mapOf("id" to 1)), source, GenericJdbcDialect) to statement
+    }
+
+    private fun packetProbe(
+        connection: Connection,
+        limit: Long = 64L * 1024L * 1024L
+    ): Pair<PreparedStatement, ResultSet> {
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val result = mockk<ResultSet>(relaxed = true)
+        every { connection.prepareStatement("SELECT @@max_allowed_packet") } returns statement
+        every { statement.executeQuery() } returns result
+        every { result.next() } returns true
+        every { result.getLong(1) } returns limit
+        return statement to result
     }
 }

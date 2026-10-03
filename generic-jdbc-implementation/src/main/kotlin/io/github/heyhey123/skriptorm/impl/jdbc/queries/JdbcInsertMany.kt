@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.queries.InsertMany
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
 import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.DefaultValueConverter
 import java.sql.Connection
 import java.sql.Statement
 
@@ -81,11 +82,32 @@ open class JdbcInsertMany(
         connection: Connection,
         multiRowDialect: MultiRowInsertDialect
     ): WriteResult {
+        val packetLimit = connection.prepareStatement("SELECT @@max_allowed_packet").use { statement ->
+            val timeout = configureStatement(statement)
+            executeWithTimeoutReported(timeout) { statement.executeQuery() }.use { result ->
+                check(result.next()) { "MySQL did not return max_allowed_packet." }
+                result.getLong(1).also {
+                    check(it > 0L) { "MySQL returned an invalid max_allowed_packet: $it." }
+                }
+            }
+        }
+        val baseSql = multiRowDialect.insertMany(table.name, columns, 1)
+        val baseBytes = baseSql.length.toLong() * 4L + 1024L
+        val directlyStored = types.map { it.converter is DefaultValueConverter<*> }
         // Direct query callers may bypass the core write splitter.
         val rowsPerStatement = maxOf(1, MAX_BOUND_VALUES / columns.size)
         var affected = 0L
-        for (start in valuesList.indices step rowsPerStatement) {
-            val rowCount = minOf(rowsPerStatement, valuesList.size - start)
+        var start = 0
+        while (start < valuesList.size) {
+            var rowCount = 0
+            var estimatedBytes = baseBytes
+            while (start + rowCount < valuesList.size && rowCount < rowsPerStatement) {
+                val rowBytes = estimateRowBytes(valuesList[start + rowCount], columns, directlyStored)
+                if (rowCount > 0 && (rowBytes == null || estimatedBytes + rowBytes > packetLimit)) break
+                rowCount++
+                if (rowBytes == null) break
+                estimatedBytes += rowBytes
+            }
             val sql = multiRowDialect.insertMany(table.name, columns, rowCount)
             connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
@@ -101,8 +123,29 @@ open class JdbcInsertMany(
                     affected = Math.addExact(affected, count)
                 }
             }
+            start += rowCount
         }
         return WriteResult(affected)
+    }
+
+    private fun estimateRowBytes(
+        row: Map<String, Any?>,
+        columns: List<String>,
+        directlyStored: List<Boolean>
+    ): Long? {
+        var bytes = 16L + columns.size * 16L
+        columns.forEachIndexed { index, column ->
+            val value = row[column]
+            if (!directlyStored[index]) return null
+            bytes += when (value) {
+                null -> 16L
+                is String -> value.length.toLong() * 8L + 8L
+                is ByteArray -> value.size.toLong() * 2L + 16L
+                is Byte, is Short, is Int, is Long, is Float, is Double, is Boolean -> 128L
+                else -> return null
+            }
+        }
+        return bytes
     }
 
     private companion object {
