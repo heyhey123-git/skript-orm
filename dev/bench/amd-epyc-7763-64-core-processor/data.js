@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1790913636406,
+  "lastUpdate": 1791007663813,
   "repoUrl": "https://github.com/heyhey123-git/skript-orm",
   "entries": {
     "Benchmark": [
@@ -32,6 +32,40 @@ window.BENCHMARK_DATA = {
           {
             "name": "io.github.heyhey123.skriptorm.benchmarks.RowLimitBenchmark.rowsPerStatement",
             "value": 15.123667991553253,
+            "unit": "ns/op",
+            "extra": "iterations: 3\nforks: 2\nthreads: 1"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Radiation-pi",
+            "username": "Radiation-pi",
+            "email": "pi1243039811@outlook.com"
+          },
+          "committer": {
+            "name": "Radiation-pi",
+            "username": "Radiation-pi",
+            "email": "pi1243039811@outlook.com"
+          },
+          "id": "6476c9ba73b156f030f675a9cca1b530f4323aa5",
+          "message": "perf(benchmarks): record nanosecond timings across database backends",
+          "timestamp": "2026-10-03T05:32:19Z",
+          "url": "https://github.com/heyhey123-git/skript-orm/commit/6476c9ba73b156f030f675a9cca1b530f4323aa5"
+        },
+        "date": 1791007662900,
+        "tool": "jmh",
+        "benches": [
+          {
+            "name": "io.github.heyhey123.skriptorm.benchmarks.InsertManyBenchmark.insertManyOf5000",
+            "value": 8.50401891816436,
+            "unit": "ms/op",
+            "extra": "iterations: 3\nforks: 2\nthreads: 1"
+          },
+          {
+            "name": "io.github.heyhey123.skriptorm.benchmarks.RowLimitBenchmark.rowsPerStatement",
+            "value": 15.119478209018048,
             "unit": "ns/op",
             "extra": "iterations: 3\nforks: 2\nthreads: 1"
           }
