@@ -136,7 +136,8 @@ open class JdbcInsertMany(
         var bytes = 16L + columns.size * 16L
         columns.forEachIndexed { index, column ->
             val value = row[column]
-            if (!directlyStored[index]) return null
+            // NULL is bound without conversion, even for a custom storage type.
+            if (value != null && !directlyStored[index]) return null
             bytes += when (value) {
                 null -> 16L
                 is String -> value.length.toLong() * 8L + 8L

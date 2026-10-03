@@ -183,6 +183,43 @@ class JdbcInsertManyTest {
     }
 
     @Test
+    fun `MySQL keeps rows with null custom-converter values in one statement`() = runBlocking {
+        val uuidTable = Table(
+            "items",
+            listOf(Column("id", IntJdbcDataType()), Column("uid", UuidJdbcDataType()))
+        )
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        val insertSql = mutableListOf<String>()
+        every { source.borrow() } returns connection
+        packetProbe(connection)
+        every { connection.prepareStatement(match { it.startsWith("INSERT") }) } answers {
+            insertSql += firstArg<String>()
+            statement
+        }
+        every { statement.executeLargeUpdate() } returns 2L
+
+        val result = JdbcInsertMany(
+            listOf(mapOf("id" to 1, "uid" to null), mapOf("id" to 2, "uid" to null)),
+            source,
+            MysqlServerJdbcDialect
+        ).execute(uuidTable)
+
+        assertEquals(WriteResult(2), result)
+        assertEquals(listOf(MysqlServerJdbcDialect.insertMany("items", listOf("id", "uid"), 2)), insertSql)
+        verifyOrder {
+            statement.setObject(1, 1, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setNull(2, JDBCType.BINARY.vendorTypeNumber)
+            statement.setObject(3, 2, JDBCType.INTEGER.vendorTypeNumber)
+            statement.setNull(4, JDBCType.BINARY.vendorTypeNumber)
+            statement.executeLargeUpdate()
+        }
+        verify(exactly = 1) { statement.executeLargeUpdate() }
+        verify(exactly = 1) { source.release(connection) }
+    }
+
+    @Test
     fun `MySQL sends custom-converter rows separately`() = runBlocking {
         val uuidTable = Table("items", listOf(Column("uid", UuidJdbcDataType())))
         val statement = mockk<PreparedStatement>(relaxed = true)
