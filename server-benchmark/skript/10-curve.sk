@@ -1,29 +1,198 @@
-import:
-    java.lang.System
+options:
+    warmups: 3
+    samples: 10
 
-# Measure one write and one read at each row count on a live Paper server.
-# System.nanoTime() brackets only the statement; validation queries and row counts
-# run afterward. The tick observer records the longest interval between tick starts
-# while the statement runs. That interval can reveal overruns but cannot measure
-# work that fits within a tick or assign an overrun to this statement alone.
-# The six-column table crosses the 30,000-value write boundary at 5,000 rows.
-# Literal loop counts keep Skript loop-number references unambiguous.
-# Key ranges avoid depending on the dialect's unsupported delete operation.
-# The SQLite URL uses pragmas to reduce disk sync costs for the local workload.
+# Inputs, count queries, validation and cleanup are outside the timed windows.
+# Each case gets a fresh key range and selects only that range. Local lists stay
+# in this function's event through database waits; suites await its busy flag.
+function benchRoundTrip(rows: number, table: text, workload: text, source: text, target: text, replaced: boolean, sample: number, legacy: text):
+    set {bench::case::busy} to true
+    add 100000 to {bench::base}
+    set {_base} to {bench::base}
+    set {_upper} to {_base} + {_rows}
+    delete {bench::batch::*}
+    delete {bench::rows::*}
+    set {_item} to diamond sword
+    if {_workload} = "objects":
+        set name of {_item} to "Benchmark sword"
+        set lore of {_item} to "Stored outside the timed window" and "Round-trip validation"
+    set {_position} to location at 12, 64, -9 in world "world"
+    loop {_rows} times:
+        set {_row} to loop-number
+        set {_batch::%{_row}%::id} to {_base} + {_row}
+        if {_workload} is not "sparse":
+            set {_batch::%{_row}%::pad1} to {_row}
+            set {_batch::%{_row}%::pad2} to 0 - {_row}
+            set {_batch::%{_row}%::pad3} to {_row} * 2
+            if {_workload} = "primitive":
+                set {_batch::%{_row}%::pad4} to {_row} * 3
+                set {_batch::%{_row}%::pad5} to {_row} * 4
+            else:
+                set {_batch::%{_row}%::item} to {_item}
+                set {_batch::%{_row}%::position} to {_position}
+        if {_source} = "global":
+            set {bench::batch::%{_row}%::id} to {_batch::%{_row}%::id}
+            set {bench::batch::%{_row}%::pad1} to {_batch::%{_row}%::pad1}
+            set {bench::batch::%{_row}%::pad2} to {_batch::%{_row}%::pad2}
+            set {bench::batch::%{_row}%::pad3} to {_batch::%{_row}%::pad3}
+            if {_workload} = "primitive":
+                set {bench::batch::%{_row}%::pad4} to {_batch::%{_row}%::pad4}
+                set {bench::batch::%{_row}%::pad5} to {_batch::%{_row}%::pad5}
+            else if {_workload} is not "sparse":
+                set {bench::batch::%{_row}%::item} to {_item}
+                set {bench::batch::%{_row}%::position} to {_position}
+
+    wait 1 tick
+    benchBegin()
+    if {_source} = "local":
+        in connection "bench":
+            insert many {_batch::*} into table {_table} and store affected rows in {_affected} and wait
+    else:
+        in connection "bench":
+            insert many {bench::batch::*} into table {_table} and store affected rows in {_affected} and wait
+    benchEnd()
+    set {_writeError} to last database error
+    wait 1 tick
+    set {bench::tick::watch} to false
+    if {_writeError} is set:
+        benchFailure("%{_workload}% %{_source}% write %{_rows}%: %{_writeError}%")
+    if {_affected} is not {_rows}:
+        benchFailure("%{_workload}% write affected %{_affected}% rows; expected %{_rows}%")
+
+    if {bench::backend} = "MongoDB":
+        in connection "bench":
+            execute command "{ ""count"": ""%{_table}%"" }" and store the result in {_count::*}
+        set {_total} to {_count::n}
+    else:
+        in connection "bench":
+            execute query "SELECT COUNT(*) AS total FROM %{_table}%" and store the result in {_count::*}
+        set {_total} to {_count::1::total}
+    if last database error is set:
+        benchFailure("%{_table}% count: %last database error%")
+    if {_legacy} is not "none":
+        log "SKRIPTORM_BENCH %{_legacy}%write: rows=%{_rows}% ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{_total}%"
+    else:
+        log "SKRIPTORM_BENCH=SAMPLE write: workload=%{_workload}% source=%{_source}% target=%{_target}% replaced=%{_replaced}% sample=%{_sample}% rows=%{_rows}% ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{_total}% %{bench::phases}%"
+
+    # Pre-fill at the query's width, plus a stale row and column, to check that
+    # writing new results replaces the list rather than merging with old data.
+    if {_replaced} is true:
+        loop {_rows} times:
+            set {_row} to loop-number
+            if {_target} = "local":
+                set {_result::%{_row}%::id} to -1
+                set {_result::%{_row}%::pad1} to -1
+                set {_result::%{_row}%::pad2} to -1
+                set {_result::%{_row}%::pad3} to -1
+                set {_result::%{_row}%::pad4} to -1
+                set {_result::%{_row}%::pad5} to -1
+            else:
+                set {bench::rows::%{_row}%::id} to -1
+                set {bench::rows::%{_row}%::pad1} to -1
+                set {bench::rows::%{_row}%::pad2} to -1
+                set {bench::rows::%{_row}%::pad3} to -1
+                set {bench::rows::%{_row}%::pad4} to -1
+                set {bench::rows::%{_row}%::pad5} to -1
+        set {_extra} to {_rows} + 1
+        if {_target} = "local":
+            set {_result::%{_extra}%::id} to -1
+            set {_result::1::stale} to true
+        else:
+            set {bench::rows::%{_extra}%::id} to -1
+            set {bench::rows::1::stale} to true
+
+    wait 1 tick
+    benchBegin()
+    if {_target} = "local":
+        in connection "bench":
+            select many entities from table {_table} and store the results in {_result::*}:
+                where all:
+                    id > {_base}
+                    id <= {_upper}
+    else:
+        in connection "bench":
+            select many entities from table {_table} and store the results in {bench::rows::*}:
+                where all:
+                    id > {_base}
+                    id <= {_upper}
+    benchEnd()
+    set {_readError} to last database error
+    wait 1 tick
+    set {bench::tick::watch} to false
+
+    set {_stored} to 0
+    loop {_rows} times:
+        set {_row} to loop-number
+        if {_target} = "local":
+            set {_id} to {_result::%{_row}%::id}
+            set {_pad1} to {_result::%{_row}%::pad1}
+            set {_pad5} to {_result::%{_row}%::pad5}
+            set {_readItem} to {_result::%{_row}%::item}
+            set {_readPosition} to {_result::%{_row}%::position}
+        else:
+            set {_id} to {bench::rows::%{_row}%::id}
+            set {_pad1} to {bench::rows::%{_row}%::pad1}
+            set {_pad5} to {bench::rows::%{_row}%::pad5}
+            set {_readItem} to {bench::rows::%{_row}%::item}
+            set {_readPosition} to {bench::rows::%{_row}%::position}
+        if {_id} is set:
+            add 1 to {_stored}
+            set {_originalRow} to {_id} - {_base}
+            if {_workload} = "primitive":
+                if {_pad1} is not {_originalRow}:
+                    benchFailure("primitive read returned wrong pad1 for id %{_id}%")
+                if {_pad5} is not {_originalRow} * 4:
+                    benchFailure("primitive read returned wrong pad5 for id %{_id}%")
+            else if {_workload} is not "sparse":
+                if type of {_readItem} is not diamond sword:
+                    benchFailure("object read returned wrong item for id %{_id}%")
+                if x-coordinate of {_readPosition} is not 12:
+                    benchFailure("object read returned wrong position for id %{_id}%")
+                if y-coordinate of {_readPosition} is not 64:
+                    benchFailure("object read returned wrong height for id %{_id}%")
+                if z-coordinate of {_readPosition} is not -9:
+                    benchFailure("object read returned wrong z coordinate for id %{_id}%")
+                if world of {_readPosition} is not world "world":
+                    benchFailure("object read returned wrong world for id %{_id}%")
+                if {_workload} = "objects":
+                    if name of {_readItem} is not "Benchmark sword":
+                        benchFailure("object read lost item name for id %{_id}%")
+                    if lore of {_readItem} does not contain "Round-trip validation":
+                        benchFailure("object read lost item lore for id %{_id}%")
+    if {_replaced} is true:
+        if {_target} = "local":
+            if {_result::%{_extra}%::id} is set:
+                benchFailure("local replacement retained an old row")
+            if {_result::1::stale} is set:
+                benchFailure("local replacement retained an old column")
+        else:
+            if {bench::rows::%{_extra}%::id} is set:
+                benchFailure("global replacement retained an old row")
+            if {bench::rows::1::stale} is set:
+                benchFailure("global replacement retained an old column")
+    if {_rows} > 5000:
+        if {_stored} is not 0:
+            benchFailure("over-limit read retained partial results")
+        if {_readError} is not set:
+            benchFailure("over-limit read did not report an error")
+    else:
+        if {_stored} is not {_rows}:
+            benchFailure("%{_workload}% read stored %{_stored}% rows; expected %{_rows}%")
+        if {_readError} is set:
+            benchFailure("%{_workload}% read %{_rows}%: %{_readError}%")
+    if {_legacy} is not "none":
+        log "SKRIPTORM_BENCH %{_legacy}%read: rows=%{_rows}% ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{_stored}% total=%{_total}% error=%{_readError}%"
+    else:
+        log "SKRIPTORM_BENCH=SAMPLE read: workload=%{_workload}% source=%{_source}% target=%{_target}% replaced=%{_replaced}% sample=%{_sample}% rows=%{_rows}% ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{_stored}% total=%{_total}% %{bench::phases}% error=%{_readError}%"
+    delete {bench::batch::*}
+    delete {bench::rows::*}
+    set {bench::case::busy} to false
 
 every 5 seconds:
-    # The guards come first and contain nothing but the stop, which is how every script in `server-test`
-    # keeps itself to one run.
-    if {bench::done::curve} is set:
-        stop trigger
     if {bench::started::curve} is set:
         stop trigger
     set {bench::started::curve} to true
-
-    # The plugin and Skript are loaded before any of this runs, so this is only long enough for the tick
-    # counter to have something in it.
     wait 5 seconds
-
     set {bench::backend} to "__BENCH_TYPE__"
     if {bench::backend} = "JDBC":
         create a connection named "bench" to database "JDBC" with properties:
@@ -39,8 +208,8 @@ every 5 seconds:
             username: "__BENCH_USERNAME__"
             password: "__BENCH_PASSWORD__"
     if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve connect: %last database error%"
-
+        benchFailure("connect: %last database error%")
+        stop trigger
     in connection "bench":
         register a database table "orm_bench_probe":
             id: bigint, primary key, not null
@@ -49,439 +218,95 @@ every 5 seconds:
             pad3: int, nullable
             pad4: int, nullable
             pad5: int, nullable
+        register a database table "orm_bench_primitive":
+            id: bigint, primary key, not null
+            pad1: int, not null
+            pad2: int, not null
+            pad3: int, not null
+            pad4: int, not null
+            pad5: int, not null
+        register a database table "orm_bench_objects":
+            id: bigint, primary key, not null
+            pad1: int, not null
+            pad2: int, not null
+            pad3: int, not null
+            item: itemstack, not null
+            position: location, not null
     if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve register table: %last database error%"
-
-    # The key ranges are handed out rather than reset, because nothing here deletes.
+        benchFailure("register tables: %last database error%")
+        stop trigger
     set {bench::base} to 0
 
-    # 100 rows, which is one statement well inside every budget.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 100 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-    log "SKRIPTORM_BENCH=DIAG first batch first row is [%{bench::batch::1::id}%] of range above %{bench::base}%"
+    # Compatible id-only curve; the 10,000-row read must reject the result.
+    loop 100, 500, 1000, 2500, 5000 and 10000:
+        benchRoundTrip(loop-value, "orm_bench_probe", "sparse", "global", "global", false, 0, "")
+        while {bench::case::busy} is true:
+            wait 1 tick
+    benchRoundTrip(5000, "orm_bench_probe", "sparse", "global", "global", false, 0, "warm")
+    while {bench::case::busy} is true:
+        wait 1 tick
 
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
+    # Alternate scopes on a warmed server. Warmups have negative sample numbers;
+    # positive sample numbers identify the ten measured repetitions.
+    loop 100, 500, 1000, 2500 and 5000:
+        set {_rows} to loop-value
+        loop {@warmups} + {@samples} times:
+            set {_sample} to loop-number-2
+            subtract {@warmups} from {_sample}
+            if {_sample} <= 0:
+                subtract 1 from {_sample}
+            benchRoundTrip({_rows}, "orm_bench_primitive", "primitive", "local", "local", false, {_sample}, "none")
+            while {bench::case::busy} is true:
+                wait 1 tick
+            benchRoundTrip({_rows}, "orm_bench_primitive", "primitive", "global", "global", false, {_sample}, "none")
+            while {bench::case::busy} is true:
+                wait 1 tick
+
+    # Existing results and mixed scope combinations at the 5,000-row ceiling.
+    loop {@warmups} + {@samples} times:
+        set {_sample} to loop-number
+        subtract {@warmups} from {_sample}
+        if {_sample} <= 0:
+            subtract 1 from {_sample}
+        benchRoundTrip(5000, "orm_bench_primitive", "primitive", "local", "local", true, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+        benchRoundTrip(5000, "orm_bench_primitive", "primitive", "global", "global", true, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+        benchRoundTrip(5000, "orm_bench_primitive", "primitive", "local", "global", false, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+        benchRoundTrip(5000, "orm_bench_primitive", "primitive", "global", "local", false, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+
+    # Conversion is separate from the numeric curve. A 1,000-row workload keeps
+    # repeated ItemStack and Location conversion practical on CI runners.
+    loop {@warmups} + {@samples} times:
+        set {_sample} to loop-number
+        subtract {@warmups} from {_sample}
+        if {_sample} <= 0:
+            subtract 1 from {_sample}
+        benchRoundTrip(1000, "orm_bench_objects", "mixed", "local", "local", false, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+        benchRoundTrip(1000, "orm_bench_objects", "mixed", "global", "global", false, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+        benchRoundTrip(1000, "orm_bench_objects", "objects", "local", "local", true, {_sample}, "none")
+        while {bench::case::busy} is true:
+            wait 1 tick
+
     wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 100: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=100 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 100 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=100 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # 500 rows.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 500 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 500: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=500 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 500 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=500 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # 1000 rows.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 1000 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 1000: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=1000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 1000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=1000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # 2500 rows.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 2500 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 2500: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=2500 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 2500 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=2500 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # 5000 rows: the write budget in one statement, and the read ceiling exactly reached.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 5000 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 5000: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 5000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # 10000 rows: twice the write budget, so two statements, and twice the read ceiling, so a refusal that
-    # is the ceiling being re-derived rather than restated.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 10000 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve write 10000: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH write: rows=10000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 10000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH read: rows=10000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
-    # The idle window shows the tick observer's baseline. Counted spin loops
-    # confirm that a long main-thread block appears in its longest gap.
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::tick::before} to {bench::tick}
-    set {bench::before} to System.nanoTime()
+    benchBegin()
     wait 6 seconds
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
+    benchEnd()
     wait 1 tick
     set {bench::tick::watch} to false
     log "SKRIPTORM_BENCH calibrate: label=idle6s ticks=%{bench::elapsed::ticks}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=0"
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::spin::before} to System.nanoTime()
-    set {bench::before} to {bench::spin::before}
-    set {_spun} to 0
-    loop 120000 times:
-        set {_spun} to {_spun} + 1
-    set {bench::spin::elapsed::ns} to System.nanoTime() - {bench::spin::before}
-    wait 1 second
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    log "SKRIPTORM_BENCH calibrate: label=spin120000 ticks=%{bench::elapsed::ticks}% spinNs=%{bench::spin::elapsed::ns}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=%{_spun}%"
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::spin::before} to System.nanoTime()
-    set {bench::before} to {bench::spin::before}
-    set {_spun} to 0
-    loop 180000 times:
-        set {_spun} to {_spun} + 1
-    set {bench::spin::elapsed::ns} to System.nanoTime() - {bench::spin::before}
-    wait 1 second
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    log "SKRIPTORM_BENCH calibrate: label=spin180000 ticks=%{bench::elapsed::ticks}% spinNs=%{bench::spin::elapsed::ns}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=%{_spun}%"
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::spin::before} to System.nanoTime()
-    set {bench::before} to {bench::spin::before}
-    set {_spun} to 0
-    loop 300000 times:
-        set {_spun} to {_spun} + 1
-    set {bench::spin::elapsed::ns} to System.nanoTime() - {bench::spin::before}
-    wait 1 second
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    log "SKRIPTORM_BENCH calibrate: label=spin300000 ticks=%{bench::elapsed::ticks}% spinNs=%{bench::spin::elapsed::ns}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=%{_spun}%"
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::spin::before} to System.nanoTime()
-    set {bench::before} to {bench::spin::before}
-    set {_spun} to 0
-    loop 900000 times:
-        set {_spun} to {_spun} + 1
-    set {bench::spin::elapsed::ns} to System.nanoTime() - {bench::spin::before}
-    wait 1 second
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    log "SKRIPTORM_BENCH calibrate: label=spin900000 ticks=%{bench::elapsed::ticks}% spinNs=%{bench::spin::elapsed::ns}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=%{_spun}%"
-
-    # Repeat the 5,000-row case after warmup; report it separately.
-    add 100000 to {bench::base}
-    delete {bench::batch::*}
-    loop 5000 times:
-        set {bench::batch::%loop-number%::id} to {bench::base} + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_probe" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve warm write 5000: %last database error%"
-    delete {bench::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_probe"" }" and store the result in {bench::count::*}
-        set {bench::count::1::total} to {bench::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_probe" and store the result in {bench::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL curve count: %last database error%"
-    log "SKRIPTORM_BENCH warmwrite: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::count::1::total}%"
-
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_probe" and store the results in {bench::rows::*}:
-            where all:
-                id > {bench::base}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 5000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH warmread: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% total=%{bench::count::1::total}% error=%last database error%"
-    delete {bench::rows::*}
-
+    loop 120000, 180000, 300000 and 900000:
+        benchCalibrate(loop-value)
+        while {bench::case::busy} is true:
+            wait 1 tick
     set {bench::done::curve} to true

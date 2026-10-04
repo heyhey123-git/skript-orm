@@ -383,6 +383,7 @@ jobs:
           name: tick-report-${{ matrix.backend }}
           path: |
             build/benchmarks/tick-results.json
+            build/benchmarks/pipeline-results.json
             build/benchmarks/environment.txt
           if-no-files-found: ignore
 

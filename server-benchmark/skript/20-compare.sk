@@ -1,24 +1,85 @@
-import:
-    java.lang.System
+# Compare the existing id-only workload with a literal multi-row SQL statement.
+# The table has six columns, but the other five are NULL in both paths. Building
+# SQL, checking results and counting rows are outside the timed windows.
+function benchCompareCase(raw: boolean, base: number):
+    set {bench::case::busy} to true
+    delete {bench::batch::*}
+    delete {bench::rows::*}
+    if {_raw} is true:
+        set {_prefix} to "raw"
+        set {_id} to {_base} + 1
+        set {_sql} to "INSERT INTO orm_bench_compare (id) VALUES (%{_id}%)"
+        loop 4999 times:
+            set {_id} to {_base} + loop-number + 1
+            set {_sql} to "%{_sql}%,(%{_id}%)"
+    else:
+        set {_prefix} to "plugin"
+        loop 5000 times:
+            set {bench::batch::%loop-number%::id} to {_base} + loop-number
 
-# Compare plugin operations with raw SQL on SQL backends using the same table shape.
-# MongoDB runs the plugin cases and skips the SQL-only comparison.
-# Plugin writes use a prepared JDBC batch; the raw write uses one multi-row
-# statement, so their difference includes SQL shape and binding costs. Reads
-# issue the same SELECT, but the plugin also converts result values. Timings
-# bracket each operation and exclude the validation and row-count loops.
+    wait 1 tick
+    benchBegin()
+    if {_raw} is true:
+        in connection "bench":
+            execute update {_sql} and store affected rows in {_affected}
+    else:
+        in connection "bench":
+            insert many {bench::batch::*} into table "orm_bench_compare" and store affected rows in {_affected} and wait
+    benchEnd()
+    set {_writeError} to last database error
+    wait 1 tick
+    set {bench::tick::watch} to false
+    if {_writeError} is set:
+        benchFailure("compare %{_prefix}% write: %{_writeError}%")
+    if {_affected} is not 5000:
+        benchFailure("compare %{_prefix}% write affected %{_affected}% rows")
+    if {bench::backend} = "MongoDB":
+        in connection "bench":
+            execute command "{ ""count"": ""orm_bench_compare"" }" and store the result in {_count::*}
+        set {_total} to {_count::n}
+    else:
+        in connection "bench":
+            execute query "SELECT COUNT(*) AS total FROM orm_bench_compare" and store the result in {_count::*}
+        set {_total} to {_count::1::total}
+    if last database error is set:
+        benchFailure("compare count: %last database error%")
+    log "SKRIPTORM_BENCH=COMPARE %{_prefix}%write: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{_total}%"
+
+    wait 1 tick
+    benchBegin()
+    if {_raw} is true:
+        in connection "bench":
+            execute query "SELECT id, pad1, pad2, pad3, pad4, pad5 FROM orm_bench_compare WHERE id > %{_base}%" and store the result in {bench::rows::*}
+    else:
+        in connection "bench":
+            select many entities from table "orm_bench_compare" and store the results in {bench::rows::*}:
+                where all:
+                    id > {_base}
+    benchEnd()
+    set {_readError} to last database error
+    wait 1 tick
+    set {bench::tick::watch} to false
+    set {_stored} to 0
+    loop 5000 times:
+        if {bench::rows::%loop-number%::id} is set:
+            add 1 to {_stored}
+        if {bench::rows::%loop-number%::pad1} is set:
+            benchFailure("compare read did not preserve NULL")
+    if {_stored} is not 5000:
+        benchFailure("compare %{_prefix}% read stored %{_stored}% rows")
+    if {_readError} is set:
+        benchFailure("compare %{_prefix}% read: %{_readError}%")
+    log "SKRIPTORM_BENCH=COMPARE %{_prefix}%read: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{_stored}% error=%{_readError}%"
+    delete {bench::batch::*}
+    delete {bench::rows::*}
+    set {bench::case::busy} to false
 
 every 5 seconds:
-    if {bench::done::compare} is set:
-        stop trigger
     if {bench::done::curve} is not set:
         stop trigger
     if {bench::started::compare} is set:
         stop trigger
     set {bench::started::compare} to true
-
-    # A second table on the same connection, same six-column shape as the probe, so the two paths write
-    # and read the same rows and nothing here touches the curve's cumulative count.
     in connection "bench":
         register a database table "orm_bench_compare":
             id: bigint, primary key, not null
@@ -28,112 +89,15 @@ every 5 seconds:
             pad4: int, nullable
             pad5: int, nullable
     if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL compare register table: %last database error%"
-
-    # Plugin write: 5000 rows, one column filled, exactly the shape the curve measures.
-    delete {bench::batch::*}
-    loop 5000 times:
-        set {bench::batch::%loop-number%::id} to 100000 + loop-number
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        insert many {bench::batch::*} into table "orm_bench_compare" and store affected rows in {_affected} and wait
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL compare plugin write: %last database error%"
-    delete {bench::compare::count::*}
-    if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_compare"" }" and store the result in {bench::compare::count::*}
-        set {bench::compare::count::1::total} to {bench::compare::count::n}
-    else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_compare" and store the result in {bench::compare::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL compare count: %last database error%"
-    log "SKRIPTORM_BENCH=COMPARE pluginwrite: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::compare::count::1::total}%"
-
-    # Plugin read: the same 5000 rows it just wrote.
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        select many entities from table "orm_bench_compare" and store the results in {bench::rows::*}:
-            where all:
-                id > 100000
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 5000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH=COMPARE pluginread: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% error=%last database error%"
-    delete {bench::rows::*}
-
-    if {bench::backend} = "MongoDB":
-        log "SKRIPTORM_BENCH=SKIP compare raw SQL: MongoDB has no SQL statements"
-        set {bench::done::compare} to true
+        benchFailure("compare register table: %last database error%")
         stop trigger
-
-    # Raw write: the same 5000 rows, one multi-row INSERT with the values written in. The statement is
-    # built outside the timed window, so the string building is not what gets measured.
-    set {_id} to 200001
-    set {_sql} to "INSERT INTO orm_bench_compare (id) VALUES (%{_id}%)"
-    loop 4999 times:
-        set {_id} to {_id} + 1
-        set {_sql} to "%{_sql}%,(%{_id}%)"
-
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        execute update {_sql} and store affected rows in {_affected}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL compare raw write: %last database error%"
-    delete {bench::compare::count::*}
+    benchCompareCase(false, 100000)
+    while {bench::case::busy} is true:
+        wait 1 tick
     if {bench::backend} = "MongoDB":
-        in connection "bench":
-            execute command "{ ""count"": ""orm_bench_compare"" }" and store the result in {bench::compare::count::*}
-        set {bench::compare::count::1::total} to {bench::compare::count::n}
+        log "SKRIPTORM_BENCH=SKIP compare raw SQL: MongoDB does not execute SQL statements"
     else:
-        in connection "bench":
-            execute query "SELECT COUNT(*) AS total FROM orm_bench_compare" and store the result in {bench::compare::count::*}
-    if last database error is set:
-        log "SKRIPTORM_BENCH=FAIL compare count: %last database error%"
-    log "SKRIPTORM_BENCH=COMPARE rawwrite: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% affected=%{_affected}% total=%{bench::compare::count::1::total}%"
-
-    # Raw read: the same 5000 rows, same SELECT over the same six columns.
-    delete {bench::rows::*}
-    set {bench::tick::before} to {bench::tick}
-    delete {bench::tick::gap::max::ns}
-    set {bench::tick::watch} to true
-    set {bench::before} to System.nanoTime()
-    in connection "bench":
-        execute query "SELECT id, pad1, pad2, pad3, pad4, pad5 FROM orm_bench_compare WHERE id > 200000" and store the result in {bench::rows::*}
-    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
-    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
-    wait 1 tick
-    set {bench::tick::watch} to false
-    set {bench::stored} to 0
-    loop 5000 times:
-        if {bench::rows::%loop-number%::id} is set:
-            add 1 to {bench::stored}
-    log "SKRIPTORM_BENCH=COMPARE rawread: rows=5000 ticks=%{bench::elapsed::ticks}% wallNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% stored=%{bench::stored}% error=%last database error%"
-    delete {bench::rows::*}
-
+        benchCompareCase(true, 200000)
+        while {bench::case::busy} is true:
+            wait 1 tick
     set {bench::done::compare} to true

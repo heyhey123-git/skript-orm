@@ -2,8 +2,10 @@
 
 [简体中文](benchmarking.zh-CN.md) | **English**
 
-This page describes the benchmark setup, recorded results, and planned tests. Results identify their
-test environment; work that has not yet been measured is marked as planned.
+This page describes the benchmark setup, recorded results, and planned tests. The numeric tables
+below are historical measurements from Run #4 on commit `6476c9b`. They predate background local-variable
+processing and the shared server-thread conversion queue, so they do not measure those changes.
+The revised suite is described separately; no new five-database result is claimed here.
 
 A tick is one server update. At the usual 20 ticks per second, each aims to finish within 50 ms.
 
@@ -12,11 +14,18 @@ A tick is one server update. At the usual 20 ticks per second, each aims to fini
 Reads that exceed the 5000-row result limit fail without storing a partial result. Writes that exceed
 30 000 bound values are split across statements. These limits protect against oversized operations,
 although a permitted large write can still lengthen a server tick.
-For `insert many` from a list variable, the addon reads the source across ticks. Each pass handles
-at most 4096 processing steps and checks the clock every 64 steps, pausing after about 2 ms.
-A single value conversion can take longer than 2 ms, so this is a target rather than a hard
-main-thread limit. The operation may take more ticks to finish; the script must leave the source
-variable unchanged until the write completes.
+For `insert many`, an exclusively held local source can be read and validated in the background.
+Global sources still use server-thread slices of at most 4096 processing steps and about 2 ms.
+Shared script-default values use the server-thread fallback. Conversions that need server APIs use
+a shared queue with a 2 ms target per tick; one conversion cannot be interrupted to enforce that target.
+The global source must remain unchanged until the write finishes. See [Writing rows](writing.md).
+
+Local query results containing ordinary values can be saved in the background while their script
+is paused. The addon builds values that need server APIs on the server thread and restores the
+local context before continuing the script. Global result variables are still written on the
+server thread. A converter declares its read and write requirements separately; unknown converters
+default to the server thread. The revised benchmark checks both the work moved off that thread
+and the extra waiting introduced by conversion scheduling.
 
 The measurements cover three different costs:
 
@@ -24,8 +33,8 @@ The measurements cover three different costs:
   Platinum 8573C and 8.241 ms on an AMD EPYC 7763. Those CI runs are stored in
   `dev/bench/intel-xeon-platinum-8573c/data.js` and
   `dev/bench/amd-epyc-7763-64-core-processor/data.js`.
-- **Current server reads and writes.** `System.nanoTime()` records elapsed time and the longest
-  interval between tick-observer executions for each database. The current measurements are listed below.
+- **Historical server reads and writes.** `System.nanoTime()` recorded elapsed time and the longest
+  interval between tick-observer executions for each database. Those measurements are listed below.
 - **Historical database driver behavior.** In a separate benchmark, twenty 5000-row inserts took 17.04 s
   with MySQL and 1.99 s with PostgreSQL or MariaDB. For one batch, the MySQL server counted
   5038 statements, including 5000 inserts; MariaDB counted two statements, including one
@@ -62,11 +71,11 @@ time. Work that fits within a normal tick is invisible to this metric. Each `rea
 `write` row is the first run at that size. The `warm read` and `warm write` labels mean the
 5000-row cases were repeated after the others; they do not establish that any cache was warm.
 
-## Current CI coverage
+## Historical CI coverage: Run #4
 
-The tick job runs plugin writes and reads at 100, 500, 1000, 2500, 5000, and 10 000 rows,
-followed by another 5000-row write and read, for every database below. It also runs a separate
-5000-row plugin-versus-raw-SQL comparison where SQL is available. The input rows populate only
+Run #4 ran plugin writes and reads at 100, 500, 1000, 2500, 5000, and 10 000 rows,
+followed by another 5000-row write and read, for every database below. It also ran a separate
+5000-row plugin-versus-raw-SQL comparison where SQL is available. Its input rows populated only
 the `id` column; this keeps the comparison focused on row transport and storage rather than a
 particular six-column value mix.
 
@@ -78,9 +87,9 @@ describes coverage; it does not compare timings.
 - **Backend** is the database under test. SQLite uses the addon's `"JDBC"` connection type.
 - **Plugin sizes and repeated cases** says whether all six row counts and the final repeated 5000-row reads and writes completed in Run #4.
 - **Raw SQL comparison** says whether hand-written SQL runs through `execute query` and `execute update` alongside the plugin statements. MongoDB does not support SQL, so that comparison is skipped; its plugin reads and writes still run.
-- **New CI results** gives the workflow link, runner CPU, and database container image or database name.
+- **Recorded run and environment** gives the workflow link, runner CPU, and database container image or database name.
 
-| Backend | Plugin sizes and repeated cases | Raw SQL comparison | New CI results |
+| Backend | Plugin sizes and repeated cases | Raw SQL comparison | Recorded run and environment |
 | --- | --- | --- | --- |
 | SQLite | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, SQLite |
 | MySQL | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), Intel Xeon 6973P-C, `mysql:8.4` |
@@ -236,11 +245,70 @@ Trigger latency includes database work, main-thread variable handling, and the w
 Skript resumes the trigger. A long tick gap shows a delay, but cannot divide that time
 among those causes.
 
-## What the current server cases report
+## Revised server benchmark
 
-The Paper scripts currently log `wallNs`, `gapNs`, tick count, and affected or stored
-row counts. The report derives tick overrun from `gapNs` and validates the counts.
-It does not isolate main-thread CPU time, database time, allocations, or MSPT percentiles.
+The revised scripts retain the id-only curve and SQL comparison for continuity. Their new
+`SAMPLE` cases address the local-variable and conversion changes. Setup, result validation,
+count queries and cleanup run outside the measured statement windows. Rows use fresh primary-key
+ranges, and each query selects only its own range.
+
+Temporary `bench::` global variables are excluded from Skript variable persistence so repeated setup and cleanup do not build a save-queue backlog. These cases measure in-memory variable handling and ORM operations; they do not measure Skript variable persistence.
+
+### Cases and comparisons
+
+The table describes workloads, not measured performance. **Case** names the data and variable
+scope; **Size** is the requested row count; **Purpose** explains why those cases are compared.
+All five backends are configured to run the plugin cases. MongoDB skips the raw SQL comparison
+because it does not execute SQL; this is not a zero-time result.
+
+| Case | Size | Purpose |
+| --- | --- | --- |
+| Six populated numeric columns, local source and local result versus global source and global result | 100, 500, 1000, 2500, 5000 | Show how variable scope changes preparation and result-storage time for the same database workload |
+| Local source with global result; global source with local result | 5000 | Examine input processing and result storage separately |
+| Existing result replaced, local versus global | 5000 | Include removal of old results; check that stale rows and columns disappear |
+| Numeric columns plus ItemStack and Location, local versus global | 1000 | Show the cost of mixed ordinary values and server-thread conversions |
+| Named ItemStack with lore plus Location, existing local result replaced | 1000 | Exercise object conversion and replacement together; validate item metadata and location |
+| Original id-only curve and repeated case | 100–10000, then 5000 | Preserve the previous workload; the 10000-row read must reject the result without retaining partial data |
+
+Each new case has three warmup repetitions followed by ten measured samples. Warmups are saved
+with negative sample numbers and excluded from summaries. Reports group the same operation,
+workload, row count, variable scopes and replacement mode, then show the median, p95 and maximum.
+The median describes the middle of the samples; p95 estimates the time below which 95% of samples
+fall; the maximum is the slowest observed sample. With only ten samples, p95 equals the
+maximum and provides limited evidence about rare delays. It is an operation percentile, not an
+MSPT percentile. Raw samples, including warmups, and median/p95/max summaries are retained in `build/benchmarks/pipeline-results.json`. `tick-results.json` contains median points for CI history.
+
+The local and global cases alternate under the same running server. Comparing them is useful
+within a backend and workload; different runner CPUs or different object contents require separate
+interpretation. No timings from this revised matrix replace the historical tables until a complete
+run has validated its inputs and results.
+
+### Phase timings
+
+`System.nanoTime()` still measures the complete statement and the observer gap. Optional addon
+instrumentation records the processing stages; it is enabled for benchmark servers. The script
+captures the completed operation's snapshot immediately on return, before another database call
+can replace it. **Field** is the raw JSON/log key; **Meaning** defines its measurement boundary.
+
+| Field | Meaning |
+| --- | --- |
+| `wallNs` | Statement start to script resumption, excluding subsequent validation |
+| `gapNs` | Largest tick-observer interval from statement start until one tick after resumption |
+| `mainNs` | Elapsed time in the operation's instrumented server-thread processing intervals; not CPU time and not all server work |
+| `mainTickMaxNs` | Largest sum of those intervals within one server tick for this operation; not the combined cost of all requests |
+| `prepareMainNs`, `prepareAsyncNs` | Input preparation recorded on the server thread and in the background |
+| `conversionMainNs` | Recorded server-thread conversions |
+| `resultMainNs`, `resultAsyncNs` | Result storage recorded on the server thread and in the background |
+| `executionNs` | Background execution stage, including local input preparation, write conversion, database calls and cursor materialization; not pure database time |
+| `queueWaitNs` | Time waiting for the server-thread conversion queue |
+| `syncConversions` | Number of recorded server-thread value conversions |
+| `largestConversionNs` | Longest single recorded server-thread conversion; helps identify a value that exceeds the queue's budget |
+| `operationId` | Identifies the completed operation associated with this snapshot |
+
+These fields overlap. In particular, `executionNs` can contain preparation and conversion
+waiting, so adding it to the other stages double-counts time. Main-thread elapsed intervals are
+measured directly, not inferred from `gapNs`. The data still does not isolate database-server
+execution, memory allocation or the server's MSPT distribution.
 
 ### Additional measurements planned
 
@@ -254,9 +322,6 @@ server). Listing a metric here does not mean current cases already report it.
 
 | Metric | Planned measurement | Layer |
 | --- | --- | --- |
-| main-thread time | time spent on the server thread during an operation | C |
-| background time | time spent doing database work on background threads | B, C |
-| trigger latency | elapsed time from statement start until Skript resumes | B, C |
 | throughput | rows and values processed per second | A, B, C |
 | statements and rows passed to the driver | calls and rows counted at the JDBC boundary | B |
 | statements received and rows written by the database | database-side counters | B |
@@ -265,8 +330,8 @@ server). Listing a metric here does not mean current cases already report it.
 | retained heap | heap use after the case and a collection | B, C |
 | MSPT distribution (p50, p99, max) | milliseconds per tick: median (p50), a time exceeded by only 1% of ticks (p99), and longest tick | C |
 
-Separating trigger latency from database and main-thread time will require additional
-instrumentation. The current `wallNs` reading includes all three.
+The phase timings above now record selected addon processing intervals. Isolating pure
+database time or collecting the memory and MSPT measures in this plan still needs additional tools.
 
 ### Counts and timings
 
@@ -390,7 +455,7 @@ Paper and Skript versions, commit, and whether the worktree had local changes.
 ## What this does not cover
 
 - **Active players.** Measurements on a quiet server do not predict the same operation under heavy player and entity load.
-- **Long-running tests.** Current cases last seconds, so they cannot detect leaks that take days to appear.
+- **Long-running tests.** Individual operations usually finish within seconds and the full matrix takes longer; neither can detect leaks that take days to appear.
 - **Untested drivers.** Generic JDBC can use drivers outside this repository's test matrix; MySQL results do not represent them.
 - **PostgreSQL statement counts.** The available statistics count rows and transactions, not individual statements.
 - **Cross-machine timing comparisons.** Timings are meaningful only with their test environment.

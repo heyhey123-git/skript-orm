@@ -6,6 +6,7 @@ import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.util.zip.ZipFile
 import org.gradle.api.DefaultTask
 import org.gradle.api.GradleException
 import org.gradle.api.file.RegularFileProperty
@@ -579,6 +580,8 @@ val serverTestChecks = buildMap {
     put("stress columns", "error=<none> valuesAsked=24000 rowsReported=4000 rowsPaged=4000")
     put("stress split", "error=<none> valuesAsked=72000 rowsReported=12000 rowsPaged=12000")
     put("write values", "ok")
+    put("local work", "ok")
+    put("local results", "ok")
     // The declared line is the file backend's verdict, and only that. The same case failed on MySQL,
     // PostgreSQL and MongoDB with `rowsAffected=-1` in the run that first carried it (d0d86a6), and those
     // three are expected to keep failing it until the cancellation path is fixed: the case asks whether the
@@ -870,6 +873,15 @@ val prepareServerBenchmark by tasks.registering {
         val scripts = run.resolve("plugins/Skript/scripts")
         scripts.mkdirs()
         sourceDirectory.dir("skript").asFile.copyRecursively(scripts, overwrite = true)
+        // These lists are temporary benchmark inputs, not persistent server data. Exclude them
+        // from Skript's save queue so repeated global-list cases cannot create a CSV backlog.
+        val skriptJar = serverTestPlugins.singleFile
+        ZipFile(skriptJar).use { archive ->
+            val entry = requireNotNull(archive.getEntry("config.sk")) { "Skript jar contains no default config." }
+            val config = archive.getInputStream(entry).bufferedReader().use { it.readText() }
+                .replace("pattern: .*", "pattern: (?!bench::).*")
+            run.resolve("plugins/Skript/config.sk").writeText(config)
+        }
         require(benchmarkDatabaseUrl.get().isNotBlank()) { "Set skriptorm.benchmark.url for this backend." }
         val settings = mapOf(
             "__BENCH_TYPE__" to benchmarkDatabaseType.get(),
@@ -901,6 +913,7 @@ val runServerBenchmark by tasks.registering(RunServer::class) {
     minecraftVersion(paperMinecraftVersion)
     build(paperBuild)
     runDirectory.set(serverBenchmarkDirectory)
+    jvmArgs("-Dskriptorm.benchmark.timings=true")
     // skript-reflect is downloaded into plugins/ and discovered there by Paper.
     pluginJars(tasks.shadowJar, serverTestPlugins)
     // These cases use numeric columns, so SkBee's NBT support is unnecessary.
@@ -1099,6 +1112,7 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                     tickEntries += """{"name":"$kind ${rows}rows overrun","unit":"ns","value":$overrun}"""
                 }
             }
+        recordPipelineSamples(lines, results, tickEntries)
         results.writeText("[${tickEntries.joinToString(",")}]\n")
         logger.lifecycle("Recorded {} tick points to {}.", tickEntries.size, results.absolutePath)
         comparisons.forEach { logger.lifecycle(format(it, null)) }
@@ -1128,6 +1142,65 @@ abstract class ReportSkriptServerBenchmark : DefaultTask() {
                 "SKRIPTORM_BENCH calibrate:" in it
         }
             .forEach { line -> logger.lifecycle("  {}", line.substringAfter("SKRIPTORM_BENCH").trim()) }
+    }
+
+    /** Keep every sample; warmups are excluded from summaries, not discarded. */
+    private fun recordPipelineSamples(lines: List<String>, results: java.io.File, tickEntries: MutableList<String>) {
+        val dimensions = listOf("workload", "source", "target", "replaced", "rows")
+        val timers = listOf(
+            "wallNs", "gapNs", "mainNs", "mainTickMaxNs", "prepareMainNs", "prepareAsyncNs",
+            "conversionMainNs", "resultMainNs", "resultAsyncNs", "executionNs", "queueWaitNs", "largestConversionNs"
+        )
+        val numbers = timers + listOf("sample", "rows", "ticks", "operationId", "syncConversions", "affected", "stored", "total")
+        val samples = lines.filter { "SKRIPTORM_BENCH=SAMPLE" in it }.map { line ->
+            val kind = Regex("SAMPLE (write|read):").find(line)?.groupValues?.get(1)
+                ?: throw GradleException("Invalid pipeline sample: $line")
+            val sample = linkedMapOf<String, Any>("kind" to kind)
+            for (dimension in dimensions) sample[dimension] = field(line, dimension)
+                ?: throw GradleException("Missing $dimension: $line")
+            for (number in numbers) {
+                val value = nanoseconds(field(line, number))
+                if (value != null) sample[number] = value
+            }
+            require(timers.all { sample[it] is Long && (sample[it] as Long) >= 0 }) {
+                "Missing or invalid phase timings: $line"
+            }
+            require((sample["operationId"] as? Long ?: 0) > 0) { "Benchmark instrumentation is disabled: $line" }
+            require(sample["sample"] is Long) { "Invalid sample number: $line" }
+            val count = if (kind == "write") "affected" else "stored"
+            require(sample[count] == sample["rows"]) { "Incomplete pipeline operation: $line" }
+            if (kind == "read") {
+                val error = Regex("error=(.*)$").find(line)?.groupValues?.get(1)?.trim()
+                require(error == "<none>" || error.isNullOrEmpty()) { "Pipeline read failed: $line" }
+            }
+            sample
+        }
+        require(samples.isNotEmpty()) { "The server recorded no pipeline samples." }
+        val groups = samples.filter { (it.getValue("sample") as Long) > 0 }
+            .groupBy { sample -> (listOf("kind") + dimensions).joinToString(" ") { sample.getValue(it).toString() } }
+        require(groups.size == 34 && samples.size == 442) {
+            "Incomplete pipeline matrix: ${groups.size} groups and ${samples.size} samples; expected 34 and 442."
+        }
+        require(samples.map { it["operationId"] }.toSet().size == samples.size) {
+            "Two samples reference the same operation timing; a snapshot was captured too late or the operation did not run."
+        }
+        val summaries = groups.map { (name, group) ->
+            require(group.size == 10 && group.map { it["sample"] }.toSet() == (1L..10L).toSet()) {
+                "Expected samples 1 through 10 for $name; received ${group.map { it["sample"] }}"
+            }
+            val summary = linkedMapOf<String, Any>("name" to name, "samples" to group.size)
+            for (timer in timers) {
+                val sorted = group.map { it.getValue(timer) as Long }.sorted()
+                val median = (sorted[4] / 2.0 + sorted[5] / 2.0).toLong()
+                val p95 = sorted[Math.ceil(sorted.size * 0.95).toInt() - 1]
+                summary[timer] = mapOf("median" to median, "p95" to p95, "max" to sorted.last())
+                tickEntries += JsonOutput.toJson(mapOf("name" to "$name $timer median", "unit" to "ns", "value" to median))
+            }
+            summary
+        }
+        val output = results.resolveSibling("pipeline-results.json")
+        output.writeText(JsonOutput.prettyPrint(JsonOutput.toJson(mapOf("backend" to backend.get(), "samples" to samples, "summaries" to summaries))) + "\n")
+        logger.lifecycle("Recorded {} pipeline samples and {} groups to {}.", samples.size, summaries.size, output)
     }
 
     private fun format(measurement: Measurement, added: Int?): String {

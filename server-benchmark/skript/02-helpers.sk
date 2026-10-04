@@ -1,0 +1,50 @@
+import:
+    java.lang.System
+    io.github.heyhey123.skriptorm.utils.BenchmarkTimings
+
+# Timing helpers never wait. A void case function can suspend at a database
+# operation, so its caller explicitly waits for the shared completion flag.
+function benchBegin():
+    set {bench::tick::before} to {bench::tick}
+    set {bench::tick::gap::max::ns} to 0
+    set {bench::tick::watch} to true
+    set {bench::before} to System.nanoTime()
+
+function benchEnd():
+    set {bench::elapsed::ns} to System.nanoTime() - {bench::before}
+    set {bench::elapsed::ticks} to {bench::tick} - {bench::tick::before}
+    set {_phases} to BenchmarkTimings.latest()
+    if {_phases} is set:
+        set {_operation} to {_phases}.getOperationId()
+        set {_main} to {_phases}.getMainNs()
+        set {_mainTick} to {_phases}.getMainTickMaxNs()
+        set {_prepareMain} to {_phases}.getPrepareMainNs()
+        set {_prepareAsync} to {_phases}.getPrepareAsyncNs()
+        set {_conversionMain} to {_phases}.getConversionMainNs()
+        set {_resultMain} to {_phases}.getResultMainNs()
+        set {_resultAsync} to {_phases}.getResultAsyncNs()
+        set {_execution} to {_phases}.getExecutionNs()
+        set {_queue} to {_phases}.getQueueWaitNs()
+        set {_conversions} to {_phases}.getSyncConversions()
+        set {_largestConversion} to {_phases}.getLargestConversionNs()
+        set {bench::phases} to "operationId=%{_operation}% mainNs=%{_main}% mainTickMaxNs=%{_mainTick}% prepareMainNs=%{_prepareMain}% prepareAsyncNs=%{_prepareAsync}% conversionMainNs=%{_conversionMain}% resultMainNs=%{_resultMain}% resultAsyncNs=%{_resultAsync}% executionNs=%{_execution}% queueWaitNs=%{_queue}% syncConversions=%{_conversions}% largestConversionNs=%{_largestConversion}%"
+    else:
+        set {bench::phases} to "phases=unavailable"
+
+function benchFailure(message: text):
+    log "SKRIPTORM_BENCH=FAIL %{_message}%"
+
+function benchCalibrate(spins: number):
+    set {bench::case::busy} to true
+    wait 1 tick
+    benchBegin()
+    set {_before} to System.nanoTime()
+    set {_spun} to 0
+    loop {_spins} times:
+        add 1 to {_spun}
+    set {_spinNs} to System.nanoTime() - {_before}
+    benchEnd()
+    wait 1 tick
+    set {bench::tick::watch} to false
+    log "SKRIPTORM_BENCH calibrate: label=spin%{_spins}% ticks=%{bench::elapsed::ticks}% spinNs=%{_spinNs}% windowNs=%{bench::elapsed::ns}% gapNs=%{bench::tick::gap::max::ns}% spun=%{_spun}%"
+    set {bench::case::busy} to false
