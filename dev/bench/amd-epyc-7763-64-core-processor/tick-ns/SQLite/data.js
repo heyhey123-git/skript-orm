@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791018793427,
+  "lastUpdate": 1791107497571,
   "repoUrl": "https://github.com/heyhey123-git/skript-orm",
   "entries": {
     "Benchmark": [
@@ -583,6 +583,298 @@ window.BENCHMARK_DATA = {
           {
             "name": "write 10000rows overrun",
             "value": 38312139,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "Radiation-pi",
+            "username": "Radiation-pi",
+            "email": "pi1243039811@outlook.com"
+          },
+          "committer": {
+            "name": "Radiation-pi",
+            "username": "Radiation-pi",
+            "email": "pi1243039811@outlook.com"
+          },
+          "id": "0f3bf2119f791ca9b2cab2dc163e918fa8b47215",
+          "message": "fix(mysql): keep null values in multi-row inserts",
+          "timestamp": "2026-10-03T08:58:41Z",
+          "url": "https://github.com/heyhey123-git/skript-orm/commit/0f3bf2119f791ca9b2cab2dc163e918fa8b47215"
+        },
+        "date": 1791107497271,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pluginread 5000rows wall",
+            "value": 99909546,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginread 5000rows gap",
+            "value": 98395312,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginread 5000rows overrun",
+            "value": 48395312,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows wall",
+            "value": 731260486,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows gap",
+            "value": 69235212,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows overrun",
+            "value": 19235212,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows wall",
+            "value": 101125263,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows gap",
+            "value": 100620514,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows overrun",
+            "value": 50620514,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows wall",
+            "value": 15645983,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows gap",
+            "value": 91276017,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows overrun",
+            "value": 41276017,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows wall",
+            "value": 53548009,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows gap",
+            "value": 56540528,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows overrun",
+            "value": 6540528,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows wall",
+            "value": 60247030,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows gap",
+            "value": 60136935,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows overrun",
+            "value": 10136935,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows wall",
+            "value": 63306113,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows gap",
+            "value": 63079240,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows overrun",
+            "value": 13079240,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows wall",
+            "value": 76421853,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows gap",
+            "value": 76351653,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows overrun",
+            "value": 26351653,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows wall",
+            "value": 100194984,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows gap",
+            "value": 100128530,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows overrun",
+            "value": 50128530,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows wall",
+            "value": 62164940,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows gap",
+            "value": 61637096,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows overrun",
+            "value": 11637096,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows wall",
+            "value": 100804977,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows gap",
+            "value": 99874942,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows overrun",
+            "value": 49874942,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows wall",
+            "value": 773215783,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows gap",
+            "value": 51346298,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows overrun",
+            "value": 1346298,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows wall",
+            "value": 186778220,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows gap",
+            "value": 66519062,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows overrun",
+            "value": 16519062,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows wall",
+            "value": 176285218,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows gap",
+            "value": 52167444,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows overrun",
+            "value": 2167444,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows wall",
+            "value": 95828587,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows gap",
+            "value": 62833894,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows overrun",
+            "value": 12833894,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows wall",
+            "value": 392240625,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows gap",
+            "value": 61940848,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows overrun",
+            "value": 11940848,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows wall",
+            "value": 546103018,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows gap",
+            "value": 56222486,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows overrun",
+            "value": 6222486,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows wall",
+            "value": 1270392111,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows gap",
+            "value": 80051464,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows overrun",
+            "value": 30051464,
             "unit": "ns"
           }
         ]
