@@ -3,7 +3,8 @@ package io.github.heyhey123.skriptorm.skript.utils
 import java.util.ConcurrentModificationException
 
 /**
- * Reads one Skript variable tree in bounded main-thread steps. The caller must not change the source
+ * Reads one Skript variable tree in bounded steps. Global sources use server ticks; exclusively
+ * owned local sources can advance on a worker. The caller must not change the source
  * until reading finishes. Mutation checks catch some structural changes, but cannot detect every
  * edit, especially changes to rows already read or values replaced at existing keys.
  */

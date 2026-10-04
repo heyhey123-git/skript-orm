@@ -95,7 +95,7 @@ On SQL implementations, a `date` column stores SQL `DATE`, which discards the ti
 
 ## "select many read more than 5000 rows ... and stored nothing."
 
-One read stores at most 5000 rows. If `select many` finds more, the result variable is cleared and the refusal is in `last database error`. A `select page` larger than 5000 rows is refused before the query is sent. The 5000-row storage limit protects the server thread: Skript writes result values into a list variable on that thread.
+One read stores at most 5000 rows. If `select many` finds more, the result variable is cleared and the refusal is in `last database error`. A `select page` larger than 5000 rows is refused before the query is sent. The limit bounds result memory use and server-thread work: global results and conversions that use server APIs still need that thread, while ordinary local results can be stored in the background.
 
 Narrow the read, or walk it a page at a time:
 
@@ -118,11 +118,11 @@ Pagination sorts by the registered primary key and rejects tables without one. P
 
 ## A quick query, and the server still hitched
 
-The query runs in the background, but Skript stores its results on the server thread. The number of column values matters: in one benchmark, storing 5000 six-column rows took about 47 ms, while 5000 two-column rows took about 15 ms. Use a stricter filter or read one page at a time. See [What storing a result costs](reading.md#what-storing-a-result-costs).
+The query runs in the background. Ordinary results stored in local variables can also be saved there, but global results are published on the server thread. Item and location conversions use a shared queue with a target budget of 2 ms per tick; a single expensive conversion can exceed that budget, and final global publication is outside it. Prefer local result variables and smaller pages when processing many values. See [What storing a result costs](reading.md#what-storing-a-result-costs) and [the current measurements](benchmarking.md#revised-server-benchmark).
 
 ## "insert many" of a large list pauses the server
 
-The plugin reads an `insert many` source variable on the server thread before sending SQL. It now spreads that read across ticks, with at most 4096 processing steps per slice; reading one row can take several steps. Each slice aims for about 2 ms, but an individual value conversion can exceed that budget. A larger list may take more ticks to finish, and other server work can still lengthen a tick. The earlier 10 ms measurement for reading 30,000 values predates sliced reading; it is not the current cost of one tick. For large jobs, `select page` can divide the work into smaller inserts. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
+The plugin must read the input before sending a database write. Local inputs owned by the paused script can be processed in the background. Global inputs are read on the server thread across ticks, with at most 4096 processing steps per slice; reading one row can take several steps. Each slice aims for about 2 ms, and conversions that need server APIs use the shared server-thread queue. An individual expensive step can still exceed the budget. A larger global input may take more ticks to finish, and other server work can lengthen a tick. The earlier 10 ms measurement for reading 30,000 values predates sliced reading; it is not the current cost of one tick. For large jobs, use local inputs or smaller inserts from `select page`. See [How many rows one write may send](writing.md#how-many-rows-one-write-may-send).
 
 ## A refused read is not a free read
 

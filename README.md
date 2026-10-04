@@ -131,46 +131,27 @@ See [Tables](docs/tables.md) before changing a deployed table.
 
 ## Performance on a real server
 
-The addon is designed for batch work: database operations run in the background, and large
-input lists are read in portions across ticks. This helps avoid one long scan of a Skript
-variable on the server thread. It does not guarantee zero tick delay: storing query results
-and processing individual values still involve the server thread.
+Database calls run in the background. Lists in local variables such as `{_rows::*}` are also processed there while the current script waits; large global inputs are read in portions across ticks. Conversions that use server APIs, including items and locations, share a 2 ms target budget per tick. A single slow conversion can exceed that target.
 
-The following test saves or reads **5000 rows in one operation**. Keeping the row count fixed
-shows how each supported database handled the same workload in this run. All writes finished
-in under 750 ms and reads in under 105 ms.
+[Run #7](https://github.com/heyhey123-git/skript-orm/actions/runs/37205411783) read **5000 rows with six populated numeric columns** on each supported database. The table compares local and global result variables for the same workload. Every value is a median of ten samples after three warmups.
 
-| Database | Write: total time | Write: largest tick gap | Read: total time | Read: largest tick gap |
+- **Database** identifies the backend used in that row.
+- **Local/global total** is the time from the read statement to script resumption, including background work and waiting.
+- **Local/global main** is elapsed time in the recorded server-thread processing intervals. It is neither total server CPU time nor the complete tick duration.
+
+| Database | Local total | Global total | Local main | Global main |
 | --- | ---: | ---: | ---: | ---: |
-| SQLite | 735.828866 ms | 65.767643 ms | 103.186998 ms | 103.066121 ms |
-| MySQL | 462.517747 ms | 50.395059 ms | 78.302884 ms | 78.218777 ms |
-| MariaDB | 685.122311 ms | 66.066614 ms | 95.789059 ms | 95.813175 ms |
-| PostgreSQL | 585.103286 ms | 66.926809 ms | 94.172914 ms | 94.082624 ms |
-| MongoDB | 717.433104 ms | 50.968606 ms | 78.761947 ms | 78.579400 ms |
+| SQLite | 49.925225 ms | 65.414039 ms | 0.018713 ms | 15.483043 ms |
+| MySQL | 49.923762 ms | 86.510248 ms | 0.015720 ms | 36.381696 ms |
+| MariaDB | 50.005949 ms | 66.299079 ms | 0.017637 ms | 15.888968 ms |
+| PostgreSQL | 49.942947 ms | 69.211086 ms | 0.018167 ms | 19.242586 ms |
+| MongoDB | 49.950872 ms | 71.939851 ms | 0.014090 ms | 21.958078 ms |
 
-**How to read this table:**
+The local path keeps ordinary result storage off the server thread. Its complete read still takes around one tick because Skript resumes on the server thread. These are comparisons between variable scopes in the current implementation, not a before/after test or a benchmark against another addon.
 
-- **Database** is the database used for that row.
-- **Total time** is how long the trigger waits for the entire operation, including variable
-  processing, database work and resuming the script. It is not continuous server-thread blocking.
-- **Largest tick gap** is the longest interval between two executions of the tick observer,
-  measured from the operation's start until one tick after it returns. A normal gap is about
-  50 ms at 20 TPS. It indicates observed delay, not the plugin's CPU time.
+The run tested commit `76dcc7e` on 2026-10-04 with Paper 26.2 build 124, Skript 2.16.2 and Java 25. Different jobs used different CPUs, so the table does not rank databases. Global object results can still take a long server tick to assign; use local results and smaller pages for large workloads.
 
-For example, the MySQL write took `462.517747 ms`, but its largest observed tick gap was
-`50.395059 ms`, close to the normal 50 ms interval. The read measurements also show why
-total time and tick delay should be reported separately.
-
-These are [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500)
-measurements from 2026-10-03 at commit `6476c9b`: Paper 26.2 build 124, Skript 2.16.2,
-Java 25.0.4.1, four visible CPUs, and input rows containing only an `id`.
-SQLite, MariaDB and PostgreSQL ran on AMD EPYC 7763; MySQL and MongoDB ran on Intel Xeon
-6973P-C. Shared runners and different CPUs prevent a general ranking of databases.
-The run predates the MySQL packet-limit fix in `21898af`; it is not a measurement of that fix.
-
-Timing uses `System.nanoTime()`; six-decimal milliseconds retain the recorded nanoseconds.
-See [Benchmarking](docs/benchmarking.md) for the 100–10000-row cases, repeated runs,
-raw SQL comparisons and full measurement limits.
+Timing uses `System.nanoTime()`; six-decimal milliseconds retain the recorded nanoseconds. See [Benchmarking](docs/benchmarking.md#measured-results-run-7) for CPU models, write curves, ItemStack/Location tests, raw reports and measurement limits.
 
 ### Practical limits
 

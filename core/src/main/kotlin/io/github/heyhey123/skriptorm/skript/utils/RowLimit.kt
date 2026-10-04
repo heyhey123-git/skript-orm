@@ -3,14 +3,14 @@ package io.github.heyhey123.skriptorm.skript.utils
 /**
  * Limits result size and the number of values bound in one write statement.
  *
- * Skript list variables are read and written on the server thread. Reads refuse results above
- * [ROWS] instead of silently truncating them; scripts can narrow a query or use `select page`.
+ * Global result variables and server-only conversions can still consume a server tick. Reads
+ * refuse results above [ROWS] instead of truncating them; scripts can narrow a query or use `select page`.
  * Writes retain every row, but [io.github.heyhey123.skriptorm.queries.insertManyInStatements]
  * splits a large batch across statements to stay within the binding budget. `insert many` reads
- * variable values in bounded steps across ticks before sending those statements.
+ * global variable values in bounded steps across ticks. Event-owned locals are read in the background.
  *
- * Read results are attached within one tick. Exposing a partly populated result list would change
- * what other scripts see.
+ * Global results are published synchronously. A parked trigger's local results can be assembled
+ * in the background before its local context is restored.
  */
 internal object RowLimit {
 
@@ -36,16 +36,16 @@ internal object RowLimit {
 
     /** What a `select many` reports when the table returned more rows than one statement may store. */
     fun readRefusal(table: String): String =
-        "select many read more than $ROWS rows from table '$table' and stored nothing. A Skript list " +
-            "variable is written one index at a time on the server thread, and a result this large would " +
-            "stop the server from ticking. Narrow the result with a where block, or read it with " +
+        "select many read more than $ROWS rows from table '$table' and stored nothing. " +
+            "The per-read limit bounds result memory use and server-thread work. " +
+            "Narrow the result with a where block, or read it with " +
             "'select page'."
 
     /** What a `select page` reports when the page it was asked for is larger than one statement may store. */
     fun pageRefusal(pageSize: Int): String =
-        "select page asked for $pageSize rows, but a page may hold at most $ROWS rows. A Skript list " +
-            "variable is written one index at a time on the server thread, and a page this large would " +
-            "stop the server from ticking. Ask for fewer rows per page and walk the pages one after " +
+        "select page asked for $pageSize rows, but a page may hold at most $ROWS rows. " +
+            "The per-page limit bounds result memory use and server-thread work. " +
+            "Ask for fewer rows per page and walk the pages one after " +
             "another."
 }
 

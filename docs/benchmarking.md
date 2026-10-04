@@ -2,10 +2,10 @@
 
 [简体中文](benchmarking.zh-CN.md) | **English**
 
-This page describes the benchmark setup, recorded results, and planned tests. The numeric tables
-below are historical measurements from Run #4 on commit `6476c9b`. They predate background local-variable
+This page describes the benchmark setup, recorded results, and planned tests. The first numeric tables
+are historical measurements from Run #4 on commit `6476c9b`. They predate background local-variable
 processing and the shared server-thread conversion queue, so they do not measure those changes.
-The revised suite is described separately; no new five-database result is claimed here.
+The revised suite and its five-database results from Run #7 appear later on this page.
 
 A tick is one server update. At the usual 20 ticks per second, each aims to finish within 50 ms.
 
@@ -218,8 +218,8 @@ but this table alone cannot establish the cause or predict elapsed time from row
 Affected or stored row counts were checked, and the 10 000-row read was refused as expected. The current
 report does not treat the gap as plugin CPU time: it is the largest interval between tick-observer
 executions, and it includes scheduler and host activity. The run predates the later MySQL
-`max_allowed_packet` fix in commit `21898af`; repeat the benchmark after that fix is pushed if
-the exact current MySQL path is needed.
+`max_allowed_packet` fix in commit `21898af`. The revised Run #7 below includes that fix and the
+local-variable changes.
 
 The sections below distinguish the available measurements from planned ones and show
 where each metric can be collected.
@@ -280,8 +280,43 @@ MSPT percentile. Raw samples, including warmups, and median/p95/max summaries ar
 
 The local and global cases alternate under the same running server. Comparing them is useful
 within a backend and workload; different runner CPUs or different object contents require separate
-interpretation. No timings from this revised matrix replace the historical tables until a complete
-run has validated its inputs and results.
+interpretation. The results below come from a complete run; the earlier tables remain historical.
+
+### Measured results: Run #7
+
+[Run #7](https://github.com/heyhey123-git/skript-orm/actions/runs/37205411783) tested commit `76dcc7e` on 4 October 2026. All five database jobs, JMH and history publication passed. Each backend produced 442 raw samples and 34 groups. Paper 26.2 build 124, Skript 2.16.2, skript-reflect 2.6.3 and Java 25 were used. CPU models differ between jobs, so compare local and global scopes within each row, rather than ranking databases across rows. The run's `tick-report-*` artifacts contain `pipeline-results.json`, `tick-results.json` and the full environment record.
+
+The first table compares reads of the same 5000 rows with six populated numeric columns. **Backend / CPU** identifies the job; **Local/global total** is median time from the read statement to script resumption; **Local/global main** is median accumulated time in the instrumented server-thread intervals. All entries are milliseconds with six decimal places. The table shows where work moved: local main-thread intervals became short, while complete operations still include background work and the wait for a server tick. It does not compare the old and new plugin versions, or measure every bit of statement overhead.
+
+| Backend / CPU | Local total | Global total | Local main | Global main |
+| --- | ---: | ---: | ---: | ---: |
+| [SQLite](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/SQLite/data.js) / EPYC 9V74 | 49.925225 ms | 65.414039 ms | 0.018713 ms | 15.483043 ms |
+| [MySQL](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-7763-64-core-processor/tick-ns/MySQL/data.js) / EPYC 7763 | 49.923762 ms | 86.510248 ms | 0.015720 ms | 36.381696 ms |
+| [MariaDB](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v45-96-core-processor/tick-ns/MariaDB/data.js) / EPYC 9V45 | 50.005949 ms | 66.299079 ms | 0.017637 ms | 15.888968 ms |
+| [PostgreSQL](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/PostgreSQL/data.js) / EPYC 9V74 | 49.942947 ms | 69.211086 ms | 0.018167 ms | 19.242586 ms |
+| [MongoDB](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/intel-xeon-platinum-8573c/tick-ns/MongoDB/data.js) / XEON 8573C | 49.950872 ms | 71.939851 ms | 0.014090 ms | 21.958078 ms |
+
+The next table compares 1000-row reads containing four numbers, one ItemStack and one Location. **Local/global busiest tick** is the median of each operation's largest `mainTickMaxNs`, converted to milliseconds. This is the operation's recorded work within a tick, not total MSPT. **Local total** is median read-to-resumption time. Keeping both readings shows the tradeoff: spreading object work across ticks lowers its per-tick cost but adds waiting. The global path can still spend tens of milliseconds assigning the completed objects; the shared conversion budget does not cover that final global assignment.
+
+| Backend | Local busiest tick | Global busiest tick | Local total |
+| --- | ---: | ---: | ---: |
+| SQLite | 1.947452 ms | 64.061272 ms | 499.969523 ms |
+| MySQL | 1.960147 ms | 126.033681 ms | 699.948048 ms |
+| MariaDB | 1.939399 ms | 45.820466 ms | 449.839210 ms |
+| PostgreSQL | 1.948226 ms | 84.902243 ms | 599.943042 ms |
+| MongoDB | 1.956798 ms | 65.141387 ms | 499.969330 ms |
+
+The final table holds the database and six-column data shape constant, using MariaDB on AMD EPYC 9V45 with `mariadb:11.4`. **Rows** is the requested count; **Local/global write** and **Local/global read** are median statement-to-resumption times in milliseconds. It shows how task size and variable scope affect latency. Input generation and validation are excluded; the global cases include sliced input reading. These populated cases differ from the historical id-only curve and should not be subtracted from it as an optimization result.
+
+| Rows | Local write | Global write | Local read | Global read |
+| --- | ---: | ---: | ---: | ---: |
+| 100 | 50.002091 ms | 99.999130 ms | 49.948891 ms | 50.561922 ms |
+| 500 | 50.003658 ms | 200.041385 ms | 49.969411 ms | 53.469929 ms |
+| 1000 | 50.029800 ms | 400.035662 ms | 49.985885 ms | 55.762635 ms |
+| 2500 | 50.027120 ms | 1000.028616 ms | 49.943913 ms | 58.051739 ms |
+| 5000 | 50.068590 ms | 1845.764052 ms | 50.005949 ms | 66.299079 ms |
+
+Published median records are linked from the backend names in the first table. Raw artifacts also retain all three warmups, ten measured samples, and median/p95/max summaries. With ten measured samples, the nearest-rank p95 equals the maximum. The 10000-row legacy read is a refusal check and has no successful-read throughput; MongoDB has no raw SQL comparison because it uses document commands.
 
 ### Phase timings
 

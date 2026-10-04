@@ -20,9 +20,10 @@ the reason is available in `last database error`.
 | `disconnect ...` | yes | The script continues after disconnection finishes. |
 
 The operations marked as waiting pause the current script execution until the operation finishes.
-Waiting for JDBC does not block the server's main thread, which runs game ticks. Reading values
-from a list variable still uses that thread; `insert many` spreads the reading across ticks as
-described in [Writing rows](writing.md#how-many-rows-one-write-may-send).
+Waiting for JDBC does not block the server's main thread, which runs game ticks. `insert many`
+can read ordinary values from local variables owned by the paused script in the background.
+Global inputs are read on the server thread in slices across ticks; conversions that need server
+APIs also run there. See [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 All reads and writes still accept `and wait`, but it no longer changes their behaviour. The clause originally made writes wait; now every read and write waits. The examples on this page retain `and wait` for compatibility with the 1.1 syntax, so existing scripts need no changes.
 

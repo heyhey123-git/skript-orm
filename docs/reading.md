@@ -47,7 +47,7 @@ select page 2 with size 20 from table "users" and store the results in {_page::*
 
 A read can store at most **5000 rows**. If more rows match, it clears the result variable and sets `last database error`; it never returns a partial result.
 
-This limit protects the server thread. The query runs asynchronously, but Skript stores the result in variables on the server thread. In a benchmark with a six-column table, storing 5000 rows took roughly 36–47 ms of server-thread time; a 10,000-row read was refused. The cost depends on the number of values and the server's Skript installation. See [What storing a result costs](#what-storing-a-result-costs) and the write limit in [Writing rows](writing.md#how-many-rows-one-write-may-send).
+This limit bounds result memory use and server-thread work. Queries run in the background. Ordinary values going into local variables can also be stored there while the trigger is paused; global results and conversions that use server APIs still require the server thread. The same row limit applies to both scopes. See [What storing a result costs](#what-storing-a-result-costs) and [Writing rows](writing.md#how-many-rows-one-write-may-send).
 
 Narrow the result, or walk it a page at a time:
 
@@ -66,11 +66,13 @@ loop 100 times:
 
 ### What storing a result costs
 
-Skript normally stores each result value separately on the server thread. On the benchmark server, this took about 1.0–1.4 microseconds per value, depending on the variable type. A six-column row contributes six values; storing 5000 such rows took about 47 ms. A two-column result of the same length took about 15 ms. These measurements describe work on the server thread, not a guarantee about tick length on another server.
+Local results are assembled in an isolated variable context while the script is paused. Ordinary numeric and text values are stored in the background. ItemStack, Location and other values that may use server APIs are converted and assigned through the shared server-thread queue. The original local context is restored before the next script statement runs, including unrelated local variables.
+
+Global results are published on the server thread. Earlier measurements, before the local-variable changes, found roughly 1.0–1.4 microseconds per value and 36–47 ms for a six-column, 5000-row result. Those historical numbers do not describe the new local path; see [the revised benchmark](benchmarking.md#revised-server-benchmark) for the measurement boundaries and results.
 
 For results above **10,000 values**, the plugin can arrange the result into the list variable's nested structure in the background, then attach it to Skript's global variable store on the server thread. In the same test, this reduced server-thread time for 30,000 values from 47 ms to 36 ms. The optimization has these limits:
 
-- It applies to **global list variables**. A result stored in a local or ephemeral variable is written value by value.
+- It applies to **global list variables containing ordinary values**. Unknown object types and types requiring Skript assignment conversions use the regular API. Local results use the isolated context described above.
 - The **first** qualifying result after startup is stored value by value while the plugin checks compatibility with Skript's variable store.
 - If the store is incompatible, every result uses the ordinary value-by-value path. No configuration change is needed.
 
