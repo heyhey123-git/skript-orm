@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.logging.DatabaseImplementations
 import io.github.heyhey123.skriptorm.logging.LogoPrinter
 import io.github.heyhey123.skriptorm.skript.registerElements
 import io.github.heyhey123.skriptorm.type.nbt.NbtSupport
+import io.github.heyhey123.skriptorm.utils.MainThreadConversions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -47,6 +48,7 @@ class SkriptOrm : JavaPlugin() {
         }
 
         ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        MainThreadConversions.start(this)
         // The database layer cannot reach a plugin logger without depending on Bukkit, so it reports
         // through this instead. What it reports is what it had to do to finish: a connection closed
         // while operations were still running, or a transaction rolled back on its own.
@@ -137,6 +139,7 @@ class SkriptOrm : JavaPlugin() {
         Skript.instance().registerAddon(SkriptOrm::class.java, pluginMeta.name)
 
     override fun onDisable() {
+        MainThreadConversions.stop()
         try {
             runBlocking(Dispatchers.IO) {
                 Database.shutdown()

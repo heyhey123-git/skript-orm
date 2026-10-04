@@ -88,7 +88,7 @@ class SecSelectPage : SecSelectBase() {
                 var rowIndex = 1
                 while (cursor.next()) {
                     columns.forEach { column ->
-                        result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
+                        result["$rowIndex::${column.name}"] = cursor.getDetached(column.name, column.type)
                     }
                     rowIndex++
                 }

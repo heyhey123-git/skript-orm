@@ -1,6 +1,7 @@
 package io.github.heyhey123.skriptorm.skript.utils
 
 import ch.njol.skript.lang.Variable
+import ch.njol.skript.registrations.Classes
 import ch.njol.skript.variables.Variables
 import io.github.heyhey123.skriptorm.SkriptOrm
 import org.bukkit.event.Event
@@ -10,6 +11,7 @@ import java.lang.invoke.MethodType
 import java.util.Comparator
 import java.util.Locale
 import java.util.TreeMap
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.locks.ReadWriteLock
 
@@ -44,6 +46,7 @@ internal object FastVariableStore {
         private set
 
     private var probed = false
+    private var safeStoredClasses: Set<Class<*>> = emptySet()
     private lateinit var rootTree: MutableMap<Any?, Any?>
     private lateinit var rootHash: MutableMap<Any?, Any?>
     private lateinit var processChangeQueue: MethodHandle
@@ -123,6 +126,11 @@ internal object FastVariableStore {
             require(nodeClass.isInstance(built)) { "constructor produced ${built.javaClass.name}" }
             Variables.setVariable("$SCRATCH::node::leaf", null, null, false)
 
+            safeStoredClasses = setOf(
+                String::class.java, Boolean::class.javaObjectType, Byte::class.javaObjectType,
+                Short::class.javaObjectType, Int::class.javaObjectType, Long::class.javaObjectType,
+                Float::class.javaObjectType, Double::class.javaObjectType, UUID::class.java
+            ).filterTo(HashSet()) { Classes.getSuperClassInfo(it).serializeAs == null }
             available = true
             diagnosis = "ready"
         } catch (error: Throwable) {
@@ -147,7 +155,7 @@ internal object FastVariableStore {
         val subtree = newNode()
         for ((key, raw) in rows) {
             // Let the regular Skript path handle null values, which represent absent keys.
-            if (raw == null) return
+            if (raw == null || raw.javaClass !in safeStoredClasses) return
             val name = if (lower) key.lowercase(Locale.ENGLISH) else key
             val segments = name.split("::")
             var node = subtree
@@ -181,9 +189,7 @@ internal object FastVariableStore {
     @Suppress("UNCHECKED_CAST")
     fun attach(variable: Variable<*>, event: Event?, prepared: Prepared): Boolean {
         if (!available || variable.isLocal || prepared.caseInsensitive != Variables.caseInsensitiveVariables) return false
-        val raw = variable.toString(event, false)
-        if (raw.length < 4 || raw[0] != '{' || raw[raw.length - 1] != '}') return false
-        val list = raw.substring(1, raw.length - 1)
+        val list = variable.name.toString(event)
         if (!list.endsWith("*")) return false
         val path = list.dropLast(1).removeSuffix("::")
         if (path.isEmpty()) return false

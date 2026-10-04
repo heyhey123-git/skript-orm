@@ -55,7 +55,7 @@ class SecSelectById : SecSelectBase() {
         queries.selectById(requireNotNull(extraArguments)).execute(table).cursor.use { cursor ->
             if (cursor.next()) {
                 table.columns.values.forEach { column ->
-                    result[column.name] = cursor.get(column.name, column.type)
+                    result[column.name] = cursor.getDetached(column.name, column.type)
                 }
             }
         }

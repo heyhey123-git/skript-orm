@@ -314,8 +314,9 @@ abstract class SecWriteBase : Section() {
         return DatabaseWork.run(
             event = event,
             continuation = next,
-            prepare = batchReader?.let { it::advance },
+            prepare = batchReader?.takeUnless { it.background }?.let { it::advance },
             query = {
+                batchReader?.prepareBackground()
                 DatabaseWork.withQueries(database, transaction) { queries ->
                     executeWrite(
                         queries,

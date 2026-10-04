@@ -73,13 +73,14 @@ class EffSelectOneUnfiltered : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
+            resultVariable = resultVar,
             query = {
                 target.withQueries { queries ->
                     val row = linkedMapOf<String, Any?>()
                     queries.selectOne(null).execute(target.table).cursor.use { cursor ->
                         if (cursor.next()) {
                             target.table.columns.values.forEach { column ->
-                                row[column.name] = cursor.get(column.name, column.type)
+                                row[column.name] = cursor.getDetached(column.name, column.type)
                             }
                         }
                     }

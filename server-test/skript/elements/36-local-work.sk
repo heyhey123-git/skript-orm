@@ -1,0 +1,109 @@
+# Local results must replace the requested path without disturbing the rest of the function context.
+# Two delayed calls use identical variable names to catch accidental sharing between contexts.
+
+function ormLocalContextProbe(id: number):
+    set {_sentinel} to "context-%{_id}%"
+    set {_path} to "result-%{_id}%"
+    set {_results::%{_path}%::stale} to "old"
+    wait 1 tick
+    in connection "local-work":
+        select one entity from table "orm_local_work" by id {_id} and store the result in {_results::%{_path}%::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work concurrent read: %last database error%"
+    if {_results::%{_path}%::id} is not {_id}:
+        log "SKRIPTORM_SELFTEST=FAIL local work crossed function contexts for %{_id}%"
+    if {_results::%{_path}%::stale} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work retained a stale function result"
+    if {_sentinel} is not "context-%{_id}%":
+        log "SKRIPTORM_SELFTEST=FAIL local work lost function locals for %{_id}%"
+    set {local-work::finished::%{_id}%} to true
+
+every tick:
+    if {local-work::launch} is set:
+        delete {local-work::launch}
+        ormLocalContextProbe(1)
+        ormLocalContextProbe(2)
+
+on load:
+    set {skriptorm::selftest::started::local-work} to true
+    wait 6 seconds
+    create a connection named "local-work" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        url: "jdbc:sqlite:plugins/Skript/local-work-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work connect: %last database error%"
+    in connection "local-work":
+        register a database table "orm_local_work":
+            id: bigint, primary key, not null
+            label: string(64), nullable
+            item: itemstack, nullable
+            position: location, nullable
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work register: %last database error%"
+
+    set {_sourceItem} to diamond sword named "local snapshot"
+    set {_sourceLocation} to spawn location of world "world"
+    set {_rows::1::id} to 1
+    set {_rows::1::label} to "first"
+    set {_rows::1::item} to {_sourceItem}
+    set {_rows::1::position} to {_sourceLocation}
+    set {_rows::2::id} to 2
+    set {_rows::2::label} to "second"
+    set {_sentinel} to "kept"
+    in connection "local-work":
+        insert many {_rows::*} into table "orm_local_work" and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work object insert: %last database error%"
+
+    set {_path} to "selected"
+    set {_result::%{_path}%::old} to "stale"
+    in connection "local-work":
+        select page 1 with size 5000 from table "orm_local_work" and store the results in {_result::%{_path}%::*}
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work object read: %last database error%"
+    if {_sentinel} is not "kept":
+        log "SKRIPTORM_SELFTEST=FAIL local work lost unrelated locals"
+    if {_rows::1::label} is not "first":
+        log "SKRIPTORM_SELFTEST=FAIL local work lost the local input"
+    if {_result::selected::old} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work retained a stale result"
+    if {_result::selected::2::label} is not "second":
+        log "SKRIPTORM_SELFTEST=FAIL local work did not resolve the dynamic target"
+    if name of {_result::selected::1::item} is not "local snapshot":
+        log "SKRIPTORM_SELFTEST=FAIL local work lost item metadata"
+    if type of {_result::selected::1::item} is not diamond sword:
+        log "SKRIPTORM_SELFTEST=FAIL local work changed the item type"
+    if {_result::selected::1::position} is not {_sourceLocation}:
+        log "SKRIPTORM_SELFTEST=FAIL local work changed the stored location"
+    if {_result::selected::2::item} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work converted NULL into an item"
+
+    # A smaller result replaces all rows in this target, including nested old keys.
+    in connection "local-work":
+        select one entity from table "orm_local_work" by id 2 and store the result in {_result::%{_path}%::*}
+    if {_result::selected::id} is not 2:
+        log "SKRIPTORM_SELFTEST=FAIL local work failed to replace a result"
+    if {_result::selected::1::item} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work retained a nested old result"
+
+    in connection "local-work":
+        execute query "SELECT * FROM orm_local_missing" and store the result in {_result::%{_path}%::*}
+    if last database error is not set:
+        log "SKRIPTORM_SELFTEST=FAIL local work expected a query failure"
+    if {_result::selected::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local work failure kept the previous result"
+    if {_sentinel} is not "kept":
+        log "SKRIPTORM_SELFTEST=FAIL local work failure discarded unrelated locals"
+
+    set {local-work::launch} to true
+    loop 100 times:
+        if {local-work::finished::1} is set:
+            if {local-work::finished::2} is set:
+                exit loop
+        wait 1 tick
+    if {local-work::finished::1} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL local work first delayed function did not finish"
+    if {local-work::finished::2} is not set:
+        log "SKRIPTORM_SELFTEST=FAIL local work second delayed function did not finish"
+    log "SKRIPTORM_SELFTEST detail: local work -> ok"
+    set {skriptorm::selftest::done::local-work} to true

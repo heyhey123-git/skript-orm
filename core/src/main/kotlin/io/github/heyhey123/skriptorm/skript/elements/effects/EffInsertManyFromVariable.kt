@@ -90,13 +90,14 @@ class EffInsertManyFromVariable : Effect() {
             event = actualEvent,
             continuation = next,
             query = {
+                reader.prepareBackground()
                 target.withQueries { queries -> queries.insertManyInStatements(target.table, reader.rows) }
             },
             deliver = { result -> AffectedRows.write(affectedRowsVariable, actualEvent, result) },
             onFailure = { failure ->
                 this.error("Write failed: ${failure.message}")
             },
-            prepare = reader::advance
+            prepare = if (reader.background) null else reader::advance
         )
     }
 

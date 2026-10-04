@@ -35,6 +35,8 @@ class EffExecuteQuery : EffRawStatementBase() {
 
     private lateinit var resultVar: Variable<*>
 
+    override val resultVariable: Variable<*> get() = resultVar
+
     override fun parameterIndex(matchedPattern: Int): Int = 1
 
     /** This pattern ends with the result variable, so the last slot is not a count target. */

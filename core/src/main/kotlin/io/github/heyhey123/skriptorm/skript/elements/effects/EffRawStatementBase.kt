@@ -8,17 +8,10 @@ import ch.njol.skript.lang.SkriptParser
 import ch.njol.skript.lang.TriggerItem
 import ch.njol.skript.lang.Variable
 import ch.njol.util.Kleenean
-import io.github.heyhey123.skriptorm.SkriptOrm
 import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.skript.utils.AffectedRows
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.ExpressionsHelper
-import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
-import io.github.heyhey123.skriptorm.utils.SyncDispatcher
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 /**
@@ -45,6 +38,8 @@ abstract class EffRawStatementBase : Effect() {
      * as a count target would refuse the statement for storing what it was asked to store.
      */
     protected open val storesAffectedRows: Boolean = true
+
+    protected open val resultVariable: Variable<*>? = null
 
     @Suppress("UNCHECKED_CAST")
     override fun init(
@@ -100,44 +95,19 @@ abstract class EffRawStatementBase : Effect() {
 
         AffectedRows.clear(affectedRowsVariable, actualEvent)
 
-        val continuation = next
-        val localVariables = SkriptLocalVariables.remove(actualEvent)
-        val triggerItem = this
-        SkriptOrm.ioScope.launch {
-            var failure: Throwable? = null
-            var result: Any? = null
-            try {
-                result = target.withQueries { queries ->
-                    executeStatement(queries, statement, parameters)
-                }
-            } catch (_: CancellationException) {
-                return@launch
-            } catch (error: Throwable) {
-                failure = error
+        return DatabaseWork.run(
+            event = actualEvent,
+            continuation = next,
+            resultVariable = resultVariable,
+            query = {
+                target.withQueries { queries -> executeStatement(queries, statement, parameters) } ?: Unit
+            },
+            deliver = { deliver(actualEvent, it) },
+            onFailure = { error ->
+                resultVariable?.let { io.github.heyhey123.skriptorm.skript.utils.VariableModifier.clear(it, actualEvent) }
+                this.error("Statement failed: ${error.message}")
             }
-
-            withContext(NonCancellable + SyncDispatcher) {
-                if (!SkriptOrm.instance.isEnabled) return@withContext
-                try {
-                    if (localVariables != null) SkriptLocalVariables.restore(actualEvent, localVariables)
-
-                    val rawFailure = failure
-                    if (rawFailure != null) {
-                        DatabaseWork.recordFailure(actualEvent, rawFailure)
-                        triggerItem.error("Statement failed: ${rawFailure.message}")
-                    } else {
-                        DatabaseWork.clearErrorForStatement(actualEvent)
-                        deliver(actualEvent, result)
-                    }
-
-                    TriggerItem.walk(continuation, actualEvent)
-                } finally {
-                    SkriptLocalVariables.clear(actualEvent)
-                }
-            }
-        }
-
-        return null
+        )
     }
 
     /** The text the statement was written with, refused when it says nothing. */

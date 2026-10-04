@@ -1,5 +1,5 @@
-# Checks that insert-many reads large list variables over multiple ticks without changing the
-# write's ordering or error contract. The disposable SQLite table belongs only to this script.
+# Checks large global inputs across ticks and local inputs in the background,
+# including ordering, source validation and local-variable preservation.
 
 every tick:
     if {skriptorm::selftest::started::write-values} is not set:
@@ -62,16 +62,12 @@ every 5 seconds:
     # The last row introduces a column missing from the first 2199 rows.
     set {_local::2200::age} to 42
     set {_localRows} to -1
-    set {_beforeTicks} to {write-values::ticks}
     in connection "write-values":
         insert many {_local::*} into table "orm_write_values" and store affected rows in {_localRows} and wait
     if last database error is set:
         log "SKRIPTORM_SELFTEST=FAIL write values local insert: %last database error%"
     if {_localRows} is not 2200:
         log "SKRIPTORM_SELFTEST=FAIL write values local affected count: %{_localRows}% instead of 2200"
-    set {_ticksElapsed} to {write-values::ticks} - {_beforeTicks}
-    if {_ticksElapsed} is less than 2:
-        log "SKRIPTORM_SELFTEST=FAIL write values local input finished after only %{_ticksElapsed}% ticks"
     if {_sentinel} is not "kept":
         log "SKRIPTORM_SELFTEST=FAIL write values lost a local variable while waiting"
     if {_local::2200::age} is not 42:

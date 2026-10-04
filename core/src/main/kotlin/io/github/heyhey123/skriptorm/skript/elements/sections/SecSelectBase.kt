@@ -2,7 +2,6 @@ package io.github.heyhey123.skriptorm.skript.elements.sections
 
 import ch.njol.skript.Skript
 import ch.njol.skript.config.SectionNode
-import ch.njol.skript.effects.Delay
 import ch.njol.skript.lang.Expression
 import ch.njol.skript.lang.Section
 import ch.njol.skript.lang.SkriptParser
@@ -16,16 +15,9 @@ import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.skript.utils.ConnectionScope
 import io.github.heyhey123.skriptorm.skript.utils.DatabaseWork
 import io.github.heyhey123.skriptorm.skript.utils.RawWhereClause
-import io.github.heyhey123.skriptorm.skript.utils.SkriptDatabaseErrors
-import io.github.heyhey123.skriptorm.skript.utils.SkriptLocalVariables
 import io.github.heyhey123.skriptorm.skript.utils.VariableModifier
 import io.github.heyhey123.skriptorm.skript.utils.WhereParser
 import io.github.heyhey123.skriptorm.table.Table
-import io.github.heyhey123.skriptorm.utils.SyncDispatcher
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import org.bukkit.event.Event
 
 abstract class SecSelectBase : Section() {
@@ -177,49 +169,21 @@ abstract class SecSelectBase : Section() {
         }
         val transaction = ConnectionScope.transaction(actualEvent)
 
-        val continuation = next
-        // Resume the script after the query completes.
-        val localVariables = SkriptLocalVariables.remove(actualEvent)
-        Delay.addDelayedEvent(actualEvent)
-
-        SkriptOrm.ioScope.launch {
-            var queryResult: Map<String, Any?>? = null
-            var failure: Throwable? = null
-            try {
-                queryResult = DatabaseWork.withQueries(database, transaction) { queries ->
+        return DatabaseWork.run(
+            event = actualEvent,
+            continuation = next,
+            resultVariable = resultVar,
+            query = {
+                DatabaseWork.withQueries(database, transaction) { queries ->
                     executeQuery(queries, table, whereClause, extraArguments)
                 }
-            } catch (_: CancellationException) {
-                return@launch
-            } catch (error: Throwable) {
-                failure = error
+            },
+            deliver = { rows -> VariableModifier.writeMap(resultVar, actualEvent, rows) },
+            onFailure = { failure ->
+                VariableModifier.clear(resultVar, actualEvent)
+                this.error("Query failed: ${failure.message}")
             }
-
-            withContext(NonCancellable + SyncDispatcher) {
-                if (!SkriptOrm.instance.isEnabled || Database.isShuttingDown) return@withContext
-                try {
-                    if (localVariables != null) {
-                        SkriptLocalVariables.restore(actualEvent, localVariables)
-                    }
-
-                    val queryFailure = failure
-                    if (queryFailure != null) {
-                        VariableModifier.clear(resultVar, actualEvent)
-                        DatabaseWork.recordFailure(actualEvent, queryFailure)
-                        this@SecSelectBase.error("Query failed: ${queryFailure.message}")
-                    } else {
-                        SkriptDatabaseErrors.clear(actualEvent)
-                        VariableModifier.writeMap(resultVar, actualEvent, checkNotNull(queryResult))
-                    }
-
-                    walk(continuation, actualEvent)
-                } finally {
-                    SkriptLocalVariables.clear(actualEvent)
-                }
-            }
-        }
-
-        return null
+        )
     }
 
     /**

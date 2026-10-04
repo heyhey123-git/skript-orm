@@ -31,13 +31,12 @@ internal object SelectResult {
         queries.selectMany(where, RowLimit.PROBE_ROWS).execute(table).cursor.use { cursor ->
             while (cursor.next()) {
                 table.columns.values.forEach { column ->
-                    result["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
+                    result["$rowIndex::${column.name}"] = cursor.getDetached(column.name, column.type)
                 }
                 rowIndex++
             }
         }
         if (rowIndex - 1 > RowLimit.ROWS) throw TooManyRowsException(RowLimit.readRefusal(table.name))
-        FastVariableStore.publish(result)
         return result
     }
 }

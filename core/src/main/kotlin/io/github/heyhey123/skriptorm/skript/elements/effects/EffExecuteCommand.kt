@@ -34,6 +34,8 @@ class EffExecuteCommand : EffRawStatementBase() {
 
     private lateinit var resultVar: Variable<*>
 
+    override val resultVariable: Variable<*> get() = resultVar
+
     /** A command document is the whole statement, so this pattern has no parameter slot. */
     override fun parameterIndex(matchedPattern: Int): Int = -1
 

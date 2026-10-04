@@ -1,0 +1,102 @@
+# Exercises detached local results, including dynamic target paths and values
+# whose conversion must run on the server thread. This database is disposable.
+every 5 seconds:
+    if {skriptorm::selftest::started::local-results} is set:
+        stop trigger
+    set {skriptorm::selftest::started::local-results} to true
+    wait 6 seconds
+
+    create a connection named "local-results" to database "JDBC" with properties:
+        driver: "org.sqlite.JDBC"
+        url: "jdbc:sqlite:plugins/Skript/local-results-probe.db?synchronous=OFF&journal_mode=MEMORY"
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results connect: %last database error%"
+    in connection "local-results":
+        register a database table "orm_local_results":
+            id: bigint, primary key, not null
+            name: string(64), not null
+            age: int, nullable
+            item: itemstack, not null
+            position: location, not null
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results register: %last database error%"
+
+    set {_sentinel} to "preserved"
+    set {_target} to "dynamic"
+    set {_item} to diamond sword
+    set name of {_item} to "Local result sword"
+    set lore of {_item} to "First line" and "Second line"
+    set {_position} to location at 12, 64, -9 in world "world"
+    loop 300 times:
+        set {_source::%loop-number%::id} to loop-number
+        set {_source::%loop-number%::name} to "row-%loop-number%"
+        set {_source::%loop-number%::item} to {_item}
+        set {_source::%loop-number%::position} to {_position}
+        set {_results::%{_target}%::%loop-number%::id} to -1
+        set {_results::%{_target}%::%loop-number%::age} to -1
+    set {_source::300::age} to 42
+    set {_results::%{_target}%::301::id} to -1
+    set {_results::%{_target}%::1::stale} to true
+    set {_results::other::keep} to "sibling"
+
+    in connection "local-results":
+        insert many {_source::*} into table "orm_local_results" and store affected rows in {_affected} and wait
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results write: %last database error%"
+    if {_affected} is not 300:
+        log "SKRIPTORM_SELFTEST=FAIL local results affected: %{_affected}% instead of 300"
+    in connection "local-results":
+        select many entities from table "orm_local_results" and store the results in {_results::%{_target}%::*}:
+            where all:
+                id >= 1
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results select: %last database error%"
+    if {_sentinel} is not "preserved":
+        log "SKRIPTORM_SELFTEST=FAIL local results lost unrelated local variable"
+    if {_source::300::age} is not 42:
+        log "SKRIPTORM_SELFTEST=FAIL local results changed input list"
+    if {_results::other::keep} is not "sibling":
+        log "SKRIPTORM_SELFTEST=FAIL local results changed sibling target"
+    if {_results::%{_target}%::301::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results retained old row"
+    if {_results::%{_target}%::1::stale} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results retained old column"
+    set {_stored} to 0
+    loop 300 times:
+        set {_row} to loop-number
+        set {_id} to {_results::%{_target}%::%{_row}%::id}
+        if {_id} is set:
+            add 1 to {_stored}
+        if {_results::%{_target}%::%{_row}%::name} is not "row-%{_id}%":
+            log "SKRIPTORM_SELFTEST=FAIL local results wrong name at row %{_row}%"
+        if {_id} is not 300:
+            if {_results::%{_target}%::%{_row}%::age} is set:
+                log "SKRIPTORM_SELFTEST=FAIL local results failed to clear NULL at row %{_row}%"
+        set {_readItem} to {_results::%{_target}%::%{_row}%::item}
+        set {_readPosition} to {_results::%{_target}%::%{_row}%::position}
+        if type of {_readItem} is not diamond sword:
+            log "SKRIPTORM_SELFTEST=FAIL local results wrong item at row %{_row}%"
+        if name of {_readItem} is not "Local result sword":
+            log "SKRIPTORM_SELFTEST=FAIL local results lost item name at row %{_row}%"
+        if lore of {_readItem} does not contain "Second line":
+            log "SKRIPTORM_SELFTEST=FAIL local results lost item lore at row %{_row}%"
+        if x-coordinate of {_readPosition} is not 12:
+            log "SKRIPTORM_SELFTEST=FAIL local results wrong location at row %{_row}%"
+        if world of {_readPosition} is not world "world":
+            log "SKRIPTORM_SELFTEST=FAIL local results wrong world at row %{_row}%"
+    if {_stored} is not 300:
+        log "SKRIPTORM_SELFTEST=FAIL local results stored %{_stored}% rows instead of 300"
+
+    # A successful empty read replaces existing results but preserves siblings.
+    in connection "local-results":
+        select many entities from table "orm_local_results" and store the results in {_results::%{_target}%::*}:
+            where all:
+                id < 0
+    if last database error is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results empty query: %last database error%"
+    if {_results::%{_target}%::1::id} is set:
+        log "SKRIPTORM_SELFTEST=FAIL local results empty query retained data"
+    if {_results::other::keep} is not "sibling":
+        log "SKRIPTORM_SELFTEST=FAIL local results empty query changed sibling"
+    log "SKRIPTORM_SELFTEST detail: local results -> ok"
+    set {skriptorm::selftest::done::local-results} to true

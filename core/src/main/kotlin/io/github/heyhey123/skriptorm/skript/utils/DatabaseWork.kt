@@ -9,6 +9,7 @@ import io.github.heyhey123.skriptorm.database.Database
 import io.github.heyhey123.skriptorm.database.Transaction
 import io.github.heyhey123.skriptorm.queries.Queries
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.utils.BenchmarkTimings
 import io.github.heyhey123.skriptorm.utils.SyncDispatcher
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -201,14 +202,20 @@ internal object DatabaseWork {
         deliver: (T) -> Unit = {},
         onFailure: (Throwable) -> Unit = {},
         clearErrorOnSuccess: Boolean = true,
-        prepare: (() -> Boolean)? = null
+        prepare: (() -> Boolean)? = null,
+        resultVariable: Variable<*>? = null
     ): Nothing? {
-        val localVariables = SkriptLocalVariables.remove(event)
+        val timing = BenchmarkTimings.begin()
+        val localWriter = resultVariable?.let {
+            BenchmarkTimings.main(timing, BenchmarkTimings.Stage.RESULT) { LocalResultWriter.capture(it, event) }
+        }
+        var localVariables = SkriptLocalVariables.remove(event)
         Delay.addDelayedEvent(event)
 
-        SkriptOrm.ioScope.launch {
+        SkriptOrm.ioScope.launch(BenchmarkTimings.context(timing)) {
             var result: T? = null
             var failure: Throwable? = null
+            var localResultWritten = false
             try {
                 if (prepare != null) {
                     while (true) {
@@ -224,7 +231,7 @@ internal object DatabaseWork {
                                 check(transaction == null || transaction.isActive) {
                                     transaction?.failure?.message ?: "The database transaction is no longer active."
                                 }
-                                prepare()
+                                BenchmarkTimings.main(timing, BenchmarkTimings.Stage.PREPARE) { prepare() }
                             } finally {
                                 SkriptLocalVariables.clear(event)
                             }
@@ -233,7 +240,29 @@ internal object DatabaseWork {
                         awaitNextTick()
                     }
                 }
-                result = query()
+                val queryStarted = if (timing != null) System.nanoTime() else 0L
+                try {
+                    result = query()
+                } finally {
+                    if (timing != null) timing.executionNs = System.nanoTime() - queryStarted
+                }
+                if (result is Map<*, *>) {
+                    @Suppress("UNCHECKED_CAST")
+                    val rows = result as Map<String, Any?>
+                    if (localWriter != null) {
+                        localVariables = localWriter.write(localVariables, rows)
+                        localResultWritten = true
+                    } else {
+                        @Suppress("UNCHECKED_CAST")
+                        val resolved = QueryResultValues.resolve(rows) as T
+                        result = resolved
+                        if (resultVariable != null) {
+                            BenchmarkTimings.async(BenchmarkTimings.Stage.RESULT) {
+                                FastVariableStore.publish(resolved as Map<String, Any?>)
+                            }
+                        }
+                    }
+                }
             } catch (_: CancellationException) {
                 return@launch
             } catch (error: Throwable) {
@@ -253,9 +282,17 @@ internal object DatabaseWork {
                         onFailure(error)
                     } else {
                         if (clearErrorOnSuccess) SkriptDatabaseErrors.clear(event)
-                        deliver(checkNotNull(result))
+                        if (!localResultWritten) {
+                            try {
+                                BenchmarkTimings.main(timing, BenchmarkTimings.Stage.RESULT) { deliver(checkNotNull(result)) }
+                            } catch (error: Throwable) {
+                                recordFailure(event, error)
+                                onFailure(error)
+                            }
+                        }
                     }
 
+                    timing?.finish()
                     TriggerItem.walk(continuation, event)
                 } finally {
                     SkriptLocalVariables.clear(event)

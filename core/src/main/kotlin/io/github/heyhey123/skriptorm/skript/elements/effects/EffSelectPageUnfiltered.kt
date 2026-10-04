@@ -109,6 +109,7 @@ class EffSelectPageUnfiltered : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
+            resultVariable = resultVar,
             query = {
                 target.withQueries { queries ->
                     val rows = linkedMapOf<String, Any?>()
@@ -116,7 +117,7 @@ class EffSelectPageUnfiltered : Effect() {
                         var rowIndex = 1
                         while (cursor.next()) {
                             target.table.columns.values.forEach { column ->
-                                rows["$rowIndex::${column.name}"] = cursor.get(column.name, column.type)
+                                rows["$rowIndex::${column.name}"] = cursor.getDetached(column.name, column.type)
                             }
                             rowIndex++
                         }

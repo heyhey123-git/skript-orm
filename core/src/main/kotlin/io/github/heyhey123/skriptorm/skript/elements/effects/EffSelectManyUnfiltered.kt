@@ -74,6 +74,7 @@ class EffSelectManyUnfiltered : Effect() {
         return DatabaseWork.run(
             event = actualEvent,
             continuation = next,
+            resultVariable = resultVar,
             query = {
                 target.withQueries { queries -> SelectResult.readMany(queries, target.table, null) }
             },
