@@ -1,496 +1,230 @@
-# Benchmarking and stress testing
+# Benchmarks and load testing
 
 [简体中文](benchmarking.zh-CN.md) | **English**
 
-This page describes the benchmark setup, recorded results, and planned tests. The first numeric tables
-are historical measurements from Run #4 on commit `6476c9b`. They predate background local-variable
-processing and the shared server-thread conversion queue, so they do not measure those changes.
-The revised suite and its five-database results from Run #7 appear later on this page.
+This page describes the current benchmark and its results. All scores come from [Run #7](https://github.com/heyhey123-git/skript-orm/actions/runs/37205411783), which tested commit `76dcc7e` on 2026-10-04. Server tables show milliseconds with six decimal places; JSON retains integer nanoseconds. JMH cases state their time unit per operation separately.
 
-A tick is one server update. At the usual 20 ticks per second, each aims to finish within 50 ms.
+A server normally updates 20 times per second. Each update is a tick, with a target interval of about 50 ms. The scripts call `System.nanoTime()` through skript-reflect. Nanoseconds are the timing unit, not a guarantee of nanosecond accuracy: scheduling, JVM garbage collection, database execution and trigger resumption affect the measurements.
 
 ## What these numbers mean for a server
 
-Reads that exceed the 5000-row result limit fail without storing a partial result. Writes that exceed
-30 000 bound values are split across statements. These limits protect against oversized operations,
-although a permitted large write can still lengthen a server tick.
-For `insert many`, an exclusively held local source can be read and validated in the background.
-Global sources still use server-thread slices of at most 4096 processing steps and about 2 ms.
-Shared script-default values use the server-thread fallback. Conversions that need server APIs use
-a shared queue with a 2 ms target per tick; one conversion cannot be interrupted to enforce that target.
-The global source must remain unchanged until the write finishes. See [Writing rows](writing.md).
+Local inputs owned by the paused trigger can be read and checked in the background. Global inputs are read on the server thread across ticks, with at most 4096 processing steps per slice and a target duration of about 2 ms. Shared default variables fall back to that thread. Ordinary local results can also be stored in the background; the local context is restored before the trigger continues.
 
-Local query results containing ordinary values can be saved in the background while their script
-is paused. The addon builds values that need server APIs on the server thread and restores the
-local context before continuing the script. Global result variables are still written on the
-server thread. A converter declares its read and write requirements separately; unknown converters
-default to the server thread. The revised benchmark checks both the work moved off that thread
-and the extra waiting introduced by conversion scheduling.
+Conversions that need server APIs, including items and locations, share one queue with a target budget of 2 ms per tick. A single expensive conversion cannot be interrupted, so this is not a hard limit. Final publication of global results still runs on the server thread and is outside that conversion budget. Prefer local results and smaller pages for large reads.
 
-The measurements cover three different costs:
+One read stores at most 5000 rows. Larger results are refused without keeping a partial result. A write statement binds at most 30,000 values; larger batches are split into multiple statements. Splitting alone does not guarantee that all statements succeed or roll back together. See [Reading rows](reading.md), [Writing rows](writing.md) and [Transactions](transactions.md).
 
-- **Insert timing in a JVM benchmark.** A 5000-row `insert many` took 8.022 ms on an Intel Xeon
-  Platinum 8573C and 8.241 ms on an AMD EPYC 7763. Those CI runs are stored in
-  `dev/bench/intel-xeon-platinum-8573c/data.js` and
-  `dev/bench/amd-epyc-7763-64-core-processor/data.js`.
-- **Historical server reads and writes.** `System.nanoTime()` recorded elapsed time and the longest
-  interval between tick-observer executions for each database. Those measurements are listed below.
-- **Historical database driver behavior.** In a separate benchmark, twenty 5000-row inserts took 17.04 s
-  with MySQL and 1.99 s with PostgreSQL or MariaDB. For one batch, the MySQL server counted
-  5038 statements, including 5000 inserts; MariaDB counted two statements, including one
-  multi-row insert. These runs predate the current MySQL insert path and describe only those
-  driver configurations.
+## CI coverage and environment
 
-The current server benchmark logs a 5000-row comparison between `insert many` and hand-written
-SQL for SQLite, MySQL, MariaDB, and PostgreSQL. MySQL now uses a parameterized multi-row
-`INSERT` by default, with at most 30 000 bound values per statement; the other JDBC paths use
-prepared batches. The raw comparison uses one literal multi-row `INSERT`, built before its
-timer starts. The measured difference includes reading the plugin's source variable, parameter
-binding, and the two write shapes; it cannot be attributed to ORM mapping alone. MongoDB runs
-the plugin write and read cases, then explicitly skips the SQL comparison.
+Plugin reads and writes passed on all five databases, as did JMH and report publication. The server used Paper 26.2 build 124, Skript 2.16.2, skript-reflect 2.6.3 and Java 25. This table checks coverage, not speed. **Backend** names the database; **Plugin cases** covers the size curve, repeated cases and scope cases; **Raw SQL comparison** says whether handwritten SQL ran; **CPU / database** identifies the job environment. MongoDB uses document commands and does not support SQL, so only its SQL comparison is skipped.
 
-A Skript loop that writes to a regular variable would measure in-memory storage, so it is not
-a useful comparison with database inserts.
-
-The current server benchmark uses skript-reflect to call `System.nanoTime()` around each
-operation and whenever the tick observer runs. It logs elapsed nanoseconds (`wallNs`)
-immediately when the operation returns, before validation queries or counting result rows.
-It also logs the longest interval between consecutive observer executions (`gapNs`). The observation
-window starts with the operation and ends one tick after it returns, so its endpoint differs from
-the elapsed-time measurement. This is not a direct measurement of an individual tick inside the server.
-
-This page and the generated report show milliseconds to six decimal places, preserving the
-nanosecond measurements. The JSON
-report and CI history retain the original integer nanoseconds. Nanoseconds are the timer's unit, not a guarantee of nanosecond accuracy:
-scheduler delays, other plugins, garbage collection (GC), database work, and Skript's resume
-tick all affect the result.
-
-**Tick overrun** is the longest observed tick gap minus 50 ms, floored at zero.
-It reveals a delayed tick but does not directly measure the operation's main-thread CPU
-time. Work that fits within a normal tick is invisible to this metric. Each `read` and
-`write` row is the first run at that size. The `warm read` and `warm write` labels mean the
-5000-row cases were repeated after the others; they do not establish that any cache was warm.
-
-## Historical CI coverage: Run #4
-
-Run #4 ran plugin writes and reads at 100, 500, 1000, 2500, 5000, and 10 000 rows,
-followed by another 5000-row write and read, for every database below. It also ran a separate
-5000-row plugin-versus-raw-SQL comparison where SQL is available. Its input rows populated only
-the `id` column; this keeps the comparison focused on row transport and storage rather than a
-particular six-column value mix.
-
-### Test coverage and environment
-
-Start by checking which cases ran on each database and where the results came from. This table
-describes coverage; it does not compare timings.
-
-- **Backend** is the database under test. SQLite uses the addon's `"JDBC"` connection type.
-- **Plugin sizes and repeated cases** says whether all six row counts and the final repeated 5000-row reads and writes completed in Run #4.
-- **Raw SQL comparison** says whether hand-written SQL runs through `execute query` and `execute update` alongside the plugin statements. MongoDB does not support SQL, so that comparison is skipped; its plugin reads and writes still run.
-- **Recorded run and environment** gives the workflow link, runner CPU, and database container image or database name.
-
-| Backend | Plugin sizes and repeated cases | Raw SQL comparison | Recorded run and environment |
+| Backend | Plugin cases | Raw SQL comparison | CPU / database |
 | --- | --- | --- | --- |
-| SQLite | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, SQLite |
-| MySQL | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), Intel Xeon 6973P-C, `mysql:8.4` |
-| MariaDB | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, `mariadb:11.4` |
-| PostgreSQL | Completed | Completed | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), AMD EPYC 7763, `postgres:17` |
-| MongoDB | Completed | Skipped: SQL is unavailable | [Run #4](https://github.com/heyhey123-git/skript-orm/actions/runs/37101757500), Intel Xeon 6973P-C, `mongo:8` |
+| SQLite | Completed | Completed | AMD EPYC 9V74 / SQLite |
+| MySQL | Completed | Completed | AMD EPYC 7763 / `mysql:8.4` |
+| MariaDB | Completed | Completed | AMD EPYC 9V45 / `mariadb:11.4` |
+| PostgreSQL | Completed | Completed | AMD EPYC 9V74 / `postgres:17` |
+| MongoDB | Completed | Not applicable: SQL is unsupported | Intel Xeon Platinum 8573C / `mongo:8` |
 
-The SQL comparison logs `pluginwrite`, `pluginread`, `rawwrite`, and `rawread` as
-`SKRIPTORM_BENCH=COMPARE` lines. MongoDB logs its plugin cases and an explicit
-`SKRIPTORM_BENCH=SKIP` for the raw SQL cases.
+Jobs used different CPUs, so absolute timings cannot rank databases. Temporary `bench::` variables are excluded from Skript variable files to avoid a save-queue backlog. The benchmark still includes in-memory variable handling and ORM database operations.
 
-### 5000-row reads and writes across databases
+**Total time** runs from the start of the statement until the trigger resumes, including variable handling, database work and scheduling waits. Input generation, later count queries, validation and cleanup are outside this window. **Maximum tick gap** is the largest interval between consecutive observer executions from statement start to one tick after it returns; it is not exclusive addon time on the server thread. **Tick excess** subtracts 50 ms from that gap, floored at zero. **Operation** and **Requested rows** identify the task and its size.
 
-Run #4 completed successfully on 2026-10-03, on commit `6476c9b`, with Paper `26.2 build 124`, Skript `2.16.2`,
-Java `25.0.4.1`, Linux `6.17.0-1022-azure`, and four visible CPUs. The following 5000-row
-measurements are the values from that run. The measurement tables below show milliseconds to six decimal places:
-`78.302884 ms` corresponds to `78302884 ns`, without rounding to whole milliseconds. The tick
-observer normally runs about every `50 ms`, so measurements can still span tens of milliseconds with a
-nanosecond timer. The timer's resolution and the operation's duration are different things.
-Each value is one run on a shared GitHub runner, so it describes that host and database image
-rather than a general ranking.
+## 5000-row reads and writes across databases
 
-Every database handles 5000 rows, keeping the task size fixed while showing differences in elapsed
-time and tick delays in this run. Putting elapsed time beside tick gaps helps distinguish waiting
-for an operation from a delayed server update. An operation spanning several ticks does not mean
-it blocked all of them.
+These cases fill only `id`; the other five columns are NULL. Inputs and results use global variables. Each database handles the same data structure. Showing total time beside tick gaps helps distinguish a long wait from a delayed update. Each case has one sample, which cannot establish a stable performance difference.
 
-- **Backend** is the database, with its environment listed in the coverage table.
-- **Write elapsed** and **Read elapsed** measure from the start of the plugin statement until it returns. They include input reading or result storage, database work, and waiting for the script to resume; subsequent validation is excluded.
-- **Write maximum tick gap** and **Read maximum tick gap** are the largest intervals between consecutive observer executions in each operation's observation window. The window ends one tick after the operation returns. About 50 ms is normal; a larger gap shows an observed update delay, not the addon's exclusive time on the main thread.
+| Backend | Operation | Requested rows | Total time | Maximum tick gap | Tick excess |
+| --- | --- | ---: | ---: | ---: | ---: |
+| SQLite | Write | 5000 | 738.019777 ms | 51.039040 ms | 1.039040 ms |
+| SQLite | Read | 5000 | 101.214641 ms | 101.797048 ms | 51.797048 ms |
+| MySQL | Write | 5000 | 653.115830 ms | 50.743193 ms | 0.743193 ms |
+| MySQL | Read | 5000 | 99.480507 ms | 100.044641 ms | 50.044641 ms |
+| MariaDB | Write | 5000 | 627.244008 ms | 50.787066 ms | 0.787066 ms |
+| MariaDB | Read | 5000 | 75.822950 ms | 76.335655 ms | 26.335655 ms |
+| PostgreSQL | Write | 5000 | 680.279059 ms | 50.846258 ms | 0.846258 ms |
+| PostgreSQL | Read | 5000 | 106.822833 ms | 107.407271 ms | 57.407271 ms |
+| MongoDB | Write | 5000 | 605.432622 ms | 50.700463 ms | 0.700463 ms |
+| MongoDB | Read | 5000 | 95.601344 ms | 95.916557 ms | 45.916557 ms |
 
-| Backend | Write elapsed | Write maximum tick gap | Read elapsed | Read maximum tick gap |
+## Larger writes and repeated writes
+
+These are the same id-only cases with global variables. **10,000-row write time / Maximum tick gap** describe the larger batch; **Repeated 5000-row write time / Maximum tick gap** describe another batch after the six size cases. Compare the repeated write with the first 5000-row write above, not with the 10,000-row batch. Repetition does not guarantee warmed caches.
+
+| Backend | 10,000-row write time | Maximum tick gap | Repeated 5000-row write time | Repeated maximum tick gap |
 | --- | ---: | ---: | ---: | ---: |
-| SQLite | 735.828866 ms | 65.767643 ms | 103.186998 ms | 103.066121 ms |
-| MySQL | 462.517747 ms | 50.395059 ms | 78.302884 ms | 78.218777 ms |
-| MariaDB | 685.122311 ms | 66.066614 ms | 95.789059 ms | 95.813175 ms |
-| PostgreSQL | 585.103286 ms | 66.926809 ms | 94.172914 ms | 94.082624 ms |
-| MongoDB | 717.433104 ms | 50.968606 ms | 78.761947 ms | 78.579400 ms |
+| SQLite | 1416.792130 ms | 50.810946 ms | 786.039922 ms | 50.662504 ms |
+| MySQL | 1208.194044 ms | 50.795271 ms | 676.070701 ms | 50.894886 ms |
+| MariaDB | 1207.324490 ms | 50.689455 ms | 700.069976 ms | 50.463965 ms |
+| PostgreSQL | 1294.077597 ms | 50.748823 ms | 654.585784 ms | 50.558487 ms |
+| MongoDB | 1349.871031 ms | 50.522086 ms | 645.084583 ms | 50.512251 ms |
 
-### Larger and repeated writes
+## Plugin statements and raw SQL
 
-This table groups each database's 10 000-row write with its later repeated 5000-row write to show
-whether a larger job also has longer tick gaps. Compare the repeated 5000-row case with the first
-5000-row write in the preceding table to see how repetition changed the result. Subtracting timings
-for different row counts cannot establish a cache-warmup benefit.
+This comparison runs separately. Each path processes 5000 rows with only `id` filled, using global inputs and results. **Plugin write / read** time `insert many` and `select many`; **Raw SQL write / read** time `execute update` and `execute query`. All four columns show complete statement time. SQL strings are built before timing, whereas plugin writes include input preparation, so their ratio is not ORM mapping overhead. Comparing both paths within a database shows the difference in complete call costs.
 
-- **Backend** is the database, from the same run as the preceding table.
-- **10 000-row write elapsed** is the first 10 000-row write's total time, measured as in the preceding table.
-- **Maximum tick gap** is the largest interval between consecutive observer executions from the start of the 10 000-row write until one tick after it returns.
-- **Repeated 5000-row write elapsed** and **Repeated write maximum tick gap** describe another 5000-row write after all six sizes have run, using the same timing windows as the preceding table. Repetition does not establish that any particular cache is warm.
-
-| Backend | 10 000-row write elapsed | Maximum tick gap | Repeated 5000-row write elapsed | Repeated write maximum tick gap |
-| --- | ---: | ---: | ---: | ---: |
-| SQLite | 1501.908676 ms | 94.670715 ms | 779.342861 ms | 50.628368 ms |
-| MySQL | 1398.534310 ms | 51.944607 ms | 684.881529 ms | 50.515912 ms |
-| MariaDB | 1149.905662 ms | 101.135769 ms | 675.078706 ms | 50.746686 ms |
-| PostgreSQL | 1255.801227 ms | 95.786030 ms | 623.383051 ms | 50.885682 ms |
-| MongoDB | 1196.824500 ms | 53.798503 ms | 683.646486 ms | 50.583169 ms |
-
-### Plugin statements and raw SQL
-
-The following comparison runs separately from the curve above. All four columns are elapsed
-time for 5000 rows. The plugin's write includes sliced input reading; the raw SQL string is
-already built when its timer starts. These are different write paths, so their elapsed-time
-ratio does not measure ORM overhead alone.
-
-Each row keeps the database and row count fixed while comparing complete plugin and hand-written
-SQL calls. It shows the difference between those paths in this environment. Writes and reads are
-separate because input handling, database work, and result storage have different costs; combining
-them into one ORM performance score would hide those differences.
-
-- **Backend** is the database used by both paths.
-- **Plugin write** and **Plugin read** time `insert many` and `select many`, including variable handling on the main thread and waiting for the database.
-- **Raw SQL write** and **Raw SQL read** time `execute update` and `execute query`. The write SQL is built before timing starts; the read still includes storing the result.
-- **Not applicable (no SQL support)** means MongoDB cannot run these SQL cases. It does not mean reads and writes are unavailable or take zero time; its plugin measurements are listed as usual.
+**Not applicable (SQL is unsupported)** means MongoDB cannot execute these SQL statements. Its plugin cases still passed, and missing SQL results do not mean zero elapsed time. MySQL plugin writes use parameterized multi-row inserts; other JDBC paths use driver batching.
 
 | Backend | Plugin write | Raw SQL write | Plugin read | Raw SQL read |
 | --- | ---: | ---: | ---: | ---: |
-| SQLite | 727.519482 ms | 17.148948 ms | 112.968835 ms | 104.414372 ms |
-| MySQL | 586.972838 ms | 46.793973 ms | 76.245264 ms | 91.635107 ms |
-| MariaDB | 628.867037 ms | 74.916475 ms | 91.608649 ms | 89.937610 ms |
-| PostgreSQL | 778.881589 ms | 61.349564 ms | 99.224999 ms | 102.880893 ms |
-| MongoDB | 685.494020 ms | Not applicable (no SQL support) | 78.850687 ms | Not applicable (no SQL support) |
+| SQLite | 749.999370 ms | 50.010275 ms | 94.916647 ms | 75.878837 ms |
+| MySQL | 750.014611 ms | 81.068476 ms | 109.862134 ms | 92.715736 ms |
+| MariaDB | 699.836833 ms | 49.816977 ms | 81.606404 ms | 69.435926 ms |
+| PostgreSQL | 750.100345 ms | 94.180613 ms | 85.262522 ms | 112.546390 ms |
+| MongoDB | 699.951095 ms | Not applicable (SQL is unsupported) | 84.042793 ms | Not applicable (SQL is unsupported) |
 
-### MariaDB: row counts and repeated operations
+## MariaDB: row counts and repeated cases
 
-The following table expands the MariaDB results from the same Run #4: AMD EPYC 7763 and
-`mariadb:11.4`, with the server versions listed above. It uses the [original nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/81c63dee48c9e77a36e98cc47bdf49c4473544aa/dev/bench/amd-epyc-7763-64-core-processor/tick-ns/MariaDB/data.js);
-no new test run was started.
+This expands the MariaDB results from the same run, on AMD EPYC 9V45 with `mariadb:11.4`. Rows still fill only `id`, with global inputs and results. Holding the database and data structure fixed while changing row counts shows how task size relates to waiting and tick gaps. Repeated 5000-row cases also show the effect of execution order.
 
-Keeping the database and environment fixed while changing row counts shows how elapsed time and
-tick delays vary with task size. Grouping the first and repeated 5000-row cases also shows the same
-task at different points in the run. Each case has only one sample, so the table cannot establish
-that elapsed time grows linearly with the number of rows.
+**Result** states whether the operation succeeded. A 10,000-row read exceeds the limit: its time measures refusal and result clearing, not a successful 10,000-row read. “Repeated” means another execution after the size cases; it does not guarantee warmed caches.
 
-- **Operation** is a plugin write or read; repeated cases run again after the other sizes.
-- **Rows requested** is the row count the script asks to handle, not necessarily the count returned.
-- **Elapsed time** runs from statement start until it returns, including variable handling, database work, and waiting to resume. Subsequent validation is excluded.
-- **Maximum tick gap** is the largest interval between consecutive observer executions from statement start until one tick after it returns; about 50 ms is normal.
-- **Tick overrun** is that gap minus 50 ms, floored at zero, showing the delay relative to the normal update cycle.
-- **Outcome** records success or refusal. The 10 000-row read exceeds the 5000-row limit, so its timing measures the refused query, not a successful read of 10 000 rows.
-
-| Operation | Rows requested | Elapsed time | Maximum tick gap | Tick overrun | Outcome |
+| Operation | Requested rows | Total time | Maximum tick gap | Tick excess | Result |
 | --- | ---: | ---: | ---: | ---: | --- |
-| Write | 100 | 183.019540 ms | 77.813136 ms | 27.813136 ms | Succeeded |
-| Read | 100 | 58.978086 ms | 54.904413 ms | 4.904413 ms | Succeeded |
-| Write | 500 | 125.585622 ms | 50.931863 ms | 0.931863 ms | Succeeded |
-| Read | 500 | 59.719091 ms | 59.571377 ms | 9.571377 ms | Succeeded |
-| Write | 1000 | 122.445042 ms | 50.273827 ms | 0.273827 ms | Succeeded |
-| Read | 1000 | 59.743000 ms | 59.761403 ms | 9.761403 ms | Succeeded |
-| Write | 2500 | 139.899172 ms | 64.122445 ms | 14.122445 ms | Succeeded |
-| Read | 2500 | 79.123322 ms | 79.081254 ms | 29.081254 ms | Succeeded |
-| Write | 5000 | 685.122311 ms | 66.066614 ms | 16.066614 ms | Succeeded |
-| Read | 5000 | 95.789059 ms | 95.813175 ms | 45.813175 ms | Succeeded |
-| Write | 10000 | 1149.905662 ms | 101.135769 ms | 51.135769 ms | Succeeded |
-| Read | 10000 | 59.551810 ms | 59.517446 ms | 9.517446 ms | Refused: exceeds the 5000-row read limit |
-| Write (repeated) | 5000 | 675.078706 ms | 50.746686 ms | 0.746686 ms | Succeeded |
-| Read (repeated) | 5000 | 82.868479 ms | 82.686620 ms | 32.686620 ms | Succeeded |
-
-The 10 000-row write took longer overall and had a larger maximum tick gap than the 5000-row
-write. The repeated 5000-row write had similar elapsed time but a shorter maximum gap. The
-100-row write was slower than the 500-row write, so elapsed time did not increase consistently
-with row count. Run order, startup effects, and shared-host activity may affect individual readings,
-but this table alone cannot establish the cause or predict elapsed time from row count.
-
-Affected or stored row counts were checked, and the 10 000-row read was refused as expected. The current
-report does not treat the gap as plugin CPU time: it is the largest interval between tick-observer
-executions, and it includes scheduler and host activity. The run predates the later MySQL
-`max_allowed_packet` fix in commit `21898af`. The revised Run #7 below includes that fix and the
-local-variable changes.
-
-The sections below distinguish the available measurements from planned ones and show
-where each metric can be collected.
-
-## Measurement layers
-
-The benchmarks use three layers to help locate the source of a slowdown:
-
-- **A: JVM benchmarks without Paper.** JMH is a Java benchmark tool; its cases live in a separate
-  module. Pure code paths can be measured without a database; the current insert case uses in-memory H2,
-  so its result includes database work as well as addon code.
-- **B: real databases.** Testcontainers starts each backend using the integration-test
-  configuration. This layer captures round trips, parsing and execution, connection-pool
-  behavior, and commits.
-- **C: Paper server.** Scripts run on a disposable server and record elapsed time and tick
-  gaps while the addon reads source variables and stores results. Memory use and the
-  distribution of MSPT (milliseconds per tick) require separate measurements.
-
-Separating the layers helps identify the source of a slowdown: value conversion in A, driver
-batching in B, or Skript variable access on the server thread in C.
-
-Trigger latency includes database work, main-thread variable handling, and the wait until
-Skript resumes the trigger. A long tick gap shows a delay, but cannot divide that time
-among those causes.
+| Write | 100 | 100.166930 ms | 52.934261 ms | 2.934261 ms | Succeeded |
+| Read | 100 | 51.661766 ms | 52.577681 ms | 2.577681 ms | Succeeded |
+| Write | 500 | 49.721242 ms | 50.633752 ms | 0.633752 ms | Succeeded |
+| Read | 500 | 55.148990 ms | 56.118816 ms | 6.118816 ms | Succeeded |
+| Write | 1000 | 199.506323 ms | 54.222904 ms | 4.222904 ms | Succeeded |
+| Read | 1000 | 56.909843 ms | 57.477091 ms | 7.477091 ms | Succeeded |
+| Write | 2500 | 299.843110 ms | 50.377625 ms | 0.377625 ms | Succeeded |
+| Read | 2500 | 70.805768 ms | 71.374238 ms | 21.374238 ms | Succeeded |
+| Write | 5000 | 627.244008 ms | 50.787066 ms | 0.787066 ms | Succeeded |
+| Read | 5000 | 75.822950 ms | 76.335655 ms | 26.335655 ms | Succeeded |
+| Write | 10000 | 1207.324490 ms | 50.689455 ms | 0.689455 ms | Succeeded |
+| Read | 10000 | 57.263183 ms | 57.794867 ms | 7.794867 ms | Refused: above the 5000-row read limit |
+| Write (repeated) | 5000 | 700.069976 ms | 50.463965 ms | 0.463965 ms | Succeeded |
+| Read (repeated) | 5000 | 83.557357 ms | 84.144273 ms | 34.144273 ms | Succeeded |
 
 ## Revised server benchmark
 
-The revised scripts retain the id-only curve and SQL comparison for continuity. Their new
-`SAMPLE` cases address the local-variable and conversion changes. Setup, result validation,
-count queries and cleanup run outside the measured statement windows. Rows use fresh primary-key
-ranges, and each query selects only its own range.
+The additional cases fill all six columns and compare local inputs / local results with global inputs / global results. They also cover mixed scopes, replacement of existing results, items and locations. Inputs are generated before timing, every case gets a fresh primary-key range, and queries read only that range. Generation, validation, counting and cleanup are outside the timed windows.
 
-Temporary `bench::` global variables are excluded from Skript variable persistence so repeated setup and cleanup do not build a save-queue backlog. These cases measure in-memory variable handling and ORM operations; they do not measure Skript variable persistence.
+Each additional case has three warmups and ten measured samples. Tables show the median of those ten samples; warmups are excluded. Each backend attachment contains 442 raw records and 34 summaries, including p95 and maximum values. With the nearest-rank method and ten measured samples, p95 equals the maximum; this provides limited evidence about rare delays. The id-only curve and SQL comparison have one sample each and are not included in these medians.
 
-### Cases and comparisons
-
-The table describes workloads, not measured performance. **Case** names the data and variable
-scope; **Size** is the requested row count; **Purpose** explains why those cases are compared.
-All five backends are configured to run the plugin cases. MongoDB skips the raw SQL comparison
-because it does not execute SQL; this is not a zero-time result.
-
-| Case | Size | Purpose |
+| Case | Rows | Purpose |
 | --- | --- | --- |
-| Six populated numeric columns, local source and local result versus global source and global result | 100, 500, 1000, 2500, 5000 | Show how variable scope changes preparation and result-storage time for the same database workload |
-| Local source with global result; global source with local result | 5000 | Examine input processing and result storage separately |
-| Existing result replaced, local versus global | 5000 | Include removal of old results; check that stale rows and columns disappear |
-| Numeric columns plus ItemStack and Location, local versus global | 1000 | Show the cost of mixed ordinary values and server-thread conversions |
-| Named ItemStack with lore plus Location, existing local result replaced | 1000 | Exercise object conversion and replacement together; validate item metadata and location |
-| Original id-only curve and repeated case | 100–10000, then 5000 | Preserve the previous workload; the 10000-row read must reject the result without retaining partial data |
-
-Each new case has three warmup repetitions followed by ten measured samples. Warmups are saved
-with negative sample numbers and excluded from summaries. Reports group the same operation,
-workload, row count, variable scopes and replacement mode, then show the median, p95 and maximum.
-The median describes the middle of the samples; p95 estimates the time below which 95% of samples
-fall; the maximum is the slowest observed sample. With only ten samples, p95 equals the
-maximum and provides limited evidence about rare delays. It is an operation percentile, not an
-MSPT percentile. Raw samples, including warmups, and median/p95/max summaries are retained in `build/benchmarks/pipeline-results.json`. `tick-results.json` contains median points for CI history.
-
-The local and global cases alternate under the same running server. Comparing them is useful
-within a backend and workload; different runner CPUs or different object contents require separate
-interpretation. The results below come from a complete run; the earlier tables remain historical.
+| Six populated numeric columns: local and global scopes | 100, 500, 1000, 2500, 5000 | Hold database work fixed and compare input preparation and result storage |
+| Local input / global result and global input / local result | 5000 | Observe input and result scope separately |
+| Replace existing local or global results | 5000 | Include old-result clearing and check stale rows and columns are removed |
+| Four numbers, one item and one location | 1000 | Measure ordinary values mixed with server-thread object conversions |
+| Named item with lore and a location; replace local results | 1000 | Check object properties and result replacement |
 
 ### Measured results: Run #7
 
-[Run #7](https://github.com/heyhey123-git/skript-orm/actions/runs/37205411783) tested commit `76dcc7e` on 4 October 2026. All five database jobs, JMH and history publication passed. Each backend produced 442 raw samples and 34 groups. Paper 26.2 build 124, Skript 2.16.2, skript-reflect 2.6.3 and Java 25 were used. CPU models differ between jobs, so compare local and global scopes within each row, rather than ranking databases across rows. The run's `tick-report-*` artifacts contain `pipeline-results.json`, `tick-results.json` and the full environment record.
+Each read returns 5000 rows with all six numeric columns populated. **Operation** identifies a local or global result. **Server-thread processing time** is the median sum of timed server-thread processing intervals for that operation. It is not a whole tick and does not cover every small statement overhead. **Total time** and **Maximum tick gap** each report a median across ten samples. **Tick excess** subtracts 50 ms from the displayed median gap, floored at zero; it does not describe the worst observed delay. Showing complete time beside server-thread processing reveals where the work goes. Scopes ran within the same server run and can be compared within a database.
 
-The first table compares reads of the same 5000 rows with six populated numeric columns. **Backend / CPU** identifies the job; **Local/global total** is median time from the read statement to script resumption; **Local/global main** is median accumulated time in the instrumented server-thread intervals. All entries are milliseconds with six decimal places. The table shows where work moved: local main-thread intervals became short, while complete operations still include background work and the wait for a server tick. It does not compare the old and new plugin versions, or measure every bit of statement overhead.
+| Backend | Operation | Requested rows | Total time | Maximum tick gap | Tick excess | Server-thread processing time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| SQLite | Read into locals | 5000 | 49.925225 ms | 50.208298 ms | 0.208298 ms | 0.018713 ms |
+| SQLite | Read into globals | 5000 | 65.414039 ms | 65.743510 ms | 15.743510 ms | 15.483043 ms |
+| MySQL | Read into locals | 5000 | 49.923762 ms | 50.204954 ms | 0.204954 ms | 0.015720 ms |
+| MySQL | Read into globals | 5000 | 86.510248 ms | 87.054996 ms | 37.054996 ms | 36.381696 ms |
+| MariaDB | Read into locals | 5000 | 50.005949 ms | 50.250288 ms | 0.250288 ms | 0.017637 ms |
+| MariaDB | Read into globals | 5000 | 66.299079 ms | 66.890665 ms | 16.890665 ms | 15.888968 ms |
+| PostgreSQL | Read into locals | 5000 | 49.942947 ms | 50.217965 ms | 0.217965 ms | 0.018167 ms |
+| PostgreSQL | Read into globals | 5000 | 69.211086 ms | 69.465648 ms | 19.465648 ms | 19.242586 ms |
+| MongoDB | Read into locals | 5000 | 49.950872 ms | 50.178014 ms | 0.178014 ms | 0.014090 ms |
+| MongoDB | Read into globals | 5000 | 71.939851 ms | 72.119047 ms | 22.119047 ms | 21.958078 ms |
 
-| Backend / CPU | Local total | Global total | Local main | Global main |
+The local path moves the main result-storage work into the background. Complete reads still take about one tick because Skript resumes on the server thread. This compares scopes in the current implementation, not plugin versions or other addons.
+
+## Items and locations: work within each tick
+
+Each of the 1000 rows contains four numbers, one item and one location. **Total time** and **Maximum tick gap** report medians across ten samples. **Tick excess** subtracts 50 ms from the displayed median gap, floored at zero. **Busiest-tick processing time** takes the largest sum of timed processing intervals within one tick for each operation, then reports the median of those ten maxima. It belongs to that operation, not the server’s complete MSPT. Showing it beside complete time exposes the tradeoff between less work in each tick and more time waiting for sliced conversion.
+
+| Backend | Operation | Requested rows | Total time | Maximum tick gap | Tick excess | Busiest-tick processing time |
+| --- | --- | ---: | ---: | ---: | ---: | ---: |
+| SQLite | Read into locals | 1000 | 499.969523 ms | 52.032646 ms | 2.032646 ms | 1.947452 ms |
+| SQLite | Read into globals | 1000 | 521.950934 ms | 112.811151 ms | 62.811151 ms | 64.061272 ms |
+| MySQL | Read into locals | 1000 | 699.948048 ms | 52.012222 ms | 2.012222 ms | 1.960147 ms |
+| MySQL | Read into globals | 1000 | 775.946264 ms | 175.476904 ms | 125.476904 ms | 126.033681 ms |
+| MariaDB | Read into locals | 1000 | 449.839210 ms | 52.125599 ms | 2.125599 ms | 1.939399 ms |
+| MariaDB | Read into globals | 1000 | 448.441535 ms | 95.115534 ms | 45.115534 ms | 45.820466 ms |
+| PostgreSQL | Read into locals | 1000 | 599.943042 ms | 52.004495 ms | 2.004495 ms | 1.948226 ms |
+| PostgreSQL | Read into globals | 1000 | 634.938087 ms | 134.294649 ms | 84.294649 ms | 84.902243 ms |
+| MongoDB | Read into locals | 1000 | 499.969330 ms | 52.020147 ms | 2.020147 ms | 1.956798 ms |
+| MongoDB | Read into globals | 1000 | 515.116861 ms | 114.311325 ms | 64.311325 ms | 65.141387 ms |
+
+Local results use about 2 ms of timed work in the busiest tick, but the complete read waits across more ticks. Final global publication can still take tens of milliseconds and is outside the shared conversion budget.
+
+## MariaDB: row counts with six populated columns
+
+These cases use the same MariaDB job with all six numeric columns populated. **Operation** identifies the read or write and its scope; **Requested rows** gives its size. **Total time** and **Maximum tick gap** report medians across ten measured samples. **Tick excess** subtracts 50 ms from the displayed median gap, floored at zero. Changing size and scope within one environment shows their effect on waiting and tick gaps. Global writes include sliced input reads across ticks; a long total does not mean every tick was blocked. The data differs from the id-only cases, so subtracting those results would not measure an optimization gain.
+
+| Operation | Requested rows | Total time | Maximum tick gap | Tick excess |
 | --- | ---: | ---: | ---: | ---: |
-| [SQLite](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/SQLite/data.js) / EPYC 9V74 | 49.925225 ms | 65.414039 ms | 0.018713 ms | 15.483043 ms |
-| [MySQL](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-7763-64-core-processor/tick-ns/MySQL/data.js) / EPYC 7763 | 49.923762 ms | 86.510248 ms | 0.015720 ms | 36.381696 ms |
-| [MariaDB](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v45-96-core-processor/tick-ns/MariaDB/data.js) / EPYC 9V45 | 50.005949 ms | 66.299079 ms | 0.017637 ms | 15.888968 ms |
-| [PostgreSQL](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/PostgreSQL/data.js) / EPYC 9V74 | 49.942947 ms | 69.211086 ms | 0.018167 ms | 19.242586 ms |
-| [MongoDB](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/intel-xeon-platinum-8573c/tick-ns/MongoDB/data.js) / XEON 8573C | 49.950872 ms | 71.939851 ms | 0.014090 ms | 21.958078 ms |
+| Local write | 100 | 50.002091 ms | 50.365996 ms | 0.365996 ms |
+| Local read | 100 | 49.948891 ms | 50.296366 ms | 0.296366 ms |
+| Global write | 100 | 99.999130 ms | 50.318539 ms | 0.318539 ms |
+| Global read | 100 | 50.561922 ms | 50.852497 ms | 0.852497 ms |
+| Local write | 500 | 50.003658 ms | 50.298183 ms | 0.298183 ms |
+| Local read | 500 | 49.969411 ms | 50.278538 ms | 0.278538 ms |
+| Global write | 500 | 200.041385 ms | 50.843437 ms | 0.843437 ms |
+| Global read | 500 | 53.469929 ms | 53.751575 ms | 3.751575 ms |
+| Local write | 1000 | 50.029800 ms | 50.227414 ms | 0.227414 ms |
+| Local read | 1000 | 49.985885 ms | 50.250870 ms | 0.250870 ms |
+| Global write | 1000 | 400.035662 ms | 50.880191 ms | 0.880191 ms |
+| Global read | 1000 | 55.762635 ms | 55.953148 ms | 5.953148 ms |
+| Local write | 2500 | 50.027120 ms | 50.249912 ms | 0.249912 ms |
+| Local read | 2500 | 49.943913 ms | 50.207857 ms | 0.207857 ms |
+| Global write | 2500 | 1000.028616 ms | 50.811210 ms | 0.811210 ms |
+| Global read | 2500 | 58.051739 ms | 58.323916 ms | 8.323916 ms |
+| Local write | 5000 | 50.068590 ms | 50.309630 ms | 0.309630 ms |
+| Local read | 5000 | 50.005949 ms | 50.250288 ms | 0.250288 ms |
+| Global write | 5000 | 1845.764052 ms | 50.874572 ms | 0.874572 ms |
+| Global read | 5000 | 66.299079 ms | 66.890665 ms | 16.890665 ms |
 
-The next table compares 1000-row reads containing four numbers, one ItemStack and one Location. **Local/global busiest tick** is the median of each operation's largest `mainTickMaxNs`, converted to milliseconds. This is the operation's recorded work within a tick, not total MSPT. **Local total** is median read-to-resumption time. Keeping both readings shows the tradeoff: spreading object work across ticks lowers its per-tick cost but adds waiting. The global path can still spend tens of milliseconds assigning the completed objects; the shared conversion budget does not cover that final global assignment.
+## JVM microbenchmarks
 
-| Backend | Local busiest tick | Global busiest tick | Local total |
-| --- | ---: | ---: | ---: |
-| SQLite | 1.947452 ms | 64.061272 ms | 499.969523 ms |
-| MySQL | 1.960147 ms | 126.033681 ms | 699.948048 ms |
-| MariaDB | 1.939399 ms | 45.820466 ms | 449.839210 ms |
-| PostgreSQL | 1.948226 ms | 84.902243 ms | 599.943042 ms |
-| MongoDB | 1.956798 ms | 65.141387 ms | 499.969330 ms |
+JMH ran on AMD EPYC 7763 in the same Run #7, with two forks, two warmup iterations and three measured iterations per fork. **Case** names the work; **Time per operation** is JMH’s aggregate; **Measured work** defines its scope. These cases examine code and database calls without Paper, not complete statement time on a game server.
 
-The final table holds the database and six-column data shape constant, using MariaDB on AMD EPYC 9V45 with `mariadb:11.4`. **Rows** is the requested count; **Local/global write** and **Local/global read** are median statement-to-resumption times in milliseconds. It shows how task size and variable scope affect latency. Input generation and validation are excluded; the global cases include sliced input reading. These populated cases differ from the historical id-only curve and should not be subtracted from it as an optimization result.
+| Case | Time per operation | Measured work |
+| --- | ---: | --- |
+| 5000-row batch insert | 9.871089 ms/op | In-memory H2, value preparation, parameter binding and database execution |
+| Rows-per-statement limit | 15.115187 ns/op | Limit calculation without database access |
 
-| Rows | Local write | Global write | Local read | Global read |
-| --- | ---: | ---: | ---: | ---: |
-| 100 | 50.002091 ms | 99.999130 ms | 49.948891 ms | 50.561922 ms |
-| 500 | 50.003658 ms | 200.041385 ms | 49.969411 ms | 53.469929 ms |
-| 1000 | 50.029800 ms | 400.035662 ms | 49.985885 ms | 55.762635 ms |
-| 2500 | 50.027120 ms | 1000.028616 ms | 49.943913 ms | 58.051739 ms |
-| 5000 | 50.068590 ms | 1845.764052 ms | 50.005949 ms | 66.299079 ms |
+[JMH records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-7763-64-core-processor/data.js)
 
-Published median records are linked from the backend names in the first table. Raw artifacts also retain all three warmups, ten measured samples, and median/p95/max summaries. With ten measured samples, the nearest-rank p95 equals the maximum. The 10000-row legacy read is a refusal check and has no successful-read throughput; MongoDB has no raw SQL comparison because it uses document commands.
+## Phase timings
 
-### Phase timings
-
-`System.nanoTime()` still measures the complete statement and the observer gap. Optional addon
-instrumentation records the processing stages; it is enabled for benchmark servers. The script
-captures the completed operation's snapshot immediately on return, before another database call
-can replace it. **Field** is the raw JSON/log key; **Meaning** defines its measurement boundary.
+Scripts record complete statements and observer gaps. Addon phase instrumentation is enabled only on benchmark servers. The script captures it immediately after the statement, before later queries overwrite it. **Field** names the JSON key; **Meaning** defines its measurement boundary. Some phases overlap and must not all be added together.
 
 | Field | Meaning |
 | --- | --- |
-| `wallNs` | Statement start to script resumption, excluding subsequent validation |
-| `gapNs` | Largest tick-observer interval from statement start until one tick after resumption |
-| `mainNs` | Elapsed time in the operation's instrumented server-thread processing intervals; not CPU time and not all server work |
-| `mainTickMaxNs` | Largest sum of those intervals within one server tick for this operation; not the combined cost of all requests |
+| `wallNs` | Statement start to trigger resumption, excluding later validation |
+| `gapNs` | Maximum observer gap from statement start to one tick after return |
+| `mainNs` | Sum of timed server-thread processing intervals for this operation |
+| `mainTickMaxNs` | Largest sum of those intervals within one tick for this operation |
 | `prepareMainNs`, `prepareAsyncNs` | Input preparation recorded on the server thread and in the background |
-| `conversionMainNs` | Recorded server-thread conversions |
+| `conversionMainNs` | Server-thread value conversion time |
 | `resultMainNs`, `resultAsyncNs` | Result storage recorded on the server thread and in the background |
-| `executionNs` | Background execution stage, including local input preparation, write conversion, database calls and cursor materialization; not pure database time |
+| `executionNs` | Asynchronous query-task time; may include preparation, conversion waits, database operations and cursor reads, not pure database time |
 | `queueWaitNs` | Time waiting for the server-thread conversion queue |
-| `syncConversions` | Number of recorded server-thread value conversions |
-| `largestConversionNs` | Longest single recorded server-thread conversion; helps identify a value that exceeds the queue's budget |
-| `operationId` | Identifies the completed operation associated with this snapshot |
+| `syncConversions` | Recorded server-thread conversion count |
+| `largestConversionNs` | Time of the slowest individual server-thread conversion |
 
-These fields overlap. In particular, `executionNs` can contain preparation and conversion
-waiting, so adding it to the other stages double-counts time. Main-thread elapsed intervals are
-measured directly, not inferred from `gapNs`. The data still does not isolate database-server
-execution, memory allocation or the server's MSPT distribution.
+## Reports and reproduction
 
-### Additional measurements planned
+The run’s `tick-report-*` attachments contain `pipeline-results.json`, `tick-results.json` and environment records. The pipeline file keeps raw samples, including warmups, and median / p95 / maximum summaries. The tick file contains points for CI history. **Report** identifies the database; **Data source** links to this run’s published records for checking numbers, not ranking databases.
 
-The table below is a measurement plan, not a set of results. It pairs each metric with the layer
-where it can be collected to help decide whether additional measurements belong in addon code,
-a real database, or the full server. This helps locate the source of time or memory costs.
+| Report | Data source |
+| --- | --- |
+| SQLite | [Nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/SQLite/data.js) |
+| MySQL | [Nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-7763-64-core-processor/tick-ns/MySQL/data.js) |
+| MariaDB | [Nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v45-96-core-processor/tick-ns/MariaDB/data.js) |
+| PostgreSQL | [Nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/amd-epyc-9v74-80-core-processor/tick-ns/PostgreSQL/data.js) |
+| MongoDB | [Nanosecond records](https://github.com/heyhey123-git/skript-orm/blob/375c13b/dev/bench/intel-xeon-platinum-8573c/tick-ns/MongoDB/data.js) |
 
-**Metric** names the quantity to observe; **Planned measurement** says what to measure;
-**Layer** refers to A (JVM benchmarks without Paper), B (real databases), and C (the Paper
-server). Listing a metric here does not mean current cases already report it.
+Run `./gradlew serverBenchmark` locally for SQLite. Other backends use `-Pskriptorm.benchmark.server.type=<type>` and connection properties. Results are written under `build/benchmarks/`. Run `./gradlew :benchmarks:jmh` for JVM benchmarks; its output is `benchmarks/build/benchmarks/results.json`. Jobs record the commit, CPU, JDK, operating system, database image, driver, Paper and Skript versions.
 
-| Metric | Planned measurement | Layer |
-| --- | --- | --- |
-| throughput | rows and values processed per second | A, B, C |
-| statements and rows passed to the driver | calls and rows counted at the JDBC boundary | B |
-| statements received and rows written by the database | database-side counters | B |
-| allocations per operation | bytes allocated per call | A, B |
-| peak heap | maximum heap use sampled during an operation | B, C |
-| retained heap | heap use after the case and a collection | B, C |
-| MSPT distribution (p50, p99, max) | milliseconds per tick: median (p50), a time exceeded by only 1% of ticks (p99), and longest tick | C |
+CI fails for script errors, wrong affected or stored row counts, missing samples and other correctness problems. Timing changes are reported without failing the build. Benchmark history lives in `gh-pages` under `dev/bench/<CPU>/`; server results are also grouped by backend.
 
-The phase timings above now record selected addon processing intervals. Isolating pure
-database time or collecting the memory and MSPT measures in this plan still needs additional tools.
+## Interpretation and remaining gaps
 
-### Counts and timings
-
-Timings on shared CI hosts have varied by 10% to 20% between identical runs. Statement counts
-are more stable, so CI can check counts directly. Timings are reported without failing a build.
-
-The historical twenty-batch test above used the same script and table definition for each database.
-MySQL and MariaDB share a SQL dialect, but their drivers sent the batch differently.
-At the JDBC layer, the plugin submitted one batch at that time. The server-side count showed that
-Connector/J sent its 5000 rows as 5000 inserts. Timing alone would not identify that cause.
-The current MySQL path instead builds a parameterized multi-row insert; the counts below
-describe the earlier path and should not be used as current expectations.
-
-The benchmarks module also counts calls at the JDBC layer. With in-memory H2 and the generic
-JDBC path, a 5000-row, six-column insert submitted one batch. The plugin reported exactly
-5000 affected rows, and the table contained 5000 rows after the call.
-
-`ServerSideCountIntegrationTest` measures what a real database receives. For MySQL-family
-servers, it reads `Questions` before and after a plugin call and subtracts the probes'
-own cost. It also reads `Innodb_rows_inserted`, `Com_insert`, and `Com_stmt_execute`.
-Because these counters cover the whole server, the test checks for other connections first;
-if it finds any, it reports the measurements without asserting them. Driver versions and
-options affect these counts, so they are recorded with the environment and do not determine whether CI passes.
-
-In one run of the 5000-row test, MySQL 8.0.46 and 8.4.11 each recorded **5038 total
-statements**, including 5000 inserts (`comInsert=5000`, `comStmtExecute=0`). MariaDB
-11.4.13 recorded **2 statements**, including one multi-row insert (`comInsert=1`,
-`comStmtExecute=1`). MariaDB did not expose an inserted-row count to the test account.
-PostgreSQL 16.15 reported 5000 inserted rows for the table and 5057 for the database,
-but its available counters could not provide a statement count. The PostgreSQL views
-took 814 ms to update. In all cases, the plugin reported 5000 affected rows and the
-table contained 5000 rows.
-
-These are single runs per backend, not a range. Their logs include
-`os=Linux 6.17.0-1022-azure arch=amd64 cores=4 java=25.0.4.1 commit=81526798498f5ad30068fcb3299f2085062f868d`.
-Even within that workflow run, MySQL and MariaDB ran on an Intel Xeon Platinum 8370C,
-while PostgreSQL ran on an AMD EPYC 7763. Compare timings only with the host recorded
-for each job.
-
-The test reads PostgreSQL's `pg_stat_user_tables.n_tup_ins` and
-`pg_stat_database.tup_inserted`, polling until these asynchronous statistics update.
-They count rows, not the statements that inserted them. A statement count would need
-`pg_stat_statements` configured and the server restarted, or a protocol-level counter.
-
-## Tools and options
-
-JMH, Testcontainers, and benchmark history are part of the current setup. The other
-tools below are options for measurements that are not yet collected.
-
-This table connects the measurement plan to tools that can carry it out; it does not compare the
-tools' own speed. **Purpose** names the data to collect, with A, B, or C identifying its layer;
-**Tool** lists the relevant library or diagnostic tool; **Role** explains what evidence it can
-provide and what needs separate tracking.
-
-| Purpose | Tool | Role |
-| --- | --- | --- |
-| Microbenchmarks (A) | JMH | runs code before timing so the JVM can optimize it, uses separate processes, and prevents the JVM from removing measured work as unused |
-| Statements and rows passed to the driver (B) | `datasource-proxy` or a counting driver | counts JDBC calls; the number of rows within a batch needs separate tracking |
-| Statements and round trips seen by the database (B) | session counters or packet capture | shows what the driver sends; results depend on driver version and connection settings |
-| Percentiles over tick samples (C) | HdrHistogram | computes a distribution from repeated tick samples |
-| Real databases (B) | Testcontainers | starts test databases; instance reuse reduces repeated startup time |
-| History and comparison | `benchmark-action/github-action-benchmark` | stores results by CPU and backend without failing the job on timing changes |
-| Allocations and pauses | JMH `-prof gc`, JFR, async-profiler | examines memory use and pauses when the JVM stops threads for garbage collection or similar work |
-| MSPT (C) | Paper's tick sampling | records tick durations from the server itself |
-
-The benchmarks module declares JMH and its annotation processor directly because the available
-Gradle plugin does not support this project's Gradle version. Run `./gradlew :benchmarks:jmh`
-to write `build/benchmarks/results.json`. Use `-Pbenchmarks.filter=<regex>` to select cases
-or `-Pbenchmarks.forks=1` for a shorter local run. Benchmark classes are Java because JMH's
-annotation processor generates Java code.
-
-## CI checks
-
-Compilation, unit tests, ktlint, and integration-test compilation already run in CI.
-
-The `tick` benchmark job fails on incorrect row counts or script errors, not timing changes.
-Other stable, reproducible checks can be added separately from timing trends, which
-vary on shared CI hosts.
-
-## Where the baseline lives
-
-Benchmark results are compared only with runs from comparable hardware.
-
-- **CI history** is stored by CPU model under `dev/bench/<slug>/` on `gh-pages`.
-  The `ubuntu-latest` label covers different processors: two runs of the same commit
-  landed on an AMD EPYC 9V74 and an Intel Xeon Platinum 8573C, with insert timings
-  differing by a factor of 1.32. Each CI job records its own CPU model. Current tick
-  history is separated further by backend at `dev/bench/<slug>/tick-ns/<backend>/`.
-- **The `gh-pages` branch** stores data for the benchmark action; this project does not
-  publish a dashboard from it. JMH results are written to
-  `dev/bench/<slug>/data.js`; tick results use the backend path above.
-- **`benchmarks/baseline.json`** is a reference for local runs, not a CI threshold.
-  `benchmarks/baseline.environment.txt` records the machine used to produce it.
-
-Results also record the JDK, operating system, CPU, container images, database drivers,
-Paper and Skript versions, commit, and whether the worktree had local changes.
-
-## Test plan
-
-- **Phase 0: microbenchmarks.** Add JMH cases for value conversion, result storage,
-  batch input, and the statements sent by `insert many`. Store the JSON results and
-  a reference baseline.
-- **Phase 1: database matrix.** Measure each supported backend and operation with
-  statement counters and several table shapes.
-- **Phase 2: server ticks (configured across five backends).** `./gradlew serverBenchmark` starts Paper with
-  Skript, skript-reflect, and this addon, then runs scripts from `server-benchmark/skript`.
-  The scripts report `SKRIPTORM_BENCH` lines with nanoseconds as the timer unit and the
-  longest observed interval between tick-observer executions. The task
-  fails if a write stores the wrong number of rows or a script reports `FAIL`.
-  CI checks the 5000-row read limit and 30 000-value limit per write statement separately; a
-  nightly and on-demand `tick` matrix records results under `dev/bench/<slug>/tick-ns/<backend>/`.
-  See [Reading rows](reading.md#how-many-rows-one-read-may-store) and
-  [Writing rows](writing.md#how-many-rows-one-write-may-send). MSPT percentiles
-  are not available from the script-side timer.
-- **Phase 3: stress and failure tests (planned).** Test concurrent work,
-  cancellation, interrupted database connections, plugin reloads during queries,
-  oversized results and batches, and exhausted connection pools.
-- **Phase 4: further CI reporting (planned).** Add the remaining metrics above and keep
-  stable correctness checks separate from timing trends.
-
-## What this does not cover
-
-- **Active players.** Measurements on a quiet server do not predict the same operation under heavy player and entity load.
-- **Long-running tests.** Individual operations usually finish within seconds and the full matrix takes longer; neither can detect leaks that take days to appear.
-- **Untested drivers.** Generic JDBC can use drivers outside this repository's test matrix; MySQL results do not represent them.
-- **PostgreSQL statement counts.** The available statistics count rows and transactions, not individual statements.
-- **Cross-machine timing comparisons.** Timings are meaningful only with their test environment.
+- Processing intervals record elapsed time, not CPU time. Not every small statement overhead is instrumented.
+- Do not add `executionNs` to every other phase: it may already contain them.
+- Maximum tick gaps can reveal delayed updates, but cannot provide a complete MSPT distribution. Allocation, peak memory and retained memory need separate measurements.
+- An idle server does not represent many online players and active entities. Short runs cannot rule out long-term leaks.
+- Generic JDBC can use drivers outside this test matrix; these scores do not describe those drivers.
+- Version comparisons need the same script, data, machine and database settings. CI results from different CPUs cannot directly establish an optimization percentage.

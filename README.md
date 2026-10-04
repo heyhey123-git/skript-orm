@@ -136,16 +136,22 @@ Database calls run in the background. Lists in local variables such as `{_rows::
 [Run #7](https://github.com/heyhey123-git/skript-orm/actions/runs/37205411783) read **5000 rows with six populated numeric columns** on each supported database. The table compares local and global result variables for the same workload. Every value is a median of ten samples after three warmups.
 
 - **Database** identifies the backend used in that row.
-- **Local/global total** is the time from the read statement to script resumption, including background work and waiting.
-- **Local/global main** is elapsed time in the recorded server-thread processing intervals. It is neither total server CPU time nor the complete tick duration.
+- **Operation** identifies whether the same result is stored in local or global variables.
+- **Total time** is the time from the read statement to script resumption, including background work and waiting.
+- **Server-thread processing time** is elapsed time in the recorded server-thread processing intervals. It is neither total server CPU time nor the complete tick duration.
 
-| Database | Local total | Global total | Local main | Global main |
-| --- | ---: | ---: | ---: | ---: |
-| SQLite | 49.925225 ms | 65.414039 ms | 0.018713 ms | 15.483043 ms |
-| MySQL | 49.923762 ms | 86.510248 ms | 0.015720 ms | 36.381696 ms |
-| MariaDB | 50.005949 ms | 66.299079 ms | 0.017637 ms | 15.888968 ms |
-| PostgreSQL | 49.942947 ms | 69.211086 ms | 0.018167 ms | 19.242586 ms |
-| MongoDB | 49.950872 ms | 71.939851 ms | 0.014090 ms | 21.958078 ms |
+| Database | Operation | Total time | Server-thread processing time |
+| --- | --- | ---: | ---: |
+| SQLite | Read into local variables | 49.925225 ms | 0.018713 ms |
+| SQLite | Read into global variables | 65.414039 ms | 15.483043 ms |
+| MySQL | Read into local variables | 49.923762 ms | 0.015720 ms |
+| MySQL | Read into global variables | 86.510248 ms | 36.381696 ms |
+| MariaDB | Read into local variables | 50.005949 ms | 0.017637 ms |
+| MariaDB | Read into global variables | 66.299079 ms | 15.888968 ms |
+| PostgreSQL | Read into local variables | 49.942947 ms | 0.018167 ms |
+| PostgreSQL | Read into global variables | 69.211086 ms | 19.242586 ms |
+| MongoDB | Read into local variables | 49.950872 ms | 0.014090 ms |
+| MongoDB | Read into global variables | 71.939851 ms | 21.958078 ms |
 
 The local path keeps ordinary result storage off the server thread. Its complete read still takes around one tick because Skript resumes on the server thread. These are comparisons between variable scopes in the current implementation, not a before/after test or a benchmark against another addon.
 

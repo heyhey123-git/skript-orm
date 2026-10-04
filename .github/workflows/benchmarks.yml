@@ -1,39 +1,11 @@
 name: Benchmarks
 
-# Performance work runs on its own schedule rather than in ci.yml, for two reasons: a benchmark takes
-# minutes where a test takes seconds, and a benchmark answers "how fast" while a test answers "does it
-# work". Mixing them would make the second answer wait for the first.
-#
-# Nothing here fails a run because a number moved, and the threshold below is not yet a gate.
-#
-# The band was measured on one machine on 2026-10-02, in two back-to-back runs of
-# `./gradlew :benchmarks:jmh` with the settings this workflow uses — two forks, two warmup iterations,
-# three measurement iterations, six samples each — and nothing else running:
-#
-#   InsertManyBenchmark.insertManyOf5000   run 1  12.447 ms/op +/- 4.407   run 2  10.049 ms/op +/- 1.201
-#   RowLimitBenchmark.rowsPerStatement     run 1  11.708 ns/op +/- 3.691   run 2  11.236 ns/op +/- 0.241
-#
-# So on an idle machine the same tree moved 19 to 24 percent between runs for the insert case and 4 percent
-# for the row-limit case, while JMH's own error inside a single run reached 35 percent of the score. Two
-# things follow, and they are why `fail-on-alert` stays false. A threshold can only mean something above the
-# noise: anything below roughly 50 percent here would fire on this machine rather than on the code, and the
-# 150 percent below is above that band by a margin nobody measured — it is a placeholder, not a finding. And
-# the noise is not one number: an I/O bound case measured in milliseconds and a CPU bound case measured in
-# nanoseconds do not share a band, so a single threshold is the wrong instrument for this suite.
-#
-# Nor is a band measured on a developer machine the band a GitHub runner will show: a runner is a different
-# CPU, with different neighbours on the host, and it has no history yet. The gate therefore stays off until
-# `gh-pages` carries enough nightly runs to read the spread out of that history — set the threshold from that
-# history first, and turn the gate on after it, in that order. What fails a run today is the harness itself: a
-# benchmark that stops compiling, or a case that cannot run.
-#
-# And "a GitHub runner" is itself a pool rather than one machine: two attempts of this workflow on one commit
-# with one set of settings landed on an AMD EPYC 9V74 and an Intel Xeon Platinum 8573C, and differed by 1.32
-# times on the insert case and 1.21 times on the row-limit case — hardware only, and larger than the moves this
-# suite exists to notice. A history that mixed the two would report the machine rather than the code, so each
-# result is filed under a directory named for the CPU that produced it: see the slug in the environment step
-# and `benchmark-data-dir-path` below. That does not turn the threshold into a finding; the band above is still
-# one machine's, and the gate still stays off until the per-CPU histories are long enough to read a spread from.
+# Benchmarks run separately from correctness tests because they take longer and measure performance.
+# The 150% alert threshold is a placeholder, and fail-on-alert is disabled. Compilation and execution
+# failures still fail the run. Establish each case's normal variation from repeated CI measurements
+# before selecting a threshold and enabling failures for performance changes.
+# Results are stored by CPU model because ubuntu-latest can assign different hardware to each run.
+# Compare the same case, CPU model and settings, and consider measurement error and host load.
 on:
   # Every night, so the trend exists even in a week nobody touches the hot path. The minute is off the
   # hour because GitHub's scheduler is busiest then.
@@ -189,14 +161,9 @@ jobs:
           # Commenting needs a token that may write to the pull request, which a pull request from a
           # fork does not get. Comparing still happens there; only the comment is skipped.
           comment-on-alert: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
-          # The placeholder the note at the top of this file explains. The measured run-to-run move was 19 to
-          # 24 percent for the I/O bound case and 4 percent for the CPU bound one, with JMH's within-run error
-          # reaching 35 percent of the score, so a threshold that meant anything would have to clear roughly
-          # 50 percent — and this one is not derived from CI history either way.
+          # Placeholder until each case has enough CI history to establish its normal variation.
           alert-threshold: '150%'
-          # Report only, deliberately: a band measured on one machine is not the band a runner will show, so
-          # the gate stays off until there is CI history to measure it from. See the note at the top of this
-          # file for the numbers and for what turning it on would take.
+          # Performance alerts are informational; they do not fail the workflow.
           fail-on-alert: false
 
   # Paper measures wall time and tick gaps on each database. Shared runners make these

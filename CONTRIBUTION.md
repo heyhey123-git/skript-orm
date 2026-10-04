@@ -561,17 +561,13 @@ may affect performance, and on demand. It accepts a fork count (the number of se
 used for each benchmark) and a case filter so a particular result can be investigated. The local task,
 `./gradlew :benchmarks:jmh`, runs the same cases and accepts the same two properties.
 
-Nothing in it fails a run because a number moved. Its alert threshold is a placeholder, not a failure
-condition. Two back-to-back local runs with the workflow's own settings — two forks, two warmup
-iterations, three measurement iterations — measured the same code at 12.447 and 10.049 ms/op for the insert
-case and 11.708 and 11.236 ns/op for the row-limit case. JMH's reported error within a run reached 35
-percent of the measured value. The two runs differed by 19 to 24 percent for the I/O-heavy insert case and
-4 percent for the CPU-heavy row-limit case. That is why the threshold cannot be read off a developer
-machine: a threshold under roughly 50 percent may produce false alerts on that machine, the two cases
-vary by different amounts, and CI
-runs on different hardware. First collect enough nightly results on `gh-pages` to establish each case's
-normal range and threshold. A result outside that threshold can fail a run only after the threshold is
-enabled for that purpose. For now, only a benchmark that fails to compile or run fails the task.
+Performance changes do not currently fail a run. The `150%` alert threshold is a placeholder;
+`fail-on-alert` is disabled. Repeated measurements of the same code can vary with CPU load, database
+activity and the host environment, and each case may have a different amount of variation. Compare
+results from the same CPU model with the same benchmark settings, and consider JMH's reported error
+before attributing a change to the code. Collect enough nightly results on `gh-pages` to establish
+each case's normal range before choosing a threshold and enabling failures for performance changes.
+Benchmark compilation or execution failures still fail the task.
 
 The numbers are kept by `benchmark-action/github-action-benchmark` on a `gh-pages` branch that holds
 nothing but the history, and it is kept per CPU: `ubuntu-latest` is a label over a pool rather than one

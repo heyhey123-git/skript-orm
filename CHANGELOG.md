@@ -59,7 +59,6 @@ type names.
 
 - **Large results are stored more efficiently.** For results above 10 000 values, the
   plugin builds the variable tree off the server thread and attaches it in one step.
-  In a six-column, 5000-row test, server-thread time fell from about 47 ms to 36 ms.
   Smaller results use the existing path. If the running Skript version uses an
   incompatible variable layout, the optimization disables itself and logs a notice.
 
