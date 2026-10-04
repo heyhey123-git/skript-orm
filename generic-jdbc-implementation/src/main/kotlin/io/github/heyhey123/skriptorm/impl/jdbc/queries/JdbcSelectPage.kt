@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcPageParameter
 import io.github.heyhey123.skriptorm.queries.SelectPage
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 import java.sql.JDBCType
 
 open class JdbcSelectPage(
@@ -18,6 +19,7 @@ open class JdbcSelectPage(
 ) : SelectPage(pageSize, pageIndex, where), JdbcQuery {
 
     override suspend fun execute(table: Table): CursorResult {
+        val where = StorageValues.where(table, this.where)
         require(pageSize > 0) { "Page size must be positive." }
         require(pageIndex >= 1) { "Page index must be at least one." }
         val offset = Math.multiplyExact(pageIndex.toLong() - 1L, pageSize.toLong())

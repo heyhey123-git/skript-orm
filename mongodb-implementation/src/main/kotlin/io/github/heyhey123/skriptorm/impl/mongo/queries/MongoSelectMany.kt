@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.result.MongoDataCursor
 import io.github.heyhey123.skriptorm.queries.SelectMany
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 class MongoSelectMany(
     where: WhereClause?,
@@ -15,6 +16,7 @@ class MongoSelectMany(
 ) : SelectMany(where, limit), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
+        val where = StorageValues.where(table, this.where)
         val collection = database.getCollection(table.name)
         val filter = where?.let {
             MongoConditionTranslator.translate(it, table)

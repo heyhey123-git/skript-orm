@@ -1,11 +1,16 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.result
 
+import io.github.heyhey123.skriptorm.impl.jdbc.type.consumeBytes
 import io.github.heyhey123.skriptorm.result.DataCursor
+import io.github.heyhey123.skriptorm.type.ConversionThread
 import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.DeferredDatabaseValue
 import io.github.heyhey123.skriptorm.type.ValueConverter
 import java.sql.Blob
 import java.sql.ResultSet
+import java.sql.SQLFeatureNotSupportedException
 import java.sql.Statement
+import javax.sql.rowset.serial.SerialBlob
 
 /**
  * JDBC cursor that owns its bound parameter resources, its result set, and its statement, and that
@@ -59,6 +64,54 @@ class JdbcDataCursor(
         return converter.fromStorage(storageValue)
     }
 
+    override fun getDetached(column: String, dataType: DataType<*>): Any? =
+        detach(readStorage(column, dataType.converter.storageType), dataType)
+
+    override fun getDetached(index: Int, dataType: DataType<*>): Any? =
+        detach(readStorage(index, dataType.converter.storageType), dataType)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun detach(storage: Any?, type: DataType<*>): Any? {
+        if (resultSet.wasNull() || storage == null) return null
+        val converter = type.converter as ValueConverter<Any, Any>
+        if (converter.readThread == ConversionThread.ANY) return converter.fromStorage(storage)
+        // Consume JDBC-owned bytes while the cursor is open; no driver resource crosses the boundary.
+        val snapshot = when (storage) {
+            is Blob -> storage.consumeBytes { it }
+            is ByteArray -> storage.copyOf()
+            is java.sql.Timestamp -> java.sql.Timestamp(storage.time).also { it.nanos = storage.nanos }
+            is java.sql.Time -> java.sql.Time(storage.time)
+            is java.sql.Date -> java.sql.Date(storage.time)
+            is java.sql.Clob, is java.sql.SQLXML, is java.sql.Array, is java.sql.Ref,
+            is java.io.InputStream, is java.io.Reader -> throw IllegalArgumentException(
+                "Storage type ${converter.storageType.name} cannot be detached from a JDBC cursor. " +
+                    "Use byte-array or Blob storage for a converter that requires the server thread."
+            )
+            else -> storage
+        }
+        return DeferredDatabaseValue(converter.readThread) {
+            if (converter.storageType == Blob::class.java) {
+                val blob = SerialBlob(snapshot as ByteArray)
+                var failure: Throwable? = null
+                try {
+                    converter.fromStorage(blob)
+                } catch (error: Throwable) {
+                    failure = error
+                    throw error
+                } finally {
+                    // Built-in converters already free the blob. SerialBlob.free() is idempotent.
+                    try {
+                        blob.free()
+                    } catch (error: Throwable) {
+                        if (failure != null) failure.addSuppressed(error) else throw error
+                    }
+                }
+            } else {
+                converter.fromStorage(snapshot)
+            }
+        }
+    }
+
     /**
      * Reads one column in the storage class its converter expects.
      *
@@ -73,13 +126,27 @@ class JdbcDataCursor(
      * read is the one call that reports absence rather than a conversion.
      */
     private fun readStorage(column: String, storageType: Class<*>): Any? {
-        if (storageType == Blob::class.java) return resultSet.getBlob(column)
+        if (storageType == Blob::class.java) {
+            return try {
+                resultSet.getBlob(column)
+            } catch (_: SQLFeatureNotSupportedException) {
+                resultSet.getBytes(column)?.let { SerialBlob(it) }
+            }
+        }
+        if (storageType == ByteArray::class.java) return resultSet.getBytes(column)
         if (resultSet.getObject(column) == null) return null
         return resultSet.getObject(column, boxed(storageType))
     }
 
     private fun readStorage(index: Int, storageType: Class<*>): Any? {
-        if (storageType == Blob::class.java) return resultSet.getBlob(index)
+        if (storageType == Blob::class.java) {
+            return try {
+                resultSet.getBlob(index)
+            } catch (_: SQLFeatureNotSupportedException) {
+                resultSet.getBytes(index)?.let { SerialBlob(it) }
+            }
+        }
+        if (storageType == ByteArray::class.java) return resultSet.getBytes(index)
         if (resultSet.getObject(index) == null) return null
         return resultSet.getObject(index, boxed(storageType))
     }

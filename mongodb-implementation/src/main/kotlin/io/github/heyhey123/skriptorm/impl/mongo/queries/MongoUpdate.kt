@@ -11,6 +11,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.type.MongoValues
 import io.github.heyhey123.skriptorm.queries.Update
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 import org.bson.Document
 import org.bson.conversions.Bson
 
@@ -34,7 +35,9 @@ class MongoUpdate(
 ) : Update(values, limit, where), MongoQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val where = StorageValues.where(table, this.where)
         require(values.isNotEmpty()) { "Update values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         val effectiveLimit = limit
         require(effectiveLimit == null || effectiveLimit > 0) { "Update limit must be positive." }
         val collection = database.getCollection(table.name)

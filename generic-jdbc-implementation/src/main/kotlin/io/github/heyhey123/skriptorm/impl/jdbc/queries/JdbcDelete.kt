@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.skriptorm.queries.Delete
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 open class JdbcDelete(
     limit: Int?,
@@ -15,6 +16,7 @@ open class JdbcDelete(
 ) : Delete(limit, where), JdbcQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val where = StorageValues.where(table, this.where)
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
         val sql = dialect.delete(table.name, whereSql, limit)
         return executeUpdate(sql) { statement ->

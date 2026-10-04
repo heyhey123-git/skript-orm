@@ -7,6 +7,8 @@ import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
 import io.github.heyhey123.skriptorm.type.DataType
 import io.github.heyhey123.skriptorm.type.DefaultValueConverter
+import io.github.heyhey123.skriptorm.type.PreparedDatabaseValue
+import io.github.heyhey123.skriptorm.type.StorageValues
 import java.sql.Connection
 import java.sql.Statement
 
@@ -35,17 +37,18 @@ open class JdbcInsertMany(
             requireNotNull(table.getColumnByName(key)) { "Table ${table.name} does not have column $key." }.type
         }
 
+        val preparedRows = StorageValues.rows(table, valuesList)
         val connection = connectionSource.borrow()
         try {
             val multiRowDialect = dialect as? MultiRowInsertDialect
             if (multiRowDialect != null) {
-                return executeMultiRow(table, columns, types, connection, multiRowDialect)
+                return executeMultiRow(table, columns, types, connection, multiRowDialect, preparedRows)
             }
             val sql = dialect.insert(table.name, columns)
             return connection.prepareStatement(sql).use { statement ->
                 statement.withBoundResources {
                     val timeout = configureStatement(statement)
-                    valuesList.forEach { row ->
+                    preparedRows.forEach { row ->
                         columns.forEachIndexed { index, key ->
                             statement.bindValue(index + 1, row[key], types[index])
                         }
@@ -80,7 +83,8 @@ open class JdbcInsertMany(
         columns: List<String>,
         types: List<DataType<*>>,
         connection: Connection,
-        multiRowDialect: MultiRowInsertDialect
+        multiRowDialect: MultiRowInsertDialect,
+        preparedRows: List<Map<String, Any?>>
     ): WriteResult {
         val packetLimit = connection.prepareStatement("SELECT @@max_allowed_packet").use { statement ->
             val timeout = configureStatement(statement)
@@ -113,7 +117,7 @@ open class JdbcInsertMany(
                 statement.withBoundResources {
                     val timeout = configureStatement(statement)
                     repeat(rowCount) { rowOffset ->
-                        val row = valuesList[start + rowOffset]
+                        val row = preparedRows[start + rowOffset]
                         columns.forEachIndexed { columnIndex, key ->
                             statement.bindValue(rowOffset * columns.size + columnIndex + 1, row[key], types[columnIndex])
                         }
@@ -135,7 +139,8 @@ open class JdbcInsertMany(
     ): Long? {
         var bytes = 16L + columns.size * 16L
         columns.forEachIndexed { index, column ->
-            val value = row[column]
+            val rawValue = row[column]
+            val value = (rawValue as? PreparedDatabaseValue)?.jdbcValue() ?: rawValue
             // NULL is bound without conversion, even for a custom storage type.
             if (value != null && !directlyStored[index]) return null
             bytes += when (value) {

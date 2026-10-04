@@ -14,6 +14,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.type.StringJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.TinyIntJdbcDataType
 import io.github.heyhey123.skriptorm.impl.jdbc.type.UuidJdbcDataType
 import io.github.heyhey123.skriptorm.type.ConfigurationSerializableDataType
+import io.github.heyhey123.skriptorm.type.ConversionThread
 import io.github.heyhey123.skriptorm.type.DataType
 import io.github.heyhey123.skriptorm.type.DataTypes
 import io.github.heyhey123.skriptorm.type.ItemStackDataType
@@ -65,6 +66,9 @@ private object PgTinyIntConverter : ValueConverter<Byte, Short>(
     Byte::class.javaObjectType,
     Short::class.javaObjectType
 ) {
+
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: Byte): Short = value.toShort()
     override fun fromStorage(value: Short): Byte = value.toByte()

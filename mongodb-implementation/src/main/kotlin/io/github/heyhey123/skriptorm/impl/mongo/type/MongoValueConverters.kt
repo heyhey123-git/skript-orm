@@ -1,5 +1,6 @@
 package io.github.heyhey123.skriptorm.impl.mongo.type
 
+import io.github.heyhey123.skriptorm.type.ConversionThread
 import io.github.heyhey123.skriptorm.type.SkriptDate
 import io.github.heyhey123.skriptorm.type.SkriptTime
 import io.github.heyhey123.skriptorm.type.SkriptTimespan
@@ -18,6 +19,8 @@ object TinyIntMongoValueConverter : ValueConverter<Byte, Int>(
     Byte::class.javaObjectType,
     Int::class.javaObjectType
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: Byte): Int = value.toInt()
 
@@ -28,6 +31,8 @@ object FloatMongoValueConverter : ValueConverter<Float, Double>(
     Float::class.javaObjectType,
     Double::class.javaObjectType
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: Float): Double = value.toDouble()
 
@@ -38,6 +43,8 @@ object UuidMongoConverter : ValueConverter<UUID, Binary>(
     UUID::class.java,
     Binary::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: UUID): Binary {
         val bytes = ByteArray(16)
@@ -127,6 +134,8 @@ object SkriptDateMongoConverter : ValueConverter<SkriptDate, Long>(
     SkriptDate::class.java,
     Long::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptDate): Long = value.time
 
@@ -137,6 +146,8 @@ object SkriptTimeMongoConverter : ValueConverter<SkriptTime, Int>(
     SkriptTime::class.java,
     Int::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptTime): Int = value.ticks
 
@@ -147,6 +158,8 @@ object SkriptTimespanMongoConverter : ValueConverter<SkriptTimespan, Long>(
     SkriptTimespan::class.java,
     Long::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptTimespan): Long = value.duration.toMillis()
 

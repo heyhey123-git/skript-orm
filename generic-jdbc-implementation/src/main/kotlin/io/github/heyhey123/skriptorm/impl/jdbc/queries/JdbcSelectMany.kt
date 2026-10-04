@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.skriptorm.queries.SelectMany
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 open class JdbcSelectMany(
     where: WhereClause?,
@@ -15,6 +16,7 @@ open class JdbcSelectMany(
 ) : SelectMany(where, limit), JdbcQuery {
 
     override suspend fun execute(table: Table): CursorResult {
+        val where = StorageValues.where(table, this.where)
         val whereSql = where?.let { JdbcConditionTranslator.translate(it, dialect) }
         return executeCursor(dialect.select(table.name, whereSql, limit)) { statement ->
             bindWhere(table, where, statement)

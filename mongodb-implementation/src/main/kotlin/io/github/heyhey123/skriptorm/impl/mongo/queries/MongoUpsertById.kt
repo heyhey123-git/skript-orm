@@ -9,6 +9,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.type.MongoValues
 import io.github.heyhey123.skriptorm.queries.UpsertById
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 /**
  * Writes the given values to the document with the given identifier, creating it when there is none.
@@ -24,7 +25,9 @@ class MongoUpsertById(
 ) : UpsertById(id, values), MongoQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val id = requireNotNull(StorageValues.prepare(MongoPrimaryKey.of(table).type, this.id))
         require(values.isNotEmpty()) { "Upsert values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         val primaryKey = MongoPrimaryKey.of(table)
         require(primaryKey.name !in values) { "The primary key must not be included in upsert values." }
         // Before the write, not after: an upsert can create the row this key names, and a crash between the

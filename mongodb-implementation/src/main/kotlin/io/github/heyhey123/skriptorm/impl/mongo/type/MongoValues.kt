@@ -1,6 +1,7 @@
 package io.github.heyhey123.skriptorm.impl.mongo.type
 
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.PreparedDatabaseValue
 import io.github.heyhey123.skriptorm.type.ValueConverter
 import org.bson.Document
 
@@ -27,6 +28,10 @@ internal object MongoValues {
     fun storage(table: Table, columnName: String, value: Any?): Any? {
         if (value == null) return null
         val type = column(table, columnName).type
+        if (value is PreparedDatabaseValue) {
+            require(value.type === type) { "A prepared value belongs to a different data type." }
+            return value.storageValue()
+        }
         require(type.domainType.isInstance(value)) {
             "Value for type ${type.typeCode} must be ${type.domainType.name}, but was ${value.javaClass.name}."
         }

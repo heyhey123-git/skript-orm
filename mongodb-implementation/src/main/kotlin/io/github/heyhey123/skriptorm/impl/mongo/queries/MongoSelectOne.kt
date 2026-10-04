@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.result.MongoDataCursor
 import io.github.heyhey123.skriptorm.queries.SelectOne
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 class MongoSelectOne(
     where: WhereClause?,
@@ -14,6 +15,7 @@ class MongoSelectOne(
 ) : SelectOne(where), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
+        val where = StorageValues.where(table, this.where)
         val collection = database.getCollection(table.name)
         val filter = where?.let {
             MongoConditionTranslator.translate(it, table)

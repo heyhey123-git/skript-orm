@@ -4,6 +4,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.skriptorm.queries.InsertIfAbsent
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 import java.sql.SQLException
 
 /**
@@ -23,6 +24,7 @@ open class JdbcInsertIfAbsent(
 
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Insert values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         val columns = values.keys.toList()
         val sql = dialect.insertIfAbsent(table.name, columns)
         return try {

@@ -12,6 +12,10 @@ class DefaultValueConverter<T : Any>(type: Class<T>) : ValueConverter<T, T>(
     type
 ) {
 
+    // Identity conversion never invokes an object method or touches server state.
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
+
     override fun toStorage(value: T): T = value
 
     override fun fromStorage(value: T): T = value

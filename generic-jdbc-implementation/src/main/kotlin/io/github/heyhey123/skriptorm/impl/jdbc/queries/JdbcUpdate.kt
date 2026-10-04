@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.skriptorm.queries.Update
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 open class JdbcUpdate(
     values: Map<String, Any?>,
@@ -16,7 +17,9 @@ open class JdbcUpdate(
 ) : Update(values, limit, where), JdbcQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val where = StorageValues.where(table, this.where)
         require(values.isNotEmpty()) { "Update values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         // The SET list is exactly the supplied keys, so the map has to stay sparse: an absent key
         // means the column is not updated and keeps its stored value. A key that is present and holds
         // null is a different thing entirely and is bound as SQL NULL. Callers must not pad the map

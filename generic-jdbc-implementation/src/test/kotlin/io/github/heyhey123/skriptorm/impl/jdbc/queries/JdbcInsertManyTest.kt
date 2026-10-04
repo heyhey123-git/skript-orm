@@ -9,6 +9,8 @@ import io.github.heyhey123.skriptorm.impl.jdbc.type.UuidJdbcDataType
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.ConversionWork
+import io.github.heyhey123.skriptorm.type.ValueConverter
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
@@ -26,6 +28,52 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 
 class JdbcInsertManyTest {
+
+    @Test
+    fun `server conversions finish in one batch before borrowing connection`() = runBlocking {
+        var converted = 0
+        var submissions = 0
+        val customType = object : io.github.heyhey123.skriptorm.impl.jdbc.type.JdbcDataType<String> {
+            override val domainType = String::class.java
+            override val typeCode = "custom"
+            override val jdbcType = JDBCType.VARCHAR
+            override val storageName = "VARCHAR"
+            override val converter = object : ValueConverter<String, String>(domainType, domainType) {
+                override fun toStorage(value: String): String {
+                    converted++
+                    return "stored:$value"
+                }
+                override fun fromStorage(value: String): String = value
+            }
+        }
+        val customTable = Table("items", listOf(Column("value", customType)))
+        val statement = mockk<PreparedStatement>(relaxed = true)
+        val connection = mockk<Connection>(relaxed = true)
+        val source = mockk<JdbcConnectionSource>(relaxed = true)
+        every { source.borrow() } answers {
+            assertEquals(2, converted)
+            connection
+        }
+        every { connection.prepareStatement(any()) } returns statement
+        every { statement.executeLargeBatch() } returns longArrayOf(1, 1)
+        ConversionWork.install(object : ConversionWork.Executor {
+            override suspend fun <T> executeBatch(actions: List<() -> T>): List<T> {
+                submissions++
+                assertEquals(2, actions.size)
+                return actions.map { it() }
+            }
+        })
+        try {
+            JdbcInsertMany(listOf(mapOf("value" to "a"), mapOf("value" to "b")), source, GenericJdbcDialect)
+                .execute(customTable)
+            assertEquals(1, submissions)
+            assertEquals(2, converted)
+            verify { statement.setObject(1, "stored:a", JDBCType.VARCHAR.vendorTypeNumber) }
+            verify { statement.setObject(1, "stored:b", JDBCType.VARCHAR.vendorTypeNumber) }
+        } finally {
+            ConversionWork.install(null)
+        }
+    }
 
     private val table = Table(
         "items",

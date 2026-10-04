@@ -9,6 +9,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.condition.MongoConditionTranslat
 import io.github.heyhey123.skriptorm.queries.Delete
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 import org.bson.Document
 import org.bson.conversions.Bson
 
@@ -27,6 +28,7 @@ class MongoDelete(
 ) : Delete(limit, where), MongoQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val where = StorageValues.where(table, this.where)
         val effectiveLimit = limit
         require(effectiveLimit == null || effectiveLimit > 0) { "Delete limit must be positive." }
         val collection = database.getCollection(table.name)

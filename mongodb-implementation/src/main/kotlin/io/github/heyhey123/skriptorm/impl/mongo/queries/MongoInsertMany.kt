@@ -6,6 +6,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.type.MongoValues
 import io.github.heyhey123.skriptorm.queries.InsertMany
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 /**
  * A batch insert. An empty batch succeeds with a count of zero; every other batch reports how many
@@ -22,10 +23,10 @@ class MongoInsertMany(
 
     override suspend fun execute(table: Table): WriteResult {
         if (valuesList.isEmpty()) return WriteResult(0)
-        val documents = valuesList.map { row ->
-            require(row.isNotEmpty()) { "Insert values cannot be empty." }
-            MongoValues.storageDocument(table, MongoSequences.withKey(database, table, row))
-        }
+        valuesList.forEach { require(it.isNotEmpty()) { "Insert values cannot be empty." } }
+        val preparedRows = StorageValues.rows(table, valuesList)
+        val keyedRows = preparedRows.map { MongoSequences.withKey(database, table, it) }
+        val documents = StorageValues.rows(table, keyedRows).map { MongoValues.storageDocument(table, it) }
         val result = database.getCollection(table.name).insertMany(documents)
         return WriteResult(result.insertedIds.size.toLong())
     }

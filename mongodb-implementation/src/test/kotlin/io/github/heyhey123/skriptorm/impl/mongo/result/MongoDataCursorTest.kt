@@ -1,12 +1,18 @@
 package io.github.heyhey123.skriptorm.impl.mongo.result
 
 import io.github.heyhey123.skriptorm.impl.mongo.type.TinyIntMongoDataType
+import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.DeferredDatabaseValue
 import io.github.heyhey123.skriptorm.type.IntDataType
 import io.github.heyhey123.skriptorm.type.StringDataType
+import io.github.heyhey123.skriptorm.type.ValueConverter
 import org.bson.Document
+import org.bson.types.Binary
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -19,6 +25,31 @@ import kotlin.test.assertTrue
  * insert happened to write them in, not the order the table declares its columns.
  */
 class MongoDataCursorTest {
+
+    @Test
+    fun `detached custom conversion owns a binary snapshot and runs after close`() {
+        var converted = false
+        val bytes = byteArrayOf(1, 2, 3)
+        val type = object : DataType<ByteArray> {
+            override val domainType = ByteArray::class.java
+            override val typeCode = "binary"
+            override val converter = object : ValueConverter<ByteArray, Binary>(domainType, Binary::class.java) {
+                override fun toStorage(value: ByteArray): Binary = Binary(value)
+                override fun fromStorage(value: Binary): ByteArray {
+                    converted = true
+                    return value.data
+                }
+            }
+        }
+        val cursor = MongoDataCursor(listOf(Document("data", Binary(bytes))), listOf("data"))
+        assertTrue(cursor.next())
+        val detached = assertIs<DeferredDatabaseValue>(cursor.getDetached(1, type))
+        assertFalse(converted)
+        bytes[0] = 99
+        cursor.close()
+        assertContentEquals(byteArrayOf(1, 2, 3), detached.resolve() as ByteArray)
+        assertTrue(converted)
+    }
 
     @Test
     fun `a cursor walks every document once and then stops`() {

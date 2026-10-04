@@ -2,21 +2,76 @@ package io.github.heyhey123.skriptorm.impl.jdbc.result
 
 import io.github.heyhey123.skriptorm.impl.jdbc.type.IntJdbcDataType
 import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.DeferredDatabaseValue
 import io.github.heyhey123.skriptorm.type.ValueConverter
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
+import java.io.ByteArrayInputStream
 import java.sql.Blob
 import java.sql.Connection
 import java.sql.ResultSet
+import java.sql.SQLFeatureNotSupportedException
 import java.sql.Statement
 import kotlin.test.Test
+import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class JdbcDataCursorTest {
+
+    @Test
+    fun `detached blob can use bytes on a driver without blob accessors`() {
+        val resultSet = mockk<ResultSet>(relaxed = true)
+        every { resultSet.getBlob("payload") } throws SQLFeatureNotSupportedException()
+        every { resultSet.getBytes("payload") } returns byteArrayOf(7, 8)
+        every { resultSet.wasNull() } returns false
+        val type = object : DataType<String> {
+            override val domainType = String::class.java
+            override val typeCode = "custom-blob"
+            override val converter = object : ValueConverter<String, Blob>(domainType, Blob::class.java) {
+                override fun toStorage(value: String): Blob = error("Unused")
+                override fun fromStorage(value: Blob): String = value.binaryStream.use { it.readBytes().joinToString() }
+            }
+        }
+        val cursor = cursor(resultSet = resultSet)
+        val value = assertIs<DeferredDatabaseValue>(cursor.getDetached("payload", type))
+        cursor.close()
+        assertEquals("7, 8", value.resolve())
+    }
+
+    @Test
+    fun `detached blob is released before cursor close and converted afterwards`() {
+        val events = mutableListOf<String>()
+        val resultSet = mockk<ResultSet>(relaxed = true)
+        val statement = mockk<Statement>(relaxed = true)
+        val blob = mockk<Blob>()
+        every { resultSet.getBlob("payload") } returns blob
+        every { resultSet.wasNull() } returns false
+        every { blob.binaryStream } returns ByteArrayInputStream(byteArrayOf(4, 5, 6))
+        every { blob.free() } answers { events += "free" }
+        val type = object : DataType<ByteArray> {
+            override val domainType = ByteArray::class.java
+            override val typeCode = "custom-blob"
+            override val converter = object : ValueConverter<ByteArray, Blob>(domainType, Blob::class.java) {
+                override fun toStorage(value: ByteArray): Blob = error("Unused")
+                override fun fromStorage(value: Blob): ByteArray {
+                    events += "convert"
+                    return value.binaryStream.use { it.readBytes() }
+                }
+            }
+        }
+        val cursor = JdbcDataCursor(resultSet, statement, { events += "release" })
+        val detached = assertIs<DeferredDatabaseValue>(cursor.getDetached("payload", type))
+        assertEquals(listOf("free"), events)
+        cursor.close()
+        assertContentEquals(byteArrayOf(4, 5, 6), detached.resolve() as ByteArray)
+        assertEquals(listOf("free", "release", "convert"), events)
+        verify(exactly = 1) { blob.free() }
+    }
 
     @Test
     fun `next delegates to result set`() {

@@ -1,5 +1,6 @@
 package io.github.heyhey123.skriptorm.impl.jdbc.type
 
+import io.github.heyhey123.skriptorm.type.ConversionThread
 import io.github.heyhey123.skriptorm.type.SkriptDate
 import io.github.heyhey123.skriptorm.type.SkriptTime
 import io.github.heyhey123.skriptorm.type.SkriptTimespan
@@ -20,7 +21,7 @@ import javax.sql.rowset.serial.SerialBlob
  * Reads all bytes from this BLOB, applies [operation], and always frees the BLOB.
  * A free failure is suppressed onto an earlier failure or thrown when it is the only failure.
  */
-private inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
+internal inline fun <T> Blob.consumeBytes(operation: (ByteArray) -> T): T {
     var failure: Throwable? = null
     try {
         return binaryStream.use { operation(it.readBytes()) }
@@ -41,6 +42,8 @@ object UuidJdbcConverter : ValueConverter<UUID, ByteArray>(
     UUID::class.java,
     ByteArray::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: UUID): ByteArray {
         val bytes = ByteArray(16)
@@ -143,6 +146,8 @@ object SkriptDateJdbcConverter : ValueConverter<SkriptDate, Date>(
     SkriptDate::class.java,
     Date::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptDate): Date = Date(value.time)
     override fun fromStorage(value: Date): SkriptDate = SkriptDate(value.time)
@@ -153,6 +158,8 @@ object SkriptTimeJdbcConverter : ValueConverter<SkriptTime, Int>(
     SkriptTime::class.java,
     Integer.TYPE
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptTime): Int = value.ticks
     override fun fromStorage(value: Int): SkriptTime = SkriptTime(value)
@@ -163,6 +170,8 @@ object SkriptTimespanJdbcConverter : ValueConverter<SkriptTimespan, Long>(
     SkriptTimespan::class.java,
     Long::class.java
 ) {
+    override val writeThread: ConversionThread get() = ConversionThread.ANY
+    override val readThread: ConversionThread get() = ConversionThread.ANY
 
     override fun toStorage(value: SkriptTimespan): Long = value.duration.toMillis()
     override fun fromStorage(value: Long): SkriptTimespan = SkriptTimespan(value)

@@ -9,6 +9,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.result.MongoDataCursor
 import io.github.heyhey123.skriptorm.queries.SelectPage
 import io.github.heyhey123.skriptorm.result.CursorResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 /**
  * One page of a collection, ordered by its primary key.
@@ -30,6 +31,7 @@ class MongoSelectPage(
 ) : SelectPage(pageSize, pageIndex, where), MongoQuery {
 
     override suspend fun execute(table: Table): CursorResult {
+        val where = StorageValues.where(table, this.where)
         val collection = database.getCollection(table.name)
         val primaryKey = requireNotNull(table.primaryKey) {
             "Stable pagination requires table ${table.name} to define a primary key."

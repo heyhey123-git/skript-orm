@@ -2,6 +2,7 @@ package io.github.heyhey123.skriptorm.impl.jdbc.queries
 
 import io.github.heyhey123.skriptorm.impl.jdbc.type.JdbcDataType
 import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.PreparedDatabaseValue
 import io.github.heyhey123.skriptorm.type.ValueConverter
 import java.sql.Blob
 import java.sql.PreparedStatement
@@ -22,12 +23,17 @@ internal fun PreparedStatement.bindValue(index: Int, value: Any?, type: DataType
         setNull(index, jdbcType.jdbcType.vendorTypeNumber)
         return
     }
-    require(type.domainType.isInstance(value)) {
-        "Value for type ${type.typeCode} must be ${type.domainType.name}, but was ${value.javaClass.name}."
+    val storageValue = if (value is PreparedDatabaseValue) {
+        require(value.type === type) { "A prepared value belongs to a different data type." }
+        value.jdbcValue()
+    } else {
+        require(type.domainType.isInstance(value)) {
+            "Value for type ${type.typeCode} must be ${type.domainType.name}, but was ${value.javaClass.name}."
+        }
+        @Suppress("UNCHECKED_CAST")
+        val converter = type.converter as ValueConverter<Any, Any>
+        converter.toStorage(value)
     }
-    @Suppress("UNCHECKED_CAST")
-    val converter = type.converter as ValueConverter<Any, Any>
-    val storageValue = converter.toStorage(value)
     try {
         // The `int` target type, not the `SQLType` one added in JDBC 4.2: both are the same call on
         // most drivers, but SQLite's implements only this one, and a plugin cannot choose its server's

@@ -13,6 +13,12 @@ abstract class ValueConverter<D : Any, S : Any>(
     val storageType: Class<S>
 ) {
 
+    /** Where extraction and encoding may run. Unknown converters default to the server thread. */
+    open val writeThread: ConversionThread get() = ConversionThread.SERVER
+
+    /** Where decoded domain objects may be constructed. Driver resources are detached beforehand. */
+    open val readThread: ConversionThread get() = ConversionThread.SERVER
+
     /**
      * Converts a value from the domain type to the storage type.
      *

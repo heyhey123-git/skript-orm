@@ -7,6 +7,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.type.MongoValues
 import io.github.heyhey123.skriptorm.queries.UpdateById
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 /**
  * Updates the document whose primary key is the given identifier.
@@ -20,7 +21,9 @@ class MongoUpdateById(
 ) : UpdateById(id, values), MongoQuery {
 
     override suspend fun execute(table: Table): WriteResult {
+        val id = requireNotNull(StorageValues.prepare(MongoPrimaryKey.of(table).type, this.id))
         require(values.isNotEmpty()) { "Update values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         val primaryKey = MongoPrimaryKey.of(table)
         require(primaryKey.name !in values) { "The primary key must not be included in update values." }
         val update = Updates.combine(

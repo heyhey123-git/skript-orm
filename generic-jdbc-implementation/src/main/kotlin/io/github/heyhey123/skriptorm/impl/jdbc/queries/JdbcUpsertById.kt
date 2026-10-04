@@ -4,6 +4,7 @@ import io.github.heyhey123.skriptorm.impl.jdbc.database.JdbcDialect
 import io.github.heyhey123.skriptorm.queries.UpsertById
 import io.github.heyhey123.skriptorm.result.WriteResult
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 open class JdbcUpsertById(
     id: Any,
@@ -14,7 +15,9 @@ open class JdbcUpsertById(
 
     override suspend fun execute(table: Table): WriteResult {
         require(values.isNotEmpty()) { "Upsert values cannot be empty." }
+        val values = StorageValues.rows(table, listOf(this.values)).single()
         val primaryKey = requireNotNull(table.primaryKey) { "Table ${table.name} does not have a primary key." }
+        val id = StorageValues.prepare(primaryKey.type, this.id)
         require(primaryKey.name !in values) { "The primary key must not be included in upsert values." }
         val columns = values.keys.toList()
         val sql = dialect.upsertById(table.name, primaryKey.name, columns)

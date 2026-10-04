@@ -11,6 +11,7 @@ import io.github.heyhey123.skriptorm.impl.mongo.DOCUMENT_ID
 import io.github.heyhey123.skriptorm.impl.mongo.type.MongoValues
 import io.github.heyhey123.skriptorm.table.Column
 import io.github.heyhey123.skriptorm.table.Table
+import io.github.heyhey123.skriptorm.type.StorageValues
 
 /**
  * Auto-increment for a backend that has no identity column.
@@ -144,7 +145,8 @@ internal object MongoSequences {
     }
 
     private suspend fun raise(database: MongoDatabase, table: Table, column: Column<*>, id: Any) {
-        val stored = MongoValues.storage(table, column.name, id) as? Number ?: return
+        val prepared = StorageValues.prepare(column.type, id)
+        val stored = MongoValues.storage(table, column.name, prepared) as? Number ?: return
         raiseTo(database, table, column, stored.toLong())
     }
 

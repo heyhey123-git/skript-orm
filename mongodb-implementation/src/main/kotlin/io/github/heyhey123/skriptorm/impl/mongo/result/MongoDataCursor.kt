@@ -1,9 +1,12 @@
 package io.github.heyhey123.skriptorm.impl.mongo.result
 
 import io.github.heyhey123.skriptorm.result.DataCursor
+import io.github.heyhey123.skriptorm.type.ConversionThread
 import io.github.heyhey123.skriptorm.type.DataType
+import io.github.heyhey123.skriptorm.type.DeferredDatabaseValue
 import io.github.heyhey123.skriptorm.type.ValueConverter
 import org.bson.Document
+import org.bson.types.Binary
 
 /**
  * Cursor over the documents a select already read.
@@ -35,6 +38,26 @@ class MongoDataCursor(
     private fun <T : Any> convert(storageValue: Any?, dataType: DataType<T>): T? {
         if (storageValue == null) return null
         return (dataType.converter as ValueConverter<T, Any>).fromStorage(storageValue)
+    }
+
+    override fun getDetached(column: String, dataType: DataType<*>): Any? =
+        detach(result[currentIndex][column], dataType)
+
+    override fun getDetached(index: Int, dataType: DataType<*>): Any? =
+        detach(result[currentIndex][columns[index - 1]], dataType)
+
+    @Suppress("UNCHECKED_CAST")
+    private fun detach(storage: Any?, type: DataType<*>): Any? {
+        if (storage == null) return null
+        val converter = type.converter as ValueConverter<Any, Any>
+        if (converter.readThread == ConversionThread.ANY) return converter.fromStorage(storage)
+        val snapshot = when (storage) {
+            is Binary -> Binary(storage.type, storage.data.copyOf())
+            is ByteArray -> storage.copyOf()
+            is java.util.Date -> java.util.Date(storage.time)
+            else -> storage
+        }
+        return DeferredDatabaseValue(converter.readThread) { converter.fromStorage(snapshot) }
     }
 
     override fun close() {}
