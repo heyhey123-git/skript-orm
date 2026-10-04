@@ -9,6 +9,23 @@ when releasing, rename that section to the version and date, then add a new `Unr
 
 ## [Unreleased]
 
+## [1.4.2] - 2026-10-04
+
+- **Less work on the server thread.** Read bulk-write input and store query results in the
+  background when the local variables belong exclusively to the paused script. Shared and
+  global variables keep their existing safeguards. Scripts resume with their local context intact.
+- **Spread server API conversions across ticks.** Converters declare whether they need the
+  server thread. Item and location conversions share a queue with a target budget of 2 ms per
+  tick. A single conversion can exceed that budget; publishing global results can still delay a tick.
+- **Safer database value handling.** Copy binary values and release database resources before
+  deferred conversion. Fix SQLite binary reads and writes, and preserve unrelated local variables
+  when replacing query results.
+- **Benchmarks that show where time goes.** Add local/global variable comparisons and item
+  and location cases, with warmups and repeated measurements. Replace the published scores
+  with the latest five-database results and distinguish total waiting time from server-thread work.
+
+**Full Changelog**: https://github.com/heyhey123-git/skript-orm/compare/v1.4.1...v1.4.2
+
 ## [1.4.1] - 2026-10-03
 
 Includes the 1.4.0 changes, which were not published on skUnity or MineBBS.
