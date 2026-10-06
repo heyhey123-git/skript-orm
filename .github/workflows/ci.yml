@@ -47,7 +47,7 @@ jobs:
         uses: ./.github/actions/annotate-test-failures
 
       - name: Check formatting
-        run: ./gradlew ktlintCheck --stacktrace
+        run: ./gradlew ktlintCheck :build-logic:check --stacktrace
 
   # Use the runner's installed MySQL for JDBC tests. MariaDB tests start their own container
   # because the runner does not provide a MariaDB server.
@@ -304,7 +304,7 @@ jobs:
           if-no-files-found: ignore
 
   # Check element registration and script parsing on a disposable Paper server without an external
-  # database. The server setup and EULA acceptance are defined in build.gradle.kts.
+  # database. Server setup and EULA acceptance are defined in the server-tests convention plugin.
   skript-server:
     name: Tests on a real Paper server
     runs-on: ubuntu-latest
