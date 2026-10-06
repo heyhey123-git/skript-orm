@@ -1,9 +1,9 @@
+plugins { id("skript-orm.module") }
+
 // Performance work lives here rather than in a test, because a benchmark is not an assertion: it
 // measures, it prints, and a red run only means the machine was busy.
 //
-// `java`, `org.jetbrains.kotlin.jvm` and ktlint are applied to every subproject by the root build, and
-// nothing here is added to `bundledModules`, so this module is never shaded into the plugin jar and
-// never published.
+// The module convention configures the JVM and formatting; this module is never bundled.
 //
 // The Gradle plugins that wrap JMH — `me.champeau.jmh` and JetBrains' kotlinx-benchmark — do not
 // support this build's Gradle 9 yet, so JMH is wired by hand: the annotation processor generates the
@@ -36,7 +36,7 @@ dependencies {
     runtimeOnly(libs.paper.api)
     runtimeOnly(libs.skript)
 
-    // The root build gives every module Kotlin's standard library and coroutines as `compileOnly`,
+    // The module convention adds Kotlin's standard library and coroutines as `compileOnly`,
     // because in a released jar they are shaded in and relocated; the `implementation` pair belongs to
     // the root project that builds that jar. This module is never shaded, so the benchmark JVM has to
     // bring its own: without these the first Kotlin class touched dies with

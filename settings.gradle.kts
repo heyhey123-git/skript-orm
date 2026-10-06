@@ -18,3 +18,4 @@ include("core")
 include("postgresql-implementation")
 // Keep benchmarks as a separate module. It is excluded from the bundled and published artifacts.
 include("benchmarks")
+includeBuild("build-logic")

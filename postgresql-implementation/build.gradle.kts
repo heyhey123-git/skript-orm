@@ -1,6 +1,4 @@
-plugins {
-    kotlin("jvm")
-}
+plugins { id("skript-orm.module") }
 
 // Declared before the dependency blocks: creating the source set also creates the
 // integrationTestImplementation and integrationTestRuntimeOnly configurations they rely on.
@@ -91,7 +89,4 @@ val integrationTest by tasks.registering(Test::class) {
 
 tasks.test {
     useJUnitPlatform()
-}
-kotlin {
-    jvmToolchain(25)
 }

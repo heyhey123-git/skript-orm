@@ -1,6 +1,4 @@
-plugins {
-    kotlin("jvm")
-}
+plugins { id("skript-orm.module") }
 
 // Declared before the dependency blocks: creating the source set also creates the
 // integrationTestImplementation and integrationTestRuntimeOnly configurations they rely on.
@@ -42,16 +40,11 @@ tasks.test {
     useJUnitPlatform()
 }
 
-// plugin.yml is a template. Bukkit reports the version in the "Enabling skript-orm v..." line and to
-// `/version`, and Paper downloads the drivers the `libraries` entry names; expanding both from the values
-// the build already resolved keeps them from drifting away from what was built and tested.
-//
-// The driver list comes from the root project, which is what decides which implementation modules the jar
-// carries. Its value is the YAML of the entry: a flow sequence when there is no driver to name, and one
-// block entry per driver otherwise.
-val driverLibraries: String = requireNotNull(project.findProperty("skriptOrmDriverLibraries") as? String) {
-    "The root build did not pass the driver list that plugin.yml is expanded with."
-}
+// Metadata uses the same bundle selection and catalog as the shaded jar.
+val driverLibraries = buildlogic.driverLibraries(
+    buildlogic.selectedModules(project),
+    extensions.getByType<VersionCatalogsExtension>().named("libs")
+)
 
 tasks.processResources {
     // Both expansions are declared as inputs, because neither is: Gradle does not track the values of
@@ -70,8 +63,4 @@ tasks.processResources {
             )
         )
     }
-}
-
-kotlin {
-    jvmToolchain(25)
 }
