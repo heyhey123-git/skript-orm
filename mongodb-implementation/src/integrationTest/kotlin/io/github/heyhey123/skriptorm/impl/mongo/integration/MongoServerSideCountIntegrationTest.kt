@@ -34,7 +34,7 @@ class MongoServerSideCountIntegrationTest : MongoIntegrationTestBase() {
     @Test
     fun `the server holds the rows one insert many produced`() = runBlocking<Unit> {
         recreateTable()
-        // The reference size: 5000 rows, the size the SQL cases and baseline.json record.
+        // Use the same 5000-row batch size as the SQL tests and insert benchmark.
         val rows = 5000
         val values = (1..rows).map { userValues(name = "user-$it", age = it) }
 

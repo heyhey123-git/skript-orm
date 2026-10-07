@@ -60,6 +60,9 @@ bin/
 .DS_Store
 
 ### Local working files ###
+# Local benchmark snapshots are not the published CI results.
+benchmarks/baseline*.json
+benchmarks/baseline*.environment.txt
 # Not repository content, and not meant to travel: the images are what gets uploaded, so the script
 # that renders them is only a copy that can disagree with them; the skill is what the agent reads from
 # this machine; the forum pages are pasted into skUnity and MINEBBS rather than published from here.
