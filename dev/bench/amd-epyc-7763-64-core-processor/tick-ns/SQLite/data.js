@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1791282250444,
+  "lastUpdate": 1791542381761,
   "repoUrl": "https://github.com/heyhey123-git/skript-orm",
   "entries": {
     "Benchmark": [
@@ -5539,6 +5539,2338 @@ window.BENCHMARK_DATA = {
           {
             "name": "read objects local local true 1000 largestConversionNs median",
             "value": 274135,
+            "unit": "ns"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "name": "heyhey123-git",
+            "username": "heyhey123-git",
+            "email": "156066831+heyhey123-git@users.noreply.github.com"
+          },
+          "committer": {
+            "name": "heyhey123-git",
+            "username": "heyhey123-git",
+            "email": "156066831+heyhey123-git@users.noreply.github.com"
+          },
+          "id": "df4fc19097f0ec98c18da565e2e0412527b71f49",
+          "message": "chore(benchmarks): remove obsolete local baseline files",
+          "timestamp": "2026-10-07T08:12:11Z",
+          "url": "https://github.com/heyhey123-git/skript-orm/commit/df4fc19097f0ec98c18da565e2e0412527b71f49"
+        },
+        "date": 1791542381367,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "pluginread 5000rows wall",
+            "value": 85639856,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginread 5000rows gap",
+            "value": 85929306,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginread 5000rows overrun",
+            "value": 35929306,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows wall",
+            "value": 800076856,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows gap",
+            "value": 50553655,
+            "unit": "ns"
+          },
+          {
+            "name": "pluginwrite 5000rows overrun",
+            "value": 553655,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows wall",
+            "value": 104812031,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows gap",
+            "value": 105087614,
+            "unit": "ns"
+          },
+          {
+            "name": "rawread 5000rows overrun",
+            "value": 55087614,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows wall",
+            "value": 40988735,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows gap",
+            "value": 49715421,
+            "unit": "ns"
+          },
+          {
+            "name": "rawwrite 5000rows overrun",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows wall",
+            "value": 53771479,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows gap",
+            "value": 54741377,
+            "unit": "ns"
+          },
+          {
+            "name": "read 100rows overrun",
+            "value": 4741377,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows wall",
+            "value": 61194330,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows gap",
+            "value": 62130597,
+            "unit": "ns"
+          },
+          {
+            "name": "read 500rows overrun",
+            "value": 12130597,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows wall",
+            "value": 63330261,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows gap",
+            "value": 64182451,
+            "unit": "ns"
+          },
+          {
+            "name": "read 1000rows overrun",
+            "value": 14182451,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows wall",
+            "value": 83658443,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows gap",
+            "value": 84421747,
+            "unit": "ns"
+          },
+          {
+            "name": "read 2500rows overrun",
+            "value": 34421747,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows wall",
+            "value": 117745741,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows gap",
+            "value": 118323068,
+            "unit": "ns"
+          },
+          {
+            "name": "read 5000rows overrun",
+            "value": 68323068,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows wall",
+            "value": 61436261,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows gap",
+            "value": 61983773,
+            "unit": "ns"
+          },
+          {
+            "name": "read 10000rows overrun",
+            "value": 11983773,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows wall",
+            "value": 84344630,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows gap",
+            "value": 85008809,
+            "unit": "ns"
+          },
+          {
+            "name": "warmread 5000rows overrun",
+            "value": 35008809,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows wall",
+            "value": 775549602,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows gap",
+            "value": 50730202,
+            "unit": "ns"
+          },
+          {
+            "name": "warmwrite 5000rows overrun",
+            "value": 730202,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows wall",
+            "value": 100179261,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows gap",
+            "value": 52968366,
+            "unit": "ns"
+          },
+          {
+            "name": "write 100rows overrun",
+            "value": 2968366,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows wall",
+            "value": 197562977,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows gap",
+            "value": 53922446,
+            "unit": "ns"
+          },
+          {
+            "name": "write 500rows overrun",
+            "value": 3922446,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows wall",
+            "value": 178323421,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows gap",
+            "value": 51231988,
+            "unit": "ns"
+          },
+          {
+            "name": "write 1000rows overrun",
+            "value": 1231988,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows wall",
+            "value": 416035513,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows gap",
+            "value": 52008657,
+            "unit": "ns"
+          },
+          {
+            "name": "write 2500rows overrun",
+            "value": 2008657,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows wall",
+            "value": 719068281,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows gap",
+            "value": 51852106,
+            "unit": "ns"
+          },
+          {
+            "name": "write 5000rows overrun",
+            "value": 1852106,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows wall",
+            "value": 1299771769,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows gap",
+            "value": 51801764,
+            "unit": "ns"
+          },
+          {
+            "name": "write 10000rows overrun",
+            "value": 1801764,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 wallNs median",
+            "value": 50010264,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 gapNs median",
+            "value": 50359100,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 mainNs median",
+            "value": 15028,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 mainTickMaxNs median",
+            "value": 15028,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 prepareAsyncNs median",
+            "value": 217806,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 resultMainNs median",
+            "value": 15028,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 executionNs median",
+            "value": 3824749,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 100 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 wallNs median",
+            "value": 49953173,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 gapNs median",
+            "value": 50300832,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 mainNs median",
+            "value": 15123,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 mainTickMaxNs median",
+            "value": 15123,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 resultMainNs median",
+            "value": 15123,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 resultAsyncNs median",
+            "value": 581144,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 executionNs median",
+            "value": 749322,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 100 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 wallNs median",
+            "value": 99990267,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 gapNs median",
+            "value": 50360052,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 mainNs median",
+            "value": 242592,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 mainTickMaxNs median",
+            "value": 226712,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 prepareMainNs median",
+            "value": 226712,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 resultMainNs median",
+            "value": 15834,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 executionNs median",
+            "value": 3733548,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 100 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 wallNs median",
+            "value": 50855592,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 gapNs median",
+            "value": 51157037,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 mainNs median",
+            "value": 887230,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 mainTickMaxNs median",
+            "value": 885457,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 resultMainNs median",
+            "value": 887230,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 resultAsyncNs median",
+            "value": 2145,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 executionNs median",
+            "value": 810562,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 100 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 wallNs median",
+            "value": 50003957,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 gapNs median",
+            "value": 50323213,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 mainNs median",
+            "value": 16621,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 mainTickMaxNs median",
+            "value": 16621,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 prepareAsyncNs median",
+            "value": 939001,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 resultMainNs median",
+            "value": 16621,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 executionNs median",
+            "value": 14186165,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 wallNs median",
+            "value": 49916744,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 gapNs median",
+            "value": 50275199,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 mainNs median",
+            "value": 15804,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 mainTickMaxNs median",
+            "value": 15804,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 resultMainNs median",
+            "value": 15804,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 resultAsyncNs median",
+            "value": 2859714,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 executionNs median",
+            "value": 1598642,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 wallNs median",
+            "value": 200040326,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 gapNs median",
+            "value": 51001784,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 mainNs median",
+            "value": 1344738,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 mainTickMaxNs median",
+            "value": 860810,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 prepareMainNs median",
+            "value": 1327746,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 resultMainNs median",
+            "value": 15799,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 executionNs median",
+            "value": 13471602,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 wallNs median",
+            "value": 53971162,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 gapNs median",
+            "value": 54246442,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 mainNs median",
+            "value": 4010637,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 mainTickMaxNs median",
+            "value": 4008923,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 resultMainNs median",
+            "value": 4010637,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 resultAsyncNs median",
+            "value": 3371,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 executionNs median",
+            "value": 1508854,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 wallNs median",
+            "value": 49965330,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 gapNs median",
+            "value": 50294704,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 mainNs median",
+            "value": 17442,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 mainTickMaxNs median",
+            "value": 17442,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 prepareAsyncNs median",
+            "value": 1868029,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 resultMainNs median",
+            "value": 17442,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 executionNs median",
+            "value": 27902365,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 1000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 wallNs median",
+            "value": 49944198,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 gapNs median",
+            "value": 50285282,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 mainNs median",
+            "value": 15859,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 mainTickMaxNs median",
+            "value": 15859,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 resultMainNs median",
+            "value": 15859,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 resultAsyncNs median",
+            "value": 4942133,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 executionNs median",
+            "value": 2472070,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 1000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 wallNs median",
+            "value": 400012907,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 gapNs median",
+            "value": 51007397,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 mainNs median",
+            "value": 2663092,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 mainTickMaxNs median",
+            "value": 893732,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 prepareMainNs median",
+            "value": 2645359,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 resultMainNs median",
+            "value": 18008,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 executionNs median",
+            "value": 26069722,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 1000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 wallNs median",
+            "value": 57919076,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 gapNs median",
+            "value": 58248270,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 mainNs median",
+            "value": 7958614,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 mainTickMaxNs median",
+            "value": 7956635,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 resultMainNs median",
+            "value": 7958614,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 resultAsyncNs median",
+            "value": 3392,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 executionNs median",
+            "value": 2380519,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 1000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 wallNs median",
+            "value": 99960341,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 gapNs median",
+            "value": 50245090,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 mainNs median",
+            "value": 20207,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 mainTickMaxNs median",
+            "value": 20207,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 prepareAsyncNs median",
+            "value": 4722187,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 resultMainNs median",
+            "value": 20207,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 executionNs median",
+            "value": 67803770,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 2500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 wallNs median",
+            "value": 49921197,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 gapNs median",
+            "value": 50291747,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 mainNs median",
+            "value": 16170,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 mainTickMaxNs median",
+            "value": 16170,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 resultMainNs median",
+            "value": 16170,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 resultAsyncNs median",
+            "value": 12129638,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 executionNs median",
+            "value": 5389968,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 2500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 wallNs median",
+            "value": 1016603816,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 gapNs median",
+            "value": 51010548,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 mainNs median",
+            "value": 6663883,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 mainTickMaxNs median",
+            "value": 929538,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 prepareMainNs median",
+            "value": 6641747,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 resultMainNs median",
+            "value": 20773,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 executionNs median",
+            "value": 64285288,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 2500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 wallNs median",
+            "value": 59883648,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 gapNs median",
+            "value": 60175237,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 mainNs median",
+            "value": 9963583,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 mainTickMaxNs median",
+            "value": 9961550,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 resultMainNs median",
+            "value": 9963583,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 resultAsyncNs median",
+            "value": 8691997,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 executionNs median",
+            "value": 5265787,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 2500 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 wallNs median",
+            "value": 175798670,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 gapNs median",
+            "value": 50246537,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 mainNs median",
+            "value": 18068,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 mainTickMaxNs median",
+            "value": 18068,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 prepareAsyncNs median",
+            "value": 8558127,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 resultMainNs median",
+            "value": 18068,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 executionNs median",
+            "value": 134262021,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 wallNs median",
+            "value": 49945376,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 gapNs median",
+            "value": 50255483,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 mainNs median",
+            "value": 15449,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 mainTickMaxNs median",
+            "value": 15449,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 resultMainNs median",
+            "value": 15449,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 resultAsyncNs median",
+            "value": 26519519,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 executionNs median",
+            "value": 10458412,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 wallNs median",
+            "value": 1864495234,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 gapNs median",
+            "value": 51074870,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 mainNs median",
+            "value": 13408628,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 mainTickMaxNs median",
+            "value": 961779,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 prepareMainNs median",
+            "value": 13336238,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 resultMainNs median",
+            "value": 15950,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 executionNs median",
+            "value": 126902030,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 wallNs median",
+            "value": 65945558,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 gapNs median",
+            "value": 66277352,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 mainNs median",
+            "value": 16000632,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 mainTickMaxNs median",
+            "value": 15998824,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 resultMainNs median",
+            "value": 16000632,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 resultAsyncNs median",
+            "value": 18889022,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 executionNs median",
+            "value": 9897795,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 wallNs median",
+            "value": 177734896,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 gapNs median",
+            "value": 50196197,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 mainNs median",
+            "value": 39949,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 mainTickMaxNs median",
+            "value": 39949,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 prepareAsyncNs median",
+            "value": 8904294,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 resultMainNs median",
+            "value": 39949,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 executionNs median",
+            "value": 134499714,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local local true 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 wallNs median",
+            "value": 50004176,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 gapNs median",
+            "value": 50260048,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 mainNs median",
+            "value": 6537,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 mainTickMaxNs median",
+            "value": 6537,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 resultMainNs median",
+            "value": 6537,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 resultAsyncNs median",
+            "value": 29226475,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 executionNs median",
+            "value": 9766898,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local local true 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 wallNs median",
+            "value": 1889306021,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 gapNs median",
+            "value": 51033018,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 mainNs median",
+            "value": 13251959,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 mainTickMaxNs median",
+            "value": 933992,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 prepareMainNs median",
+            "value": 13225641,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 resultMainNs median",
+            "value": 20398,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 executionNs median",
+            "value": 126812140,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global global true 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 wallNs median",
+            "value": 75978386,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 gapNs median",
+            "value": 71705412,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 mainNs median",
+            "value": 25953730,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 mainTickMaxNs median",
+            "value": 25947974,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 resultMainNs median",
+            "value": 25953730,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 resultAsyncNs median",
+            "value": 18617716,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 executionNs median",
+            "value": 10161588,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global global true 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 wallNs median",
+            "value": 172915509,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 gapNs median",
+            "value": 50213298,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 mainNs median",
+            "value": 17031,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 mainTickMaxNs median",
+            "value": 17031,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 prepareAsyncNs median",
+            "value": 10101497,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 resultMainNs median",
+            "value": 17031,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 executionNs median",
+            "value": 134937193,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive local global false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 wallNs median",
+            "value": 62678728,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 gapNs median",
+            "value": 62930131,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 mainNs median",
+            "value": 12767028,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 mainTickMaxNs median",
+            "value": 12765495,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 resultMainNs median",
+            "value": 12767028,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 resultAsyncNs median",
+            "value": 18469741,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 executionNs median",
+            "value": 9831508,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive local global false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 wallNs median",
+            "value": 1911002589,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 gapNs median",
+            "value": 51004995,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 mainNs median",
+            "value": 13036442,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 mainTickMaxNs median",
+            "value": 917060,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 prepareMainNs median",
+            "value": 12990130,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 resultMainNs median",
+            "value": 17187,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 executionNs median",
+            "value": 126300777,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write primitive global local false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 wallNs median",
+            "value": 49959017,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 gapNs median",
+            "value": 50208658,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 mainNs median",
+            "value": 6587,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 mainTickMaxNs median",
+            "value": 6587,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 conversionMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 resultMainNs median",
+            "value": 6587,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 resultAsyncNs median",
+            "value": 26115323,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 executionNs median",
+            "value": 9753457,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 queueWaitNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read primitive global local false 5000 largestConversionNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 wallNs median",
+            "value": 499988048,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 gapNs median",
+            "value": 51124802,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 mainNs median",
+            "value": 14788648,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 mainTickMaxNs median",
+            "value": 1938234,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 prepareAsyncNs median",
+            "value": 2249320,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 conversionMainNs median",
+            "value": 14774065,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 resultMainNs median",
+            "value": 15264,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 executionNs median",
+            "value": 478758223,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 queueWaitNs median",
+            "value": 431449492,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed local local false 1000 largestConversionNs median",
+            "value": 114198,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 wallNs median",
+            "value": 699990148,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 gapNs median",
+            "value": 51971805,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 mainNs median",
+            "value": 24971957,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 mainTickMaxNs median",
+            "value": 1977713,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 conversionMainNs median",
+            "value": 24965835,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 resultMainNs median",
+            "value": 6101,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 resultAsyncNs median",
+            "value": 3152200,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 executionNs median",
+            "value": 5753151,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 queueWaitNs median",
+            "value": 616829703,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed local local false 1000 largestConversionNs median",
+            "value": 147370,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 wallNs median",
+            "value": 701299323,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 gapNs median",
+            "value": 51569740,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 mainNs median",
+            "value": 17779474,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 mainTickMaxNs median",
+            "value": 1935309,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 prepareMainNs median",
+            "value": 2919300,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 conversionMainNs median",
+            "value": 14875321,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 resultMainNs median",
+            "value": 18740,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 executionNs median",
+            "value": 428830911,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 queueWaitNs median",
+            "value": 384355043,
+            "unit": "ns"
+          },
+          {
+            "name": "write mixed global global false 1000 largestConversionNs median",
+            "value": 127568,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 wallNs median",
+            "value": 778552051,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 gapNs median",
+            "value": 167256655,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 mainNs median",
+            "value": 138988641,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 mainTickMaxNs median",
+            "value": 117257392,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 conversionMainNs median",
+            "value": 21917831,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 resultMainNs median",
+            "value": 117258820,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 resultAsyncNs median",
+            "value": 6412,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 executionNs median",
+            "value": 5904207,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 queueWaitNs median",
+            "value": 571405292,
+            "unit": "ns"
+          },
+          {
+            "name": "read mixed global global false 1000 largestConversionNs median",
+            "value": 156346,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 wallNs median",
+            "value": 673602676,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 gapNs median",
+            "value": 51129108,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 mainNs median",
+            "value": 23213876,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 mainTickMaxNs median",
+            "value": 1968369,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 prepareAsyncNs median",
+            "value": 1960973,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 conversionMainNs median",
+            "value": 23163152,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 resultMainNs median",
+            "value": 37660,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 resultAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 executionNs median",
+            "value": 652831370,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 queueWaitNs median",
+            "value": 597310749,
+            "unit": "ns"
+          },
+          {
+            "name": "write objects local local true 1000 largestConversionNs median",
+            "value": 207406,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 wallNs median",
+            "value": 924905396,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 gapNs median",
+            "value": 51986021,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 mainNs median",
+            "value": 33585447,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 mainTickMaxNs median",
+            "value": 1990146,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 prepareMainNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 prepareAsyncNs median",
+            "value": 0,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 conversionMainNs median",
+            "value": 33579060,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 resultMainNs median",
+            "value": 6301,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 resultAsyncNs median",
+            "value": 4179581,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 executionNs median",
+            "value": 5921736,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 queueWaitNs median",
+            "value": 831561226,
+            "unit": "ns"
+          },
+          {
+            "name": "read objects local local true 1000 largestConversionNs median",
+            "value": 242232,
             "unit": "ns"
           }
         ]
