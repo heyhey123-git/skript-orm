@@ -170,7 +170,10 @@ jobs:
   # readings useful as trends, not as a pass/fail gate.
   tick:
     name: Tick benchmark (${{ matrix.backend }})
-    runs-on: ubuntu-latest
+    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner. Keep the
+    # whole matrix on the 24.04 runner so the MongoDB case runs with its normal allocator and every
+    # backend in one run is measured on the same runner image.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
       fail-fast: false

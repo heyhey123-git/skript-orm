@@ -225,7 +225,8 @@ jobs:
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
       github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - name: Check out
@@ -257,7 +258,8 @@ jobs:
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
       github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner.
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       mongodb:
