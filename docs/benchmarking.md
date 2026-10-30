@@ -28,6 +28,8 @@ Plugin reads and writes passed on all five databases, as did JMH and report publ
 
 Jobs used different CPUs, so absolute timings cannot rank databases. Temporary `bench::` variables are excluded from Skript variable files to avoid a save-queue backlog. The benchmark still includes in-memory variable handling and ORM database operations.
 
+Current MongoDB benchmark containers set `GLIBC_TUNABLES=glibc.pthread.rseq=1` to use TCMalloc thread caches and avoid [the rseq/kernel incompatibility](https://jira.mongodb.org/browse/SERVER-121912). This can change database performance. The setting is recorded in `environment.txt`, and new MongoDB history uses `MongoDB/thread-cache` so it does not mix with earlier results, including the run shown on this page.
+
 **Total time** runs from the start of the statement until the trigger resumes, including variable handling, database work and scheduling waits. Input generation, later count queries, validation and cleanup are outside this window. **Maximum tick gap** is the largest interval between consecutive observer executions from statement start to one tick after it returns; it is not exclusive addon time on the server thread. **Tick excess** subtracts 50 ms from that gap, floored at zero. **Operation** and **Requested rows** identify the task and its size.
 
 ## 5000-row reads and writes across databases

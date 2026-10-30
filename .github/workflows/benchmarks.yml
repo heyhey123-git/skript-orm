@@ -170,9 +170,8 @@ jobs:
   # readings useful as trends, not as a pass/fail gate.
   tick:
     name: Tick benchmark (${{ matrix.backend }})
-    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner. Keep the
-    # whole matrix on the 24.04 runner so the MongoDB case runs with its normal allocator and every
-    # backend in one run is measured on the same runner image.
+    # Keep all backends on the same runner image. Its kernel can still change, so the MongoDB
+    # container uses thread caches below and records that allocator in a separate history.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     strategy:
@@ -220,6 +219,7 @@ jobs:
       - name: Start the database
         if: matrix.backend != 'SQLite'
         run: |
+          echo "Host kernel: $(uname -r)"
           case '${{ matrix.backend }}' in
             MySQL)
               docker run -d --name benchmark-db -p 3306:3306 \
@@ -239,11 +239,19 @@ jobs:
                 -e POSTGRES_PASSWORD=benchmark '${{ matrix.image }}'
               ;;
             MongoDB)
-              docker run -d --name benchmark-db -p 27017:27017 '${{ matrix.image }}'
+              # Match CI and Testcontainers: glibc owns rseq, disabling incompatible TCMalloc
+              # per-CPU caches. Do not mix these timings with the old allocator's history.
+              docker run -d --name benchmark-db -p 27017:27017 \
+                -e GLIBC_TUNABLES=glibc.pthread.rseq=1 '${{ matrix.image }}'
               ;;
           esac
 
           for attempt in {1..60}; do
+            if [ "$(docker inspect --format '{{.State.Running}}' benchmark-db)" != true ]; then
+              docker logs benchmark-db
+              echo '${{ matrix.backend }} exited before becoming ready.' >&2
+              exit 1
+            fi
             case '${{ matrix.backend }}' in
               MySQL)
                 docker exec benchmark-db mysql -ubenchmark -pbenchmark skriptorm_bench \
@@ -287,6 +295,10 @@ jobs:
             echo "java=$(java -version 2>&1 | head -n1)"
             echo "backend=${{ matrix.backend }}"
             echo "database_image=${{ matrix.image }}"
+            if [ '${{ matrix.backend }}' = MongoDB ]; then
+              echo 'mongodb_glibc_tunables=glibc.pthread.rseq=1'
+              echo 'mongodb_allocator=thread-cache'
+            fi
           } | tee build/benchmarks/environment.txt
           slug=$(printf '%s' "$cpu" \
             | sed -E 's/\((R|TM|C)\)//g' \
@@ -366,7 +378,7 @@ jobs:
           output-file-path: build/benchmarks/tick-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gh-pages-branch: gh-pages
-          benchmark-data-dir-path: 'dev/bench/${{ steps.environment.outputs.slug }}/tick-ns/${{ matrix.backend }}'
+          benchmark-data-dir-path: "dev/bench/${{ steps.environment.outputs.slug }}/tick-ns/${{ matrix.backend }}${{ matrix.backend == 'MongoDB' && '/thread-cache' || '' }}"
           auto-push: false
           comment-on-alert: false
           fail-on-alert: false
@@ -476,7 +488,8 @@ jobs:
           output-file-path: build/published-benchmarks/tick-report-MongoDB/tick-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}
           gh-pages-branch: gh-pages
-          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.mongodb }}/tick-ns/MongoDB'
+          # Thread caches change database timing; keep the old per-CPU-cache history intact.
+          benchmark-data-dir-path: 'dev/bench/${{ steps.slugs.outputs.mongodb }}/tick-ns/MongoDB/thread-cache'
           auto-push: true
           comment-on-alert: false
           fail-on-alert: false

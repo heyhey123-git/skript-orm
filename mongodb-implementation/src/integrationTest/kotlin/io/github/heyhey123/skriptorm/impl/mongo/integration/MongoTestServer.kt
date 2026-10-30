@@ -128,6 +128,9 @@ object MongoTestServer {
     private fun startContainer(): Endpoint {
         val image = setting(IMAGE_PROPERTY, IMAGE_ENV) ?: DEFAULT_IMAGE
         val container = GenericContainer(DockerImageName.parse(image))
+            // Match CI and benchmarks: glibc owns rseq, so TCMalloc falls back to thread caches.
+            // This avoids SERVER-121912 without relying on a runner label to pin the host kernel.
+            .withEnv("GLIBC_TUNABLES", "glibc.pthread.rseq=1")
             .withExposedPorts(PORT)
             .withStartupTimeout(STARTUP_TIMEOUT)
         container.start()

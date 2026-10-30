@@ -225,7 +225,7 @@ jobs:
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
       github.event_name == 'workflow_dispatch'
-    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner.
+    # Match the runner image used by the MongoDB server and benchmark jobs.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -258,12 +258,17 @@ jobs:
     if: >-
       github.ref == format('refs/heads/{0}', github.event.repository.default_branch) ||
       github.event_name == 'workflow_dispatch'
-    # MongoDB 8 refuses to start on the Linux 6.19 kernel used by the Ubuntu 26 runner.
+    # The runner label does not pin its kernel; configure the container's allocator below.
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     services:
       mongodb:
         image: mongo:8
+        # Let glibc own rseq so TCMalloc uses thread caches. MongoDB 8's per-CPU caches are
+        # incompatible with some runner kernels, including Ubuntu's 7.0.0-* version checks.
+        # https://jira.mongodb.org/browse/SERVER-121912
+        env:
+          GLIBC_TUNABLES: glibc.pthread.rseq=1
         ports:
           - 27017:27017
     steps:
@@ -277,13 +282,24 @@ jobs:
       # Wait for MongoDB to answer before starting the Skript server test.
       - name: Wait for MongoDB
         run: |
+          echo "Host kernel: $(uname -r)"
+          container='${{ job.services.mongodb.id }}'
           for attempt in $(seq 1 30); do
-            if docker exec ${{ job.services.mongodb.id }} mongosh --quiet --eval 'db.runCommand({ ping: 1 }).ok' 2>/dev/null | grep -q 1; then
-              break
+            if [ "$(docker inspect --format '{{.State.Running}}' "$container")" != true ]; then
+              docker logs "$container"
+              echo 'MongoDB exited before becoming ready.' >&2
+              exit 1
+            fi
+            if docker exec "$container" mongosh --quiet \
+              --eval 'if (db.adminCommand({ ping: 1 }).ok !== 1) quit(1)' >/dev/null 2>&1; then
+              docker exec "$container" mongosh --quiet --eval 'db.version()'
+              exit 0
             fi
             sleep 2
           done
-          docker exec ${{ job.services.mongodb.id }} mongosh --quiet --eval 'db.runCommand({ ping: 1 })'
+          docker logs "$container"
+          echo 'MongoDB did not become ready within 60 seconds.' >&2
+          exit 1
 
       # Use the service container's published host port, which Paper can reach.
       - name: Run the Skript server test against MongoDB
