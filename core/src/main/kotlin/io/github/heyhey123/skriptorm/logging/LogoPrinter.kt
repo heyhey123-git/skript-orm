@@ -75,8 +75,8 @@ internal object LogoPrinter {
     // from a truecolour SSH client. Prefer its advertised indexed palette.
     private val indexedColour = System.getenv("TERM").orEmpty().startsWith("screen")
 
-    private fun ansi(spans: List<Span>): String {
-        return buildString {
+    private fun ansi(spans: List<Span>): String =
+        buildString {
             spans.forEach { span ->
                 append(ESCAPE)
                 if (indexedColour) {
@@ -91,7 +91,6 @@ internal object LogoPrinter {
             }
             append(RESET)
         }
-    }
 
     // Entries 16..255 have fixed RGB values, unlike the user's themed ANSI 16.
     private fun paletteIndex(rgb: Int): Int {
