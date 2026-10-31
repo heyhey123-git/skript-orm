@@ -3,16 +3,7 @@ package io.github.heyhey123.skriptorm.logging
 import io.github.heyhey123.skriptorm.SkriptOrm
 import kotlin.math.roundToInt
 
-/**
- * Prints the banner the plugin greets a server with, and the line it says goodbye with.
- *
- * The colours are written into the text rather than offered to Paper. Paper decides for itself whether a
- * console can show colour and records that decision in the `net.kyori.ansi.colorLevel` system property,
- * so on a platform it reads wrong the banner arrives grey while the terminal could have shown it in full
- * colour. The banner is the one thing here that exists to be looked at, so it carries its own colours and
- * asks nobody. Paper's file appender drops them again on the way into `logs/latest.log`, which stays
- * readable as plain text.
- */
+/** Prints the banner using foreground colours supported by the console. */
 internal object LogoPrinter {
 
     /**
@@ -80,23 +71,48 @@ internal object LogoPrinter {
         SkriptOrm.instance.logger.info(ansi(spans))
     }
 
-    /**
-     * The spans as true-colour escape sequences.
-     *
-     * `38;2;r;g;b` picks a foreground colour, and the reset at the end keeps it out of everything that
-     * follows the line. Doing this by hand is what makes the colours survive a console Paper has decided
-     * cannot show them.
-     */
-    private fun ansi(spans: List<Span>): String = buildString {
-        spans.forEach { span ->
-            append(ESCAPE)
-                .append("38;2;")
-                .append(span.colour shr 16 and 0xFF).append(';')
-                .append(span.colour shr 8 and 0xFF).append(';')
-                .append(span.colour and 0xFF).append('m')
-                .append(span.text)
+    // Screen 4.x cannot parse RGB SGR reliably, even when COLORTERM was inherited
+    // from a truecolour SSH client. Prefer its advertised indexed palette.
+    private val indexedColour = System.getenv("TERM").orEmpty().startsWith("screen")
+
+    private fun ansi(spans: List<Span>): String {
+        return buildString {
+            spans.forEach { span ->
+                append(ESCAPE)
+                if (indexedColour) {
+                    append("38;5;").append(paletteIndex(span.colour))
+                } else {
+                    append("38;2;")
+                        .append(span.colour shr 16 and 0xFF).append(';')
+                        .append(span.colour shr 8 and 0xFF).append(';')
+                        .append(span.colour and 0xFF)
+                }
+                append('m').append(span.text)
+            }
+            append(RESET)
         }
-        append(RESET)
+    }
+
+    // Entries 16..255 have fixed RGB values, unlike the user's themed ANSI 16.
+    private fun paletteIndex(rgb: Int): Int {
+        val red = rgb shr 16 and 0xFF
+        val green = rgb shr 8 and 0xFF
+        val blue = rgb and 0xFF
+        val levels = intArrayOf(0, 95, 135, 175, 215, 255)
+        var best = 16
+        var distance = Int.MAX_VALUE
+        for (index in 16..255) {
+            val cube = index - 16
+            val r = if (index < 232) levels[cube / 36] else 8 + (index - 232) * 10
+            val g = if (index < 232) levels[cube / 6 % 6] else r
+            val b = if (index < 232) levels[cube % 6] else r
+            val delta = (red - r) * (red - r) + (green - g) * (green - g) + (blue - b) * (blue - b)
+            if (delta < distance) {
+                distance = delta
+                best = index
+            }
+        }
+        return best
     }
 
     /** [text] painted one character at a time, so that the gradient is not lost on any of it. */
